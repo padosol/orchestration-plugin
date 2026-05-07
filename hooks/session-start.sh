@@ -33,11 +33,11 @@ INBOX_PATH="$(orch_inbox_path "$wid" 2>/dev/null || true)"
 case "$kind" in
     orch)
         ROLE_DESC="orchestrator (PM). 사용자와 직접 대화, leader에게 위임. 직접 워커 송신은 차단됨 — leader 통해서만."
-        CMDS="/orch:setup, /orch:up, /orch:mp-up, /orch:mp-down, /orch:send, /orch:check-inbox, /orch:status"
+        CMDS="/orch:setup, /orch:up, /orch:issue-up, /orch:issue-down, /orch:send, /orch:check-inbox, /orch:status"
         ;;
     leader)
-        ROLE_DESC="${wid} 팀리더. 자기 MP 안에서 워커 spawn(/orch:leader-spawn) + 라우팅 + shutdown(/orch:mp-down) 책임. orch 보고 / 사용자 결정 받기. 산하 워커 간 통신은 leader 경유."
-        CMDS="/orch:leader-spawn, /orch:send, /orch:check-inbox, /orch:mp-down"
+        ROLE_DESC="${wid} 팀리더. 자기 MP 안에서 워커 spawn(/orch:leader-spawn) + 라우팅 + shutdown(/orch:issue-down) 책임. orch 보고 / 사용자 결정 받기. 산하 워커 간 통신은 leader 경유."
+        CMDS="/orch:leader-spawn, /orch:send, /orch:check-inbox, /orch:issue-down"
         ;;
     worker)
         scope="${wid%%/*}"

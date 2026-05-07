@@ -211,4 +211,4 @@ echo "────────────────────────�
 echo "다음 단계:"
 echo "  1. 위 settings.json 의 description / tech_stack 손보세요"
 echo "  2. /orch:up 으로 orch pane 등록"
-echo "  3. /orch:mp-up MP-XX 로 첫 leader 띄우기"
+echo "  3. /orch:issue-up MP-XX 로 첫 leader 띄우기"

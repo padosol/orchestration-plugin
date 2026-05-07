@@ -116,6 +116,6 @@ drift 가 하나라도 있으면 다음 형식으로 보고:
 ## 보고 후 다음 단계
 
 검증 끝나면 사용자에게:
-- drift 없음 → "다음: `/orch:up` → `/orch:mp-up MP-XX`"
+- drift 없음 → "다음: `/orch:up` → `/orch:issue-up MP-XX`"
 - drift 있고 모두 처리됨 → 같음
 - 보류 항목 있음 → 사용자가 직접 settings.json 편집하라고 안내

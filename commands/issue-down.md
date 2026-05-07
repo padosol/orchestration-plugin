@@ -1,15 +1,15 @@
 ---
 description: MP-XXX leader cascade shutdown (산하 워커 + scope dir archive + 머지 브랜치 자동 정리)
 argument-hint: <issue-id> [--no-cleanup]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/mp-down.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh:*)
 ---
 
 다음 명령으로 cascade shutdown을 실행하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/mp-down.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh $ARGUMENTS`
 
 **호출자별 동작**:
-- **orch가 호출**: leader pane에 `/orch:mp-down <id>` 자동 전달 → leader가 cleanup 수행. leader pane이 이미 죽었으면 직접 정리.
+- **orch가 호출**: leader pane에 `/orch:issue-down <id>` 자동 전달 → leader가 cleanup 수행. leader pane이 이미 죽었으면 직접 정리.
 - **leader가 호출**: 산하 워커 pane 모두 kill + 머지된 worktree 자동 정리(+pull) + `.orch/<mp-id>/` 를 archive로 이동 + 마지막에 mp-id tmux 윈도우 통째 kill (**leader 자기 pane 까지 자동 종료** — 사용자가 닫지 않음).
 
 **worktree 자동 정리 (default ON)**:
@@ -30,8 +30,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/mp-down.sh:*)
 - mp_id 패턴 일치 로컬 브랜치 후보를 머지 상태와 함께 출력 — **자동 삭제 안 함, 명령 제안만**
 
 **REPORT 자동 작성 (default ON)**:
-- mp-down 시 archive 직전에 `report.sh` 가 실행 → `<archive_dir>/REPORT-data.md` 생성
-- mp-down 이 orch 인박스에 종료 보고 + **REPORT.html 자동 작성 요청** 메시지 발송
+- issue-down 시 archive 직전에 `report.sh` 가 실행 → `<archive_dir>/REPORT-data.md` 생성
+- issue-down 이 orch 인박스에 종료 보고 + **REPORT.html 자동 작성 요청** 메시지 발송
 - orch 가 인박스 처리할 때 `/orch:report <mp-id>` 실행 → `<archive_dir>/REPORT.html` 작성
 
 **옵션**:

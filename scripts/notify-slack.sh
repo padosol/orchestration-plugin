@@ -5,7 +5,7 @@
 # 노트북 닫고 있어도 폰으로 알 수 있도록. 디바운스/큐 없음 — fire-and-forget.
 #
 # 실패 모드: webhook URL 미설정 / 네트워크 실패 / Slack 응답 비정상 → 모두 조용히
-# exit 0. 호출자(mp-down 등) 의 본 흐름을 절대 막지 않는다.
+# exit 0. 호출자(issue-down 등) 의 본 흐름을 절대 막지 않는다.
 #
 # 활성화 조건 (둘 다 만족해야 POST):
 #   1. ${ORCH_ROOT}/settings.json 의 .notify.slack_enabled == true (master 토글 — 사용자가
@@ -26,7 +26,7 @@
 #   pr_open          🟡  PR 새로 생성됨, review 마커 부재 (리뷰 작업 남음)
 #   pr_ready         🟢  PR review 마커 있음, 머지 가능
 #   worker_question  ❓  워커 → orch 메시지 도착 (handoff 필요)
-#   mp_done          ✅  mp-down 종료
+#   mp_done          ✅  issue-down 종료
 #   error            🔴  errors.jsonl 새 entry
 
 LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
@@ -86,7 +86,7 @@ if [ -z "${payload:-}" ]; then
     payload="{\"text\":\"${safe}\"}"
 fi
 
-# 5초 timeout, 실패는 조용히. 본 스크립트가 mp-down 같은 critical path 에서 호출되므로
+# 5초 timeout, 실패는 조용히. 본 스크립트가 issue-down 같은 critical path 에서 호출되므로
 # 절대 호출자 종료코드에 영향 주지 않도록 || true.
 curl --silent --output /dev/null --max-time 5 \
     -X POST -H 'Content-Type: application/json' \

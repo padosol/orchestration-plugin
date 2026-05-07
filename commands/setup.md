@@ -23,4 +23,4 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLU
 출력 후 사용자에게:
 1. settings.json 내용 보여주고 편집 권유
 2. **이어서 `validate-settings` 스킬을 자동 실행** — description/tech_stack 이 실제 프로젝트와 어긋나는지 검증(Next.js/Spring Boot/JDK 버전 등). drift 가 있으면 표로 보고 + 한 건씩 동의받아 settings.json 을 `Edit` 으로 patch.
-3. 다음 단계(`/orch:up` → `/orch:mp-up`) 안내
+3. 다음 단계(`/orch:up` → `/orch:issue-up`) 안내
