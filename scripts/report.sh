@@ -143,7 +143,7 @@ if [ "$scope_kind" = "live" ]; then
 fi
 
 # archive 의 workers 도 스캔 (또는 live 라도 보충).
-# workers/ = 살아있는 워커 등록, workers-archive/ = self-shutdown 후 보존된 워커 (PAD-22).
+# workers/ = 살아있는 워커 등록, workers-archive/ = self-shutdown 후 보존된 워커.
 workers_dir="$scope_dir/workers"
 workers_archive_dir="$scope_dir/workers-archive"
 for d in "$workers_dir" "$workers_archive_dir"; do
