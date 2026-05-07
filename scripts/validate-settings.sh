@@ -144,7 +144,7 @@ PY
                 [ -f "$project_path/$marker" ] && printf '%s\tbuild_file\t%s\n' "$alias" "$marker"
             done
 
-            # PAD-6: 실제 원격 기본 브랜치 — declared default_base_branch 와 어긋나면 validate 측에서 flag.
+            # 실제 원격 기본 브랜치 — declared default_base_branch 와 어긋나면 validate 측에서 flag.
             actual_base="$(timeout 5 git -C "$project_path" remote show origin 2>/dev/null \
                 | awk '/HEAD branch:/ {print $NF; exit}')"
             if [ -z "$actual_base" ] || [ "$actual_base" = "(unknown)" ]; then

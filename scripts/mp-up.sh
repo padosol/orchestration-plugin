@@ -64,7 +64,7 @@ if orch_worker_exists "$mp_id"; then
     fi
 fi
 
-# scope skeleton (PAD-3: runs/ wrapper 가 신규 위치)
+# scope skeleton (runs/ wrapper 가 기본 위치)
 mkdir -p "$ORCH_RUNS_DIR"
 scope_dir="$(orch_scope_dir "$mp_id")"
 mkdir -p "$scope_dir/inbox" "$scope_dir/archive" "$scope_dir/workers" "$scope_dir/worktrees"
@@ -173,5 +173,5 @@ tmux send-keys -t "$leader_pane" Enter
 echo "OK leader=$mp_id pane=$leader_pane window=$leader_window"
 echo "  scope_dir: $scope_dir"
 
-# PAD-8: Slack 알림 — leader 가 막 떴고 plan 메시지를 곧 orch 로 송신할 예정.
+# Slack 알림 — leader 가 막 떴고 plan 메시지를 곧 orch 로 송신할 예정.
 "${LIB_DIR}/notify-slack.sh" mp_select "$mp_id" "leader 떴음 — 곧 plan 컨펌 메시지 도착" || true

@@ -67,8 +67,8 @@ if [ "$self" = "orch" ]; then
     if ! orch_worker_exists "$mp_id"; then
         echo "INFO: $mp_id leader 등록 없음 — 잔재만 정리"
         run_cleanup_if_enabled
-        # PAD-20: leader cascade 가 archive mv 만 하고 죽은 경우 git 메타·로컬 브랜치 잔재가
-        # 남는다. 모든 project 에 worktree prune 1회 + mp_id 패턴 머지 브랜치 후보 출력.
+        # leader cascade 가 archive mv 만 하고 죽은 경우 git 메타·로컬 브랜치 잔재가 남는다.
+        # 모든 project 에 worktree prune 1회 + mp_id 패턴 머지 브랜치 후보 출력.
         if [ "$do_cleanup" -eq 1 ]; then
             orch_orphan_cleanup_suggest "$mp_id"
         fi
@@ -104,7 +104,7 @@ if [ "$self" = "orch" ]; then
     # leader pane 죽음 — orch 가 직접 정리
     echo "INFO: leader $mp_id pane 이미 죽음 — 직접 정리"
     run_cleanup_if_enabled
-    # PAD-20: leader 가 비정상 종료한 경우 잔재 prune + 머지된 브랜치 후보 출력.
+    # leader 가 비정상 종료한 경우 잔재 prune + 머지된 브랜치 후보 출력.
     if [ "$do_cleanup" -eq 1 ]; then
         orch_orphan_cleanup_suggest "$mp_id"
     fi
@@ -116,7 +116,7 @@ if [ "$self" = "orch" ]; then
     [ -d "$scope_dir_path" ] && mv "$scope_dir_path" "$archive_dir"
     orch_worker_unregister "$mp_id"
     echo "OK archived $archive_dir"
-    # PAD-8: Slack 알림 — leader pane 이미 죽어서 orch 가 직접 정리한 경로.
+    # Slack 알림 — leader pane 이미 죽어서 orch 가 직접 정리한 경로.
     "${LIB_DIR}/notify-slack.sh" mp_done "$mp_id" "leader 이미 종료, 정리 완료" "$archive_dir" || true
     exit 0
 fi
@@ -168,7 +168,7 @@ fi
 orch_append_message "$mp_id" "orch" "[mp-down] $mp_id cascade shutdown 완료. archive: $archive_dir. 머지 worktree 자동 정리(+pull), 미머지는 보존.$report_hint" >/dev/null
 orch_notify "orch" || true
 
-# PAD-8: Slack 알림 — MP 완료. archive 경로 + REPORT 작성 안내.
+# Slack 알림 — MP 완료. archive 경로 + REPORT 작성 안내.
 "${LIB_DIR}/notify-slack.sh" mp_done "$mp_id" "cascade shutdown 완료. /orch:report 로 REPORT.html 작성 권유" "$archive_dir" || true
 
 # 마지막: mp-id 윈도우(leader 자기 pane 포함) 통째로 kill — self-shutdown.
