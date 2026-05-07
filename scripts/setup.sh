@@ -229,7 +229,9 @@ if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
         . as $new |
         ($cur[0] // {}) as $old |
         ( if $tracker != "" then $tracker
-          else ($old.issue_tracker // $new.issue_tracker // "none") end ) as $final_tracker |
+          # legacy file 에 issue_tracker 없으면 "linear" 로 명시 백필 (0.3.x 이하 = 항상 Linear).
+          # 사용자가 fresh 셋업으로 'none' 을 명시적으로 골랐던 경우는 $old 에 그 값이 남아있음.
+          else ($old.issue_tracker // "linear") end ) as $final_tracker |
         ( if $tracker == "github" or ($tracker == "" and $final_tracker == "github")
           then ( if $gh_repo != "" then $gh_repo
                  else ($old.github_issue_repo // "") end )
