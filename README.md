@@ -25,33 +25,20 @@
 
 ## 빠른 시작
 
-### 1. 설치
+처음 한 번 (1, 2) 셋업하면 매번은 (3, 4) 한 줄.
+
+### 1. 설치 (1회)
 
 ```
 /plugin marketplace add padosol/padosol-marketplace
 /plugin install orch
 ```
 
-scope 는 **project** 권장 (`<project>/.claude/settings.json` 에 등록 → 그 워크스페이스에서만 활성화).
+scope 는 **project** 권장 (해당 워크스페이스의 `.claude/settings.json` 에 등록 → 그 워크스페이스에서만 활성화, 다른 곳에는 노이즈 없음).
 
-### 2. 워크스페이스 진입 (한 명령)
+### 2. 셸 함수 등록 (1회)
 
-어디서든 워크스페이스 path 를 인자로 주면 tmux 세션 + Claude + orch 등록까지 자동:
-
-```bash
-orch ~/path/to/workspace
-```
-
-(`orch` 는 아래 셸 함수. 등록 1회로 어디서든 호출 가능.)
-
-내부 동작:
-- 워크스페이스 디렉토리 이름의 tmux 세션 attach (없으면 create)
-- 새 세션이면 orch pane 에서 `claude` 실행 + `/orch:up` 자동 입력
-- 기존 세션이면 그대로 attach (이미 등록된 orch 그대로 활용)
-
-#### 셸 함수 등록 (1회)
-
-`.bashrc` / `.zshrc`:
+어디서든 `orch <workspace>` 한 명령으로 진입할 수 있도록 `.bashrc` / `.zshrc` 에 등록:
 
 ```bash
 orch() {
@@ -62,27 +49,34 @@ orch() {
 }
 ```
 
-플러그인 version bump 와 무관하게 가장 최신 cache 의 bootstrap 을 자동 선택.
+`sort -V | tail -n1` — 가장 최신 semver 버전을 자동 선택. plugin version bump 와 무관하게 동작.
 
-### 3. settings 생성 (워크스페이스당 1회)
+### 3. 워크스페이스 진입
 
-orch pane 안에서:
+```bash
+orch ~/path/to/workspace   # 인자 없으면 cwd
+```
+
+- **신규 워크스페이스** — tmux 세션 (이름 = 디렉토리 basename) 생성 → `claude` 실행 → `/orch:up` 자동 입력. 첫 화면이 `/orch:setup` 안내로 끝남.
+- **기존 워크스페이스** — 동일 이름 세션이 살아있으면 그대로 attach (등록 중복 안 함).
+
+### 4. 첫 이슈 위임
+
+신규 워크스페이스라면 orch pane 에서 한 번만:
 
 ```
 /orch:setup
 ```
 
-→ 산하 git repo 들을 자동 발견해 `.orch/settings.json` 작성 (alias, path, kind, default_base_branch 자동 감지).
+→ 산하 git repo 자동 발견해 `.orch/settings.json` 생성 (alias / path / kind / default_base_branch).
 
-### 4. 첫 MP 위임
-
-orch 와 평소처럼 대화하다가 큰 이슈가 떴을 때:
+이후 orch 와 평소처럼 대화하다가 큰 이슈가 떴을 때:
 
 ```
 /orch:issue-up MP-13
 ```
 
-→ MP-13 leader pane 이 뜨고 Linear 이슈를 읽어 plan 을 orch 인박스로 보고 → 사용자가 confirm → leader 가 `/orch:leader-spawn repo-a fix` 등으로 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:issue-down MP-13` 으로 정리.
+→ leader pane 이 떠서 Linear 이슈를 읽고 plan 을 orch 인박스로 보고 → 사용자 confirm → leader 가 `/orch:leader-spawn repo-a fix` 등으로 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:issue-down MP-13` 으로 정리 + REPORT.html.
 
 ---
 
