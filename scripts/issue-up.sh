@@ -11,9 +11,11 @@ orch_install_error_trap "$0"
 
 if [ "$#" -lt 1 ]; then
     cat >&2 <<EOF
-사용법: /orch:issue-up <issue-id> [--force]
+사용법: /orch:issue-up <issue-id> [--force] [--no-issue]
   issue-id 예: MP-13 / mp-13 / 13 (모두 mp-13으로 정규화)
   --force: 이미 떠 있는 leader가 있어도 cascade kill 후 재생성
+  --no-issue: 트래커 설정 무시 (이번 한 번만). leader 가 orch 에 spec 직접 요청.
+              사용 케이스: 이슈 만들기 번거로운 작은 작업 / 이슈 없이 try-out
 EOF
     exit 2
 fi
@@ -21,9 +23,11 @@ fi
 raw_id="$1"
 shift || true
 force=0
+no_issue=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --force) force=1 ;;
+        --no-issue) no_issue=1 ;;
         *) echo "ERROR: 알 수 없는 옵션: $1" >&2; exit 2 ;;
     esac
     shift
@@ -89,7 +93,13 @@ issue_num="${mp_id#mp-}"
 tracker="$(orch_settings_issue_tracker)"
 gh_repo="$(orch_settings_github_issue_repo 2>/dev/null || true)"
 
-case "$tracker" in
+# --no-issue 가 켜지면 워크스페이스 트래커 설정과 무관하게 spec 요청 모드.
+effective_tracker="$tracker"
+if [ "$no_issue" -eq 1 ]; then
+    effective_tracker="none"
+fi
+
+case "$effective_tracker" in
     linear)
         issue_fetch_step="1. mcp__linear-server__get_issue ${mp_upper} (description / acceptance criteria)"
         ;;
@@ -101,7 +111,12 @@ case "$tracker" in
         fi
         ;;
     none|*)
-        issue_fetch_step="1. 이슈 트래커 미사용 (settings.issue_tracker=none). 본인 inbox 의 spec 메시지 또는 orch 의 첫 지시 확인. spec 부재 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${mp_upper} spec 부탁 — 작업 범위·acceptance·관련 repo 알려달라.\\nORCH_MSG\` 로 요청."
+        if [ "$no_issue" -eq 1 ] && [ "$tracker" != "none" ]; then
+            tracker_note="(이번 호출만 --no-issue — 워크스페이스 트래커 설정 ${tracker} 는 다음 호출부터 그대로 적용)"
+        else
+            tracker_note="(트래커 미사용 모드)"
+        fi
+        issue_fetch_step="1. 이슈 컨텍스트 없음 ${tracker_note}. 본인 inbox 의 spec 메시지 또는 orch 의 첫 지시 확인. spec 부재 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${mp_upper} spec 부탁 — 작업 범위·acceptance·관련 repo 알려달라.\\nORCH_MSG\` 로 요청."
         ;;
 esac
 

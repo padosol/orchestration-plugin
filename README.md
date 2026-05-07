@@ -73,8 +73,9 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 이후 orch 와 평소처럼 대화하다가 큰 이슈가 떴을 때:
 
 ```
-/orch:issue-up MP-13     # Linear / 없음 모드
-/orch:issue-up 142       # GitHub Issues 모드 (이슈 번호)
+/orch:issue-up MP-13              # Linear / 없음 모드
+/orch:issue-up 142                # GitHub Issues 모드 (이슈 번호)
+/orch:issue-up 99 --no-issue      # 이슈 없는 ad-hoc 작업 — 트래커 설정 무관, leader 가 orch 에 spec 직접 요청
 ```
 
 → leader pane 이 떠서 트래커별로 이슈 컨텍스트를 가져와 plan 을 orch 인박스로 보고 → 사용자 confirm → leader 가 `/orch:leader-spawn repo-a fix` 등으로 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:issue-down MP-13` 으로 정리 + REPORT.html.
@@ -310,6 +311,8 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 | `none` | 트래커 호출 없음. leader 가 orch 에 spec 직접 요청 → orch 가 사용자에게 묻고 spec 을 leader inbox 로 전달. stale docs 는 REPORT.html 에만 기록 (자동 이슈 생성 안 함). | 없음. 가장 가벼움. |
 
 내부적으로 worker_id 는 항상 `mp-NN` 형식 — 트래커 종류와 무관 (`MP` 는 multi-project 의 약자, Linear-specific 아님). `/orch:issue-up <num>` 의 `<num>` 만 트래커별 의미가 다르다 (Linear MP-N / GitHub issue # / 자유 식별자).
+
+**한 번만 이슈 없이 띄우기**: `--no-issue` 플래그. 워크스페이스가 `linear` / `github` 모드여도 이번 호출만 fetch 스킵, leader 가 orch 에 spec 직접 요청. 이슈 만들기 번거로운 작은 작업이나 try-out 에 유용.
 
 ---
 
