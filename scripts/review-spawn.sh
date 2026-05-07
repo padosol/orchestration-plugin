@@ -52,7 +52,7 @@ fi
 project_path="$(orch_settings_project_field "$project" path)"
 [ -d "$project_path" ] || { echo "ERROR: project path '$project_path' 없음" >&2; exit 2; }
 
-# mp-NN 윈도우 찾기 (mp-up 이 만든 leader 윈도우 = 워커들이 합류한 윈도우)
+# mp-NN 윈도우 찾기 (issue-up 이 만든 leader 윈도우 = 워커들이 합류한 윈도우)
 mp_window="$(tmux list-windows -t "$ORCH_TMUX_SESSION" -F '#{window_id} #W' 2>/dev/null \
     | awk -v n="$mp_id" '$2==n {print $1}' | head -n1)"
 

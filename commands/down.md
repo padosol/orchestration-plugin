@@ -16,7 +16,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/down.sh:*)
 **언제 쓰나**:
 - 모든 작업이 끝났고 깨끗하게 닫고 싶을 때
 - 시스템이 꼬여서 hard reset이 필요할 때
-- 평소 MP 단위 종료는 `/orch:mp-down MP-XX` 사용 (leader cascade) — `/orch:down`은 최후의 수단
+- 평소 MP 단위 종료는 `/orch:issue-down MP-XX` 사용 (leader cascade) — `/orch:down`은 최후의 수단
 
 **사용**:
 - `/orch:down` — 확인 프롬프트 후 종료

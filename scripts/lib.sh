@@ -10,14 +10,14 @@
 #   .orch/settings.json                            프로젝트 메타데이터
 #   .orch/inbox/<id>.md                            orch / leader 인박스
 #   .orch/archive/<id>-YYYY-MM-DD.md               orch / leader 메시지 archive
-#   .orch/archive/<scope>-YYYY-MM-DD/              mp-down 시 scope dir 통째 archive
+#   .orch/archive/<scope>-YYYY-MM-DD/              issue-down 시 scope dir 통째 archive
 #   .orch/workers/<id>.json                        orch / leader 등록
 #   .orch/runs/<scope>/inbox/<role>.md             leader 산하 워커 인박스
 #   .orch/runs/<scope>/archive/<role>-YYYY-MM-DD.md
 #   .orch/runs/<scope>/workers/<role>.json         살아있는 워커 등록
 #   .orch/runs/<scope>/workers-archive/<role>.json 종료된 워커 (worker-shutdown 이 보존, sidecar 분석용)
 #   .orch/runs/<scope>/worktrees/<project>/        git worktree
-#   .orch/runs/<scope>/leader-archive.md           leader inbox archive (mp-down 시 함께 archive)
+#   .orch/runs/<scope>/leader-archive.md           leader inbox archive (issue-down 시 함께 archive)
 #   .orch/runs/<scope>/errors.jsonl                scope 별 에러 로그
 #
 # 신규 MP scope 는 `.orch/runs/<scope>/` 아래에 묶인다 — 동시 진행 MP 가 많아져도 .orch
@@ -56,7 +56,7 @@ ORCH_WORKERS="${ORCH_ROOT}/workers"
 ORCH_SETTINGS="${ORCH_ROOT}/settings.json"
 # errors.jsonl 은 caller scope 에 따라 결정 (orch_errors_log_path 참고).
 # orch / unknown → ${ORCH_ROOT}/errors.jsonl
-# mp-NN, mp-NN/role → ${ORCH_ROOT}/runs/<mp-NN>/errors.jsonl  (mp-down 이 scope dir 째 archive)
+# mp-NN, mp-NN/role → ${ORCH_ROOT}/runs/<mp-NN>/errors.jsonl  (issue-down 이 scope dir 째 archive)
 ORCH_ERRORS_LOG="${ORCH_ROOT}/errors.jsonl"  # legacy compat — 신규 코드는 orch_errors_log_path 사용
 ORCH_RUNS_DIR="${ORCH_ROOT}/runs"
 
@@ -172,7 +172,7 @@ orch_archive_path() {
             # orch 는 어느 MP 와도 안 묶이므로 top-level 보존
             printf '%s/%s-%s.md' "$ORCH_ARCHIVE" "$w" "$(date +%Y-%m-%d)" ;;
         leader)
-            # leader 메시지 archive 는 자기 scope dir 안에 — mp-down 이 scope 째 archive
+            # leader 메시지 archive 는 자기 scope dir 안에 — issue-down 이 scope 째 archive
             scope="$(orch_scope_dir "$w")" || return 1
             printf '%s/leader-archive.md' "$scope" ;;
         worker)
@@ -200,7 +200,7 @@ orch_worker_path() {
 # 결정 순서:
 #   1) runs/<scope> 디렉토리 존재 → runs path
 #   2) 평탄 <scope> 디렉토리 존재 → 평탄 path (legacy)
-#   3) 둘 다 없음 → runs path (mp-up 이 mkdir 할 위치)
+#   3) 둘 다 없음 → runs path (issue-up 이 mkdir 할 위치)
 orch_scope_dir() {
     local s="$1"
     [[ "$s" =~ $ORCH_LEADER_PATTERN ]] || return 1
@@ -328,7 +328,7 @@ orch_worker_unregister() {
 
 # 워커 종료 시 registry 를 지우지 않고 <scope>/workers-archive/<role>.json 으로 mv +
 # terminated_at 필드 추가. report.sh 가 sidecar(jsonl) 분석할 때 cwd/started_at 이
-# 필요하므로 종료 후에도 보존해야 한다. mp-down archive mv 시 디렉토리 통째로 이동.
+# 필요하므로 종료 후에도 보존해야 한다. issue-down archive mv 시 디렉토리 통째로 이동.
 # leader/orch 에는 의미 없음 (top-level 등록 — scope 디렉토리 아님). worker 만 처리.
 orch_worker_archive_local() {
     local wid="$1" path archive_dir archive_path scope role scope_dir ts
@@ -553,7 +553,7 @@ orch_inbox_mtime() {
 }
 
 # ─── worktree cleanup ────────────────────────────────────────────────
-# mp-down 시 산하 워커의 머지된 브랜치 worktree 만 자동 정리. 미머지·dirty 는 보존.
+# issue-down 시 산하 워커의 머지된 브랜치 worktree 만 자동 정리. 미머지·dirty 는 보존.
 
 # orch_branch_merged <project_path> <branch> <base_branch>
 # 머지 확인. gh PR(squash/rebase 포함) → git merge commit 순으로 검사. 0=merged, 1=not.
@@ -767,7 +767,7 @@ orch_orphan_cleanup_suggest() {
 # ─── 에러 로깅 ─────────────────────────────────────────────────────────
 # 어느 스크립트든 실패하면 한 줄 JSON 으로 추적용 로그 남긴다.
 # scope-aware: orch / unknown 은 top-level errors.jsonl,
-# mp-NN, mp-NN/role 은 .orch/<mp-NN>/errors.jsonl (mp-down 이 scope 째 archive 함).
+# mp-NN, mp-NN/role 은 .orch/<mp-NN>/errors.jsonl (issue-down 이 scope 째 archive 함).
 
 # orch_errors_log_path [<wid>] — 호출자 worker_id 기반 errors.jsonl 경로 결정.
 # 인자 없으면 ORCH_WORKER_ID(또는 LOL_WORKER_ID 후방호환) → orch_detect_self 순으로 추론.

@@ -45,7 +45,7 @@ print_row "orch" ""
 # leaders + 산하 워커
 mapfile -t leaders < <(orch_active_leaders)
 if [ "${#leaders[@]}" -eq 0 ]; then
-    printf '\n(active leader 없음 — /orch:mp-up MP-XX 로 시작)\n'
+    printf '\n(active leader 없음 — /orch:issue-up MP-XX 로 시작)\n'
 else
     printf '\n'
     for leader in "${leaders[@]}"; do

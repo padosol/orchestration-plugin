@@ -10,7 +10,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/errors.sh:*)
 
 **역할**:
 - orch 스크립트 비0 종료 시 자동으로 errors.jsonl 에 한 줄 JSON 로그 추가
-- **scope-aware**: 워커가 mp-NN scope 면 `.orch/<mp-NN>/errors.jsonl`, orch/unknown 이면 `.orch/errors.jsonl`. mp-down 시 scope 째 archive 됨.
+- **scope-aware**: 워커가 mp-NN scope 면 `.orch/<mp-NN>/errors.jsonl`, orch/unknown 이면 `.orch/errors.jsonl`. issue-down 시 scope 째 archive 됨.
 - 패턴 보고 시스템(스크립트 / 첫 메시지 / 라우팅) 지속 개선용
 
 **예**:

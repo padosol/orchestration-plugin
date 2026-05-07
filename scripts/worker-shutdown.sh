@@ -32,7 +32,7 @@ case "$kind" in
         ;;
     *)
         echo "ERROR: worker-shutdown 은 worker(mp-NN/<project>) 만 호출 가능. 현재 self=$self (kind=$kind)" >&2
-        echo "  - leader 종료는 /orch:mp-down 으로." >&2
+        echo "  - leader 종료는 /orch:issue-down 으로." >&2
         echo "  - orch 종료는 /orch:down 으로." >&2
         exit 2
         ;;
@@ -52,7 +52,7 @@ echo "[shutdown] worker_id=$self pane=$pane_id self-terminating" >&2
 orch_worker_archive_local "$self" || true
 
 # reviewer 워커가 종료할 때는 PR 리뷰 코멘트를 막 게시한 직후라 머지 가능 상태.
-# 작업 워커 종료(머지 완료 후)는 mp-down 의 mp_done 알림이 대신 처리하므로 여기선 noop.
+# 작업 워커 종료(머지 완료 후)는 issue-down 의 mp_done 알림이 대신 처리하므로 여기선 noop.
 role="$(orch_wid_role "$self" 2>/dev/null || true)"
 if [ "${role#review-}" != "$role" ]; then
     scope="$(orch_wid_scope "$self" 2>/dev/null || true)"

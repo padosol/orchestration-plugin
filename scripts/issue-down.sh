@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# /orch:mp-down <issue-id> [--no-cleanup] — leader cascade shutdown.
-# orch가 호출 → leader pane에 /orch:mp-down 자동 전달 (leader가 cleanup).
+# /orch:issue-down <issue-id> [--no-cleanup] — leader cascade shutdown.
+# orch가 호출 → leader pane에 /orch:issue-down 자동 전달 (leader가 cleanup).
 # leader가 호출 → 산하 워커 cascade kill + 머지 브랜치 worktree 자동 정리 + scope dir archive.
 
 set -euo pipefail
@@ -11,7 +11,7 @@ source "${LIB_DIR}/lib.sh"
 orch_install_error_trap "$0"
 
 if [ "$#" -lt 1 ]; then
-    echo "사용법: /orch:mp-down <issue-id> [--no-cleanup]" >&2
+    echo "사용법: /orch:issue-down <issue-id> [--no-cleanup]" >&2
     exit 2
 fi
 
@@ -93,7 +93,7 @@ if [ "$self" = "orch" ]; then
     leader_pane="$(orch_worker_field "$mp_id" pane_id 2>/dev/null || true)"
     if [ -n "$leader_pane" ] && orch_pane_alive "$leader_pane"; then
         echo "INFO: leader pane=$leader_pane 에 cascade shutdown 위임"
-        delegated_cmd="/orch:mp-down $mp_id"
+        delegated_cmd="/orch:issue-down $mp_id"
         [ "$do_cleanup" -eq 0 ] && delegated_cmd="$delegated_cmd --no-cleanup"
         [ "$do_report" -eq 0 ] && delegated_cmd="$delegated_cmd --no-report"
         orch_send_keys_line "$leader_pane" "$delegated_cmd" \
@@ -123,7 +123,7 @@ fi
 
 # leader 본인이 호출
 if [ "$self_kind" != "leader" ] || [ "$self" != "$mp_id" ]; then
-    echo "ERROR: /orch:mp-down 은 orch 또는 해당 leader($mp_id) 에서만 호출 가능 (현재: ${self:-unknown})" >&2
+    echo "ERROR: /orch:issue-down 은 orch 또는 해당 leader($mp_id) 에서만 호출 가능 (현재: ${self:-unknown})" >&2
     exit 2
 fi
 
@@ -165,7 +165,7 @@ if [ "$do_report" -eq 1 ] && [ -f "$archive_dir/REPORT-data.md" ]; then
 fi
 
 # orch에 종료 보고 (leader pane 이 곧 죽으므로 stdout 은 남지 않음 — 보고는 inbox 통해 전달)
-orch_append_message "$mp_id" "orch" "[mp-down] $mp_id cascade shutdown 완료. archive: $archive_dir. 머지 worktree 자동 정리(+pull), 미머지는 보존.$report_hint" >/dev/null
+orch_append_message "$mp_id" "orch" "[issue-down] $mp_id cascade shutdown 완료. archive: $archive_dir. 머지 worktree 자동 정리(+pull), 미머지는 보존.$report_hint" >/dev/null
 orch_notify "orch" || true
 
 # Slack 알림 — MP 완료. archive 경로 + REPORT 작성 안내.

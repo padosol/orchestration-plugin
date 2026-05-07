@@ -35,8 +35,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLU
 
 처리 결과를 사용자/leader 에게 보고할 때 **반드시 message_id 를 인용**하라. message_id 가 빠진 보고는 처리 미완료로 간주.
 
-- ✅ 좋은 예: `[id=1778074602-9oovce] mp-7 mp-down 알림 처리. /orch:report mp-7 곧바로 트리거합니다.`
-- ❌ 나쁜 예: `mp-7 mp-down 알림 받았어요, report 작성 시작합니다.` (id 누락)
+- ✅ 좋은 예: `[id=1778074602-9oovce] mp-7 issue-down 알림 처리. /orch:report mp-7 곧바로 트리거합니다.`
+- ❌ 나쁜 예: `mp-7 issue-down 알림 받았어요, report 작성 시작합니다.` (id 누락)
 
 이유: 같은 from 에서 비슷한 본문이 여러 번 올 수 있어 id 없으면 어떤 메시지가 어떻게 처리됐는지 추적 불가.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# /orch:mp-up <issue-id> [--force]
+# /orch:issue-up <issue-id> [--force]
 # orch가 호출. MP-XX 팀리더 pane을 띄운다.
 
 set -euo pipefail
@@ -11,7 +11,7 @@ orch_install_error_trap "$0"
 
 if [ "$#" -lt 1 ]; then
     cat >&2 <<EOF
-사용법: /orch:mp-up <issue-id> [--force]
+사용법: /orch:issue-up <issue-id> [--force]
   issue-id 예: MP-13 / mp-13 / 13 (모두 mp-13으로 정규화)
   --force: 이미 떠 있는 leader가 있어도 cascade kill 후 재생성
 EOF
@@ -39,7 +39,7 @@ orch_settings_require || exit 2
 
 caller="$(orch_detect_self 2>/dev/null || true)"
 if [ "$caller" != "orch" ]; then
-    echo "ERROR: /orch:mp-up 은 orch에서만 호출 가능 (현재: ${caller:-unknown})" >&2
+    echo "ERROR: /orch:issue-up 은 orch에서만 호출 가능 (현재: ${caller:-unknown})" >&2
     echo "  orch pane이 등록 안 돼 있으면 먼저 /orch:up 실행" >&2
     exit 2
 fi
@@ -113,7 +113,7 @@ first_msg="너는 ${mp_id} 팀리더(leader)다. 사용자가 위임한 ${mp_upp
    - **LGTM** → 답신 그대로 작업 워커에 라우팅. 워커가 자동으로 wait-merge.sh 진입 (별도 '머지 대기' 지시 불필요).
    ⚠ LGTM 라우팅 후 워커가 wait-merge 안 들어가고 멈춰 있으면 \"\\\$ORCH_BIN_DIR/wait-merge.sh <pr> 실행\" 명시 트리거.
 3. **머지 대기**: 워커 wait-merge.sh 30s 폴링. 사용자 머지 시 'PR #N merged' 답신 후 자동 종료. exit 1 / 2 면 워커 보고 → escalate.
-4. **종료**: 모든 워커 종료 후 /orch:mp-down ${mp_id} → cascade kill + worktree 정리 + REPORT 자동 작성 + leader 자기 pane 종료.
+4. **종료**: 모든 워커 종료 후 /orch:issue-down ${mp_id} → cascade kill + worktree 정리 + REPORT 자동 작성 + leader 자기 pane 종료.
 
 [테스트·컨텍스트]
 - 크로스-프로젝트 E2E SKIP — 후속 이슈 메모. 워커 작업 독립 가정.
