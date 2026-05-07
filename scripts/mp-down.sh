@@ -91,7 +91,8 @@ if [ "$self" = "orch" ]; then
         delegated_cmd="/orch:mp-down $mp_id"
         [ "$do_cleanup" -eq 0 ] && delegated_cmd="$delegated_cmd --no-cleanup"
         [ "$do_report" -eq 0 ] && delegated_cmd="$delegated_cmd --no-report"
-        tmux send-keys -t "$leader_pane" "$delegated_cmd" Enter
+        orch_send_keys_line "$leader_pane" "$delegated_cmd" \
+            || echo "WARN: leader $mp_id (pane=$leader_pane) 에 위임 명령 전달 실패" >&2
         echo "OK delegated to leader $mp_id"
         exit 0
     fi
