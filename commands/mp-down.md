@@ -14,7 +14,10 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/mp-down.sh:*)
 
 **worktree 자동 정리 (default ON)**:
 - 산하 워커마다 그 worktree 의 현재 브랜치를 검사
-- **base 머지 검사 정확도를 위해 project_path 별로 `git pull --ff-only origin <base>` 1회**
+- 각 워커는 자기 프로젝트의 `default_base_branch` (PAD-6 override 우선) 로 검사
+- **base 머지 검사 정확도 + 사용자 수동 pull 면제 (PAD-12)**: project 마다 1회
+  - main working tree 가 이미 base 체크아웃 중 → `git pull --ff-only origin <base>`
+  - 다른 브랜치에 있음 → `git fetch origin <base>:<base>` 로 working tree 안 건드리고 local <base> ref 만 ff
 - 머지 확인: `gh pr list --state merged --head <branch>` (squash/rebase merge 까지) → fallback: `git branch -r --merged origin/<base>`
 - 머지됨 → `git worktree remove --force` + `git branch -d <branch>` (squash-merge 인식 거부 시 `-D` 폴백)
 - 미머지 / 검출 실패 → 보존, 위치 출력

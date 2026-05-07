@@ -605,11 +605,11 @@ orch_cleanup_merged_worktrees() {
         return 0
     fi
 
-    local base_branch
-    base_branch="$(orch_settings_global default_base_branch 2>/dev/null || true)"
-    [ -n "$base_branch" ] || base_branch="develop"
+    local default_base
+    default_base="$(orch_settings_global default_base_branch 2>/dev/null || true)"
+    [ -n "$default_base" ] || default_base="develop"
 
-    local sub_wid role worktree_path project_path branch any=0
+    local sub_wid role worktree_path project_path branch project_base current_branch any=0
     declare -A pulled_paths=()
     for sub_wid in $(orch_active_sub_workers "$mp_id"); do
         any=1
@@ -626,13 +626,28 @@ orch_cleanup_merged_worktrees() {
             continue
         fi
 
-        # base 머지 검사 정확도를 위해 project_path 에서 base 를 최신화 (project당 1회)
+        # PAD-6 정합: 각 프로젝트의 default_base_branch override 우선, 없으면 글로벌.
+        project_base="$(orch_settings_project_base_branch "$role" 2>/dev/null || true)"
+        [ -n "$project_base" ] || project_base="$default_base"
+
+        # PAD-12: project_path 의 local <base> ref 갱신 (project당 1회). 현재 체크아웃이
+        # base 면 pull --ff-only, 다른 브랜치에 있으면 fetch <base>:<base> 로 working tree
+        # 안 건드리고 ref 만 ff. 어느 쪽이든 결과를 명시적으로 로깅 — 사용자가 이후 수동
+        # pull 안 해도 develop 이 최신.
         if [ -z "${pulled_paths[$project_path]+x}" ]; then
-            git -C "$project_path" fetch origin "$base_branch" >/dev/null 2>&1 || true
-            if git -C "$project_path" pull --ff-only origin "$base_branch" >/dev/null 2>&1; then
-                echo "  pull OK $project_path (origin/$base_branch)"
+            current_branch="$(git -C "$project_path" symbolic-ref --short HEAD 2>/dev/null || true)"
+            if [ "$current_branch" = "$project_base" ]; then
+                if git -C "$project_path" pull --ff-only origin "$project_base" >/dev/null 2>&1; then
+                    echo "  pull OK $project_path ($project_base — current checkout, working tree 갱신)"
+                else
+                    echo "  pull skip $project_path ($project_base — ff-only 불가: 로컬 분기 / dirty)"
+                fi
             else
-                echo "  pull skip $project_path (ff-only 불가 — dirty 또는 분기 — 머지 검사가 부정확할 수 있음)"
+                if git -C "$project_path" fetch origin "${project_base}:${project_base}" >/dev/null 2>&1; then
+                    echo "  fetch OK $project_path (origin/$project_base → local $project_base, 현재 $current_branch 안 건드림)"
+                else
+                    echo "  fetch skip $project_path ($project_base — local ref 가 origin 보다 앞서 있거나 분기)"
+                fi
             fi
             pulled_paths[$project_path]=1
         fi
@@ -643,9 +658,9 @@ orch_cleanup_merged_worktrees() {
             continue
         fi
 
-        if orch_branch_merged "$project_path" "$branch" "$base_branch"; then
+        if orch_branch_merged "$project_path" "$branch" "$project_base"; then
             if orch_worktree_cleanup "$project_path" "$worktree_path" "$branch" 1; then
-                echo "  cleanup OK $sub_wid: $branch → $base_branch 머지 확인, worktree+local branch 정리"
+                echo "  cleanup OK $sub_wid: $branch → $project_base 머지 확인, worktree+local branch 정리"
             else
                 echo "  cleanup partial $sub_wid: 머지됐지만 정리 도중 일부 실패 (위 WARN)"
             fi
