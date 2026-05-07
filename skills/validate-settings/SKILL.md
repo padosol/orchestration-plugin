@@ -30,14 +30,14 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/validate-settings.sh
   "default_base_branch": "develop",
   "projects": {
     "ui": {
-      "declared": {"path", "kind", "tech_stack", "description"},
-      "actual":   {"path_exists", "build_files", "frameworks", "jdk"}
+      "declared": {"path", "kind", "tech_stack", "default_base_branch", "description"},
+      "actual":   {"path_exists", "build_files", "frameworks", "jdk", "actual_base_branch"}
     }
   }
 }
 ```
 
-`actual.frameworks` 는 `{"next": {"version": "16.1.6", "major": 16}, ...}` 형태. `actual.jdk` 는 정수.
+`actual.frameworks` 는 `{"next": {"version": "16.1.6", "major": 16}, ...}` 형태. `actual.jdk` 는 정수. `actual.actual_base_branch` 는 `git remote show origin` 의 HEAD branch (예: `develop`, `main`).
 
 ### 2. drift 식별
 
@@ -64,7 +64,12 @@ description 텍스트에서 다음 정규 패턴을 찾아 actual 과 대조:
 
 major 차이가 있으면 drift 로 보고. 마이너만 다르면(예: Spring Boot 3.3 → 3.5) 사용자에게 알리되 자동 수정은 보류 — 의도적으로 stale 일 수도 있음.
 
-#### D. kind 정합성
+#### D. default_base_branch
+- `declared.default_base_branch` 미지정이고 `actual.actual_base_branch` 가 글로벌 `default_base_branch` 와 다르면 → **drift 보고 + override 추가 제안**. (예: 글로벌 `develop` 인데 어떤 프로젝트 actual 이 `main` → `projects.<alias>.default_base_branch: "main"` 추가)
+- `declared.default_base_branch` 와 `actual.actual_base_branch` 둘 다 있고 다르면 → **불일치 보고**. 사용자에게 어느 쪽이 맞는지 확인. 보통 actual (실제 git 원격) 이 정답이라 declared 를 갱신.
+- 둘 다 같거나 declared 가 글로벌 default 와 동일하면 OK.
+
+#### E. kind 정합성
 - `frontend-spa` ↔ Next/React/Vue/Nuxt 중 하나라도 있어야
 - `backend-api` ↔ spring-boot 또는 다른 서버 프레임워크
 - `unknown` 인데 actual 에 명확한 프레임워크 있으면 → 분류 제안
@@ -87,8 +92,6 @@ drift 가 하나라도 있으면 다음 형식으로 보고:
 
 (전부 일치) → "✅ settings.json 모든 프로젝트가 실제 파일과 일치합니다."
 ```
-
-이모지(❌/⚠️/✅)는 사용자가 한눈에 알아보게 하는 용도라 사용. (이 가이드의 "이모지 금지" 규칙은 코드 파일 대상이고, 사용자 보고용 표 출력은 예외)
 
 ### 4. 수정 제안 → 사용자 동의 → Edit
 

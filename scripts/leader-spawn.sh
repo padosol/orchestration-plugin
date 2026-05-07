@@ -53,8 +53,7 @@ fi
 project_path="$(orch_settings_project_field "$project" path)"
 [ -d "$project_path" ] || { echo "ERROR: project path '$project_path' 없음" >&2; exit 2; }
 
-base_branch="$(orch_settings_global default_base_branch)"
-[ -n "$base_branch" ] || base_branch="develop"
+base_branch="$(orch_settings_project_base_branch "$project")"
 
 issue_num="${mp_id#mp-}"
 branch_name="${type}/MP-${issue_num}"
@@ -67,7 +66,21 @@ if [ -d "$worktree_path" ]; then
     echo "INFO: worktree '$worktree_path' 이미 존재 — 재사용"
 else
     echo "INFO: fetch origin/$base_branch from $project_path"
-    git -C "$project_path" fetch origin "$base_branch" >/dev/null 2>&1 || true
+    git -C "$project_path" fetch origin "$base_branch" 2>&1 | tail -5 || true
+
+    # PAD-6: fetch 실패는 silent || true 였다. origin/<base_branch> 가 실제로 없으면 fail-loud.
+    # 없으면 잘못된 base 에서 worktree 가 만들어지거나 (HEAD 기준), 'invalid reference' 로 죽는다.
+    if ! git -C "$project_path" rev-parse --verify --quiet "refs/remotes/origin/$base_branch" >/dev/null; then
+        global_default="$(orch_settings_global default_base_branch 2>/dev/null || true)"
+        cat >&2 <<EOF
+ERROR: origin/$base_branch 가 $project_path 에 없음 — worktree 생성 불가.
+  - 이 프로젝트의 기본 브랜치가 다르면 settings.json projects.$project.default_base_branch 로 override:
+      jq '.projects.$project.default_base_branch = "main"' .orch/settings.json
+  - 워크스페이스 default: ${global_default:-develop} (글로벌 .default_base_branch)
+  - 사용 가능한 원격 브랜치: $(git -C "$project_path" branch -r 2>/dev/null | sed 's/^ *//' | tr '\n' ' ')
+EOF
+        exit 2
+    fi
 
     if git -C "$project_path" show-ref --verify --quiet "refs/heads/$branch_name"; then
         echo "INFO: 브랜치 $branch_name 이미 존재 — attach"

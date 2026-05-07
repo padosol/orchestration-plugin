@@ -143,6 +143,15 @@ PY
             for marker in Cargo.toml go.mod requirements.txt pyproject.toml Dockerfile docker-compose.yml docker-compose.yaml; do
                 [ -f "$project_path/$marker" ] && printf '%s\tbuild_file\t%s\n' "$alias" "$marker"
             done
+
+            # PAD-6: 실제 원격 기본 브랜치 — declared default_base_branch 와 어긋나면 validate 측에서 flag.
+            actual_base="$(timeout 5 git -C "$project_path" remote show origin 2>/dev/null \
+                | awk '/HEAD branch:/ {print $NF; exit}')"
+            if [ -z "$actual_base" ] || [ "$actual_base" = "(unknown)" ]; then
+                actual_base="$(git -C "$project_path" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null \
+                    | sed 's@^origin/@@' || true)"
+            fi
+            [ -n "$actual_base" ] && printf '%s\tactual_base_branch\t%s\n' "$alias" "$actual_base"
         else
             printf '%s\tpath_exists\tfalse\n' "$alias"
         fi
@@ -164,6 +173,7 @@ per_project = collections.defaultdict(lambda: {
     "build_files": [],
     "frameworks": {},
     "jdk": None,
+    "actual_base_branch": None,
 })
 
 with open(tsv_path) as f:
@@ -189,6 +199,8 @@ with open(tsv_path) as f:
             }
         elif key == "jdk":
             bucket["jdk"] = int(parts[2]) if parts[2].isdigit() else parts[2]
+        elif key == "actual_base_branch":
+            bucket["actual_base_branch"] = parts[2]
 
 out = {
     "settings_path": settings_path,
@@ -201,6 +213,7 @@ for alias, declared in declared_projects.items():
             "path": declared.get("path"),
             "kind": declared.get("kind"),
             "tech_stack": declared.get("tech_stack", []),
+            "default_base_branch": declared.get("default_base_branch"),
             "description": declared.get("description", ""),
         },
         "actual": dict(per_project.get(alias, {
@@ -208,6 +221,7 @@ for alias, declared in declared_projects.items():
             "build_files": [],
             "frameworks": {},
             "jdk": None,
+            "actual_base_branch": None,
         })),
     }
 print(json.dumps(out, indent=2, ensure_ascii=False))

@@ -265,6 +265,27 @@ orch_settings_project_exists() {
     [ "$(jq -r --arg p "$project" '.projects[$p] // empty' "$ORCH_SETTINGS")" != "" ]
 }
 
+# 프로젝트의 기본 브랜치 결정 — projects.<alias>.default_base_branch > global default_base_branch > "develop".
+# 모든 워크스페이스가 develop 플로우는 아니다 (예: lol-db-schema 는 main). 프로젝트별 override 가
+# 핵심 안전장치 — 없으면 leader-spawn 이 origin/develop fetch 에서 silently fail 한 뒤 worktree
+# add 가 'fatal: invalid reference: origin/develop' 로 죽는다 (PAD-6).
+orch_settings_project_base_branch() {
+    local project="$1"
+    orch_settings_require || return 1
+    local override global
+    override="$(orch_settings_project_field "$project" default_base_branch 2>/dev/null || true)"
+    if [ -n "$override" ]; then
+        printf '%s' "$override"
+        return 0
+    fi
+    global="$(orch_settings_global default_base_branch 2>/dev/null || true)"
+    if [ -n "$global" ]; then
+        printf '%s' "$global"
+        return 0
+    fi
+    printf 'develop'
+}
+
 # ─── Worker registry ──────────────────────────────────────────────────
 
 # 인자: worker_id, kind, window_id, pane_id, cwd
