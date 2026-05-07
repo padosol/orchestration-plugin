@@ -115,6 +115,15 @@ first_msg="너는 ${worker_id} 워커다.
 - leader($mp_id) 가 곧 inbox에 작업 지시를 보낸다 — /orch:check-inbox 로 받아 처리.
 - 코드 수정은 worktree 안에서. 커밋은 safe-commit 스킬 사용.
 
+[브랜치 prefix type — 변경 성격에 맞춰 고를 것]
+- 본 워커는 type=$type 으로 spawn 됐다. 작업 내용이 다른 type 에 더 가까우면 leader 에 보고 후 재spawn 요청 (직접 브랜치 rename 금지).
+- feat: 신규 기능 / 신규 클래스·메서드·엔드포인트·테이블
+- fix: 버그 수정 / NPE·잘못된 로직·테스트 실패 해결
+- refactor: 동작 변화 없는 구조 개선 (리네이밍·메서드 추출·패키지 이동)
+- chore: 코드 영향 없는 산출물·문서 외 부속 변경 (audit 산출물, 의존 업그레이드, lint 룰 추가, CI/.github/workflows 변경 등)
+- docs: 사용자/개발자 문서 (.md, README, Javadoc, 주석)
+- test: 테스트 추가/수정만
+
 [메시지 규칙 — Hub-and-Spoke]
 - 모든 외부 통신은 leader($mp_id) 를 통한다.
 - leader 에 답신: /orch:send $mp_id '<답>'
