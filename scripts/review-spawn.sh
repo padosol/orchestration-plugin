@@ -75,7 +75,22 @@ sleep 4
 desc="$(orch_settings_project_field "$project" description)"
 stack="$(orch_settings_project_field "$project" tech_stack)"
 mp_upper="${mp_id^^}"
+issue_num_review="${mp_id#mp-}"
+tracker="$(orch_settings_issue_tracker)"
+gh_repo="$(orch_settings_github_issue_repo 2>/dev/null || true)"
 guidelines_path="$(dirname "$LIB_DIR")/references/coding-guidelines.md"
+
+case "$tracker" in
+    linear) issue_lookup_line="- 이슈 컨텍스트: mcp__linear-server__get_issue ${mp_upper}" ;;
+    github)
+        if [ -n "$gh_repo" ]; then
+            issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_review} --repo ${gh_repo}"
+        else
+            issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_review} (현재 repo 기준)"
+        fi
+        ;;
+    none|*) issue_lookup_line="- 이슈 컨텍스트: 트래커 없음 — PR description / leader 가 보낸 spec 으로만 판단" ;;
+esac
 
 first_msg="너는 ${worker_id} reviewer 다 (PR #${pr} 단발성). **코드 수정·커밋·push 금지** (읽기 전용). 답신은 GitHub PR 코멘트 + leader($mp_id) inbox 두 채널 의무.
 
@@ -95,7 +110,7 @@ first_msg="너는 ${worker_id} reviewer 다 (PR #${pr} 단발성). **코드 수�
 - gh pr view ${pr} --json title,body,files,headRefName,baseRefName
 - gh pr diff ${pr}  /  gh pr checks ${pr}
 - base 탐색: $project_path 안에서 grep / Read
-- Linear: mcp__linear-server__get_issue ${mp_upper}
+${issue_lookup_line}
 
 [답신 — 두 채널 의무]
 **같은 본문** 을 GitHub PR + leader inbox 둘 다에 게시. PR 코멘트는 사용자가 머지 검토 시 참고 자료.

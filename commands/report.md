@@ -36,9 +36,9 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 
 5. 사용자에게 경로와 한 줄 요약만 전달
 
-6. **AI-Ready 영향 검사 — 후속 Linear 이슈 자동 생성** (REPORT.html 직후 자동 수행):
+6. **AI-Ready 영향 검사 — 후속 이슈 자동 생성** (REPORT.html 직후 자동 수행):
 
-   변경 파일 목록을 보고 CLAUDE.md / 핵심 docs 가 stale 해질 후보를 식별 → 발견 시 후속 Linear 이슈 자동 생성. 매번 ai-ready-audit 100점 루브릭을 돌리는 게 아니라, **이번 변경분에 한정한 가벼운 영향 검사**.
+   변경 파일 목록을 보고 CLAUDE.md / 핵심 docs 가 stale 해질 후보를 식별 → 발견 시 후속 이슈 자동 생성. 매번 ai-ready-audit 100점 루브릭을 돌리는 게 아니라, **이번 변경분에 한정한 가벼운 영향 검사**.
 
    절차:
    1. **변경 파일 목록** — 위 데이터의 워커별 diff stat 에서 변경된 파일 경로 모두 모음.
@@ -50,19 +50,23 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
       - Build/CI 설정 변경 (gradle, package.json scripts, github workflow)
       - 기존 CLAUDE.md / AGENTS.md / docs/ 에서 변경 파일이 mention 됨
    3. **stale 여부 직접 확인** — 후보 파일을 mention 하는 CLAUDE.md/`*.md` 를 grep 한 뒤 본문이 변경 이후에도 정확한지 Read 로 검증. 부정확/누락 발견 시 stale 위치 (file:line) 명시.
-   4. **stale 발견 시 후속 Linear 이슈 자동 생성** — `mcp__linear-server__save_issue`:
-      - title: `[docs] MP-N 변경에 따른 CLAUDE.md / docs 갱신`
-      - description: 구체 stale 위치 + 갱신 방법 (commit / PR 링크 인용)
-      - team: 본 MP 와 동일한 team
-      - parent: 본 MP issue
-      - priority: 3 (Medium) 또는 4 (Low)
-      - labels: `docs`, `ai-ready` (팀에 라벨이 존재할 때만)
+   4. **stale 발견 시 후속 이슈 자동 생성** — settings.json 의 `issue_tracker` 값에 따라 분기:
+      - `linear` → `mcp__linear-server__save_issue`:
+        - title: `[docs] MP-N 변경에 따른 CLAUDE.md / docs 갱신`
+        - description: 구체 stale 위치 + 갱신 방법 (commit / PR 링크 인용)
+        - team: 본 MP 와 동일한 team
+        - parent: 본 MP issue
+        - priority: 3 (Medium) 또는 4 (Low)
+        - labels: `docs`, `ai-ready` (팀에 라벨이 존재할 때만)
+      - `github` → `gh issue create --repo <github_issue_repo> --title '...' --body '...' --label docs`
+        - title / body 형식 동일. parent 링크는 body 에 텍스트로 (`Related: #N`).
+      - `none` → 이슈 자동 생성 SKIP. stale 위치만 REPORT.html 의 `ai_ready_check.stale_items` 에 기록 — 사용자가 직접 후속 처리.
 
       stale 미발견 시 이슈 생성 안 함.
    5. **JSON 의 `ai_ready_check` 필드에 결과 반영** 후 4번 단계 다시 실행해 REPORT.html 갱신:
-      - 자동 생성된 이슈가 있으면 `auto_issue: {id, url}` 채움
+      - 자동 생성된 이슈가 있으면 `auto_issue: {id, url}` 채움 (트래커 linear/github 일 때만)
       - stale 위치는 `stale_items` 배열로
-      - narrative 한 줄 ("stale 항목 자동 검사 결과 X — 영향 없음" 또는 "X건 발견, 자동 이슈 생성")
+      - narrative 한 줄 ("stale 항목 자동 검사 결과 X — 영향 없음" 또는 "X건 발견, 자동 이슈 생성" 또는 "X건 발견, 트래커 미사용으로 직접 처리 필요")
 
 ## JSON 스키마
 
