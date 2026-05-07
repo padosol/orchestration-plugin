@@ -7,12 +7,16 @@
 # 실패 모드: webhook URL 미설정 / 네트워크 실패 / Slack 응답 비정상 → 모두 조용히
 # exit 0. 호출자(mp-down 등) 의 본 흐름을 절대 막지 않는다.
 #
-# Webhook URL 조회 우선순위:
-#   1. 환경변수 ORCH_SLACK_WEBHOOK
-#   2. ${ORCH_ROOT}/notify.local.json 의 .slack_webhook_url 키 (jq 필요)
-#   둘 다 없으면 조용히 종료.
+# 활성화 조건 (둘 다 만족해야 POST):
+#   1. ${ORCH_ROOT}/settings.json 의 .notify.slack_enabled == true (master 토글 — 사용자가
+#      cat 한 번으로 켜져있는지 확인 가능)
+#   2. webhook URL 이 설정됨:
+#      a. 환경변수 ORCH_SLACK_WEBHOOK
+#      b. 또는 ${ORCH_ROOT}/notify.local.json 의 .slack_webhook_url 키 (jq 필요)
+#   둘 중 하나라도 빠지면 조용히 종료 — 셋업 안 한 사용자 / 일반 개발 환경에서
+#   소음 없도록.
 #
-# 명시적 비활성화: ORCH_NOTIFY_ENABLED=0
+# 임시 per-shell disable: ORCH_NOTIFY_ENABLED=0
 #
 # 사용:
 #   notify-slack.sh <category> [mp_id] [title] [link]
@@ -29,9 +33,6 @@ LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
 source "${LIB_DIR}/lib.sh" 2>/dev/null || exit 0
 
-# 비활성화 — opt-out.
-[ "${ORCH_NOTIFY_ENABLED:-1}" = "0" ] && exit 0
-
 cat="${1:-}"
 mp_id="${2:-}"
 title="${3:-}"
@@ -39,9 +40,18 @@ link="${4:-}"
 
 [ -z "$cat" ] && exit 0   # 카테고리 없이 호출되면 noop (방어)
 
-# webhook URL — env 또는 file.
+# 1. settings.json 의 master 토글. 미설정 / false / 파일 없음 → 즉시 silent exit.
+[ -f "$ORCH_SETTINGS" ] || exit 0
+command -v jq >/dev/null 2>&1 || exit 0
+slack_enabled="$(jq -r '.notify.slack_enabled // false' "$ORCH_SETTINGS" 2>/dev/null || echo false)"
+[ "$slack_enabled" = "true" ] || exit 0
+
+# 2. per-shell 임시 비활성화 (settings.json 켰지만 이 셸에서만 끄고 싶을 때).
+[ "${ORCH_NOTIFY_ENABLED:-1}" = "0" ] && exit 0
+
+# 3. webhook URL — env 우선, 그 다음 notify.local.json. 없으면 silent exit.
 webhook="${ORCH_SLACK_WEBHOOK:-}"
-if [ -z "$webhook" ] && [ -f "${ORCH_ROOT}/notify.local.json" ] && command -v jq >/dev/null 2>&1; then
+if [ -z "$webhook" ] && [ -f "${ORCH_ROOT}/notify.local.json" ]; then
     webhook="$(jq -r '.slack_webhook_url // empty' "${ORCH_ROOT}/notify.local.json" 2>/dev/null || true)"
 fi
 [ -z "$webhook" ] && exit 0
