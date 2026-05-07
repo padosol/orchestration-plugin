@@ -103,10 +103,82 @@ mp-13/repo-a      ← MP-13 산하 repo-a 프로젝트 워커
 
 ### PR 라이프사이클 (4 단계)
 
-1. **CI 통과** — 워커가 PR 생성 후 `gh pr checks --watch --required` 로 자기 책임. 통과하면 leader 에 `PR #N ready for review + URL` 답신.
-2. **코드 리뷰** — leader 가 `/orch:review-spawn <project> <pr>` → 깨끗한 컨텍스트 reviewer 가 LGTM 또는 needs-changes 답신 후 자기 종료.
-3. **머지 대기** — 워커가 LGTM 받으면 자동으로 `wait-merge.sh` 진입 (30s 폴링). 사용자가 GitHub 에서 머지하면 워커 자기 종료.
-4. **cascade shutdown** — 모든 산하 워커 종료 확인 후 `/orch:issue-down`. worktree / 머지 브랜치 자동 정리, REPORT.html 작성, leader 자기 pane 까지 통째 종료.
+#### 1. CI 통과 — 워커 자기 책임
+
+- 워커가 worktree 안에서 작업 → `safe-commit` 으로 커밋 → `git push` → `gh pr create`.
+- 이후 `gh pr checks <pr> --watch --required` 로 블록 대기.
+- 실패: `gh run view <run-id> --log-failed | head -200` 로 진단. 자기 영역이면 직접 fix → 재push → 재watch. 다른 워커 영역이면 leader 에 escalate.
+- 통과: leader 에 `PR #N ready for review + URL` 답신.
+
+#### 2. 코드 리뷰 — 깨끗한 컨텍스트의 reviewer
+
+- leader 가 `/orch:review-spawn <project> <pr>` 호출 → reviewer 워커가 새 pane 에 spawn.
+- reviewer 는 **읽기 전용** (코드 수정·커밋·push 금지). `gh pr diff`, `gh pr view`, base repo grep / Read 만으로 변경분 검토.
+- 평가 기준: 정확성 / 사이드이펙트 / 테스트 커버리지 / 회귀 / 스타일. 4원칙 가이드 (Think Before / Simplicity / Surgical / Goal-Driven) 를 잣대로 적용.
+- **답신 두 채널 의무**:
+  - **GitHub PR 코멘트** (`gh pr comment`) — 사용자가 머지 시 PR 페이지에서 검토 자료 확인.
+  - **leader inbox** (`send.sh`) — orch 라우팅용.
+- LGTM 또는 needs-changes 답신 후 reviewer 자기 종료 (한 reviewer = 1회 검토).
+- needs-changes 받으면: 워커가 수정 → push → `re-review please` 답신 → leader 가 새 reviewer spawn.
+
+#### 3. 머지 대기 — 사용자 결정
+
+- 워커가 LGTM 받으면 즉시 `wait-merge.sh` 진입 (30s 폴링).
+- 머지 결정은 **항상 사용자**. plugin 은 자동 머지 안 함.
+- exit 0 (MERGED): 워커가 leader 에 `PR #N merged` 답신 후 다음 단계.
+- exit 1 (CLOSED): leader 에 보고 후 대기 — 사용자 의도 확인 필요.
+
+#### 4. Cascade shutdown — leader 자기 종료
+
+- 모든 산하 워커 종료 확인 후 `/orch:issue-down`.
+- 자동 정리:
+  - 머지된 worktree prune + 로컬 브랜치 삭제 + base 브랜치 fetch
+  - 미머지 worktree 보존 (수동 정리 가능)
+  - 산하 워커 registry → `workers-archive/` 보존 (sidecar 토큰·도구 분석용)
+  - `REPORT-data.md` 덤프 → archive 에 보존
+  - leader 자기 pane 까지 통째 kill
+
+---
+
+## 사이클 종료 후 자가진단 → 개선 루프
+
+회고는 일회성 보고가 아니라 **다음 사이클의 입력**. 페인포인트가 plugin 자체 개선 이슈로 다시 들어와 워커 가이드 / 라이프사이클 / 라우팅을 점진적으로 다듬는다.
+
+```
+issue-down ──→ REPORT-data.md ──→ /orch:report ──→ REPORT.html ──→ 페인포인트 발견
+                                                                        │
+plugin 개선 ←── version bump ←── PR 머지 ←── orch-plugin fix ←── 이슈 트래커 등록
+```
+
+#### 1. 자동 데이터 덤프
+
+`issue-down` 이 archive 직전에 `report.sh` 호출 → `archive/<mp>-YYYY-MM-DD/REPORT-data.md` 작성. 포함:
+
+- **워커별 토큰 사용량** — sidecar jsonl (`~/.claude/projects/<encoded-cwd>/`) 파싱
+- **도구 호출 분포** — Read / Edit / Bash / 슬래시 명령 빈도
+- **메시지 흐름** — orch ↔ leader ↔ worker 송수신 타임라인
+- **에러 로그** — `errors.jsonl` 항목
+
+#### 2. HTML 렌더
+
+orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으로 요약 → `render_report.py` 가 결정적 HTML (`REPORT.html`) 렌더. 골격:
+
+- 회고 메타 (시간 / 워커 수 / PR 수)
+- 워커별 토큰·도구 통계
+- **핸드오프 페인포인트** — 메시지 누락·지연, 권한 차단, 컨텍스트 사고, escalation 횟수
+- **Follow-up 개선 액션** — 다음 사이클 입력
+
+#### 3. 페인포인트 → 이슈 트래커
+
+사용자가 REPORT.html 의 페인포인트 / Follow-up 섹션을 보고 Linear 등 이슈 트래커에 `[orch] …` 류로 등록. 워커가 이미 자신의 마찰을 회고에 기록해 두었으면 그대로 ticketize.
+
+#### 4. plugin 개선 → 다음 사이클 적용
+
+- 이슈 fix PR → 머지 → `plugin.json` + `marketplace.json` version bump
+- 클라이언트: `/plugin marketplace update padosol` + `/plugin update orch@padosol`
+- 다음 issue-up 사이클부터 워커 first_msg / reviewer 가이드 / 정리 로직 등이 갱신된 동작으로 spawn
+
+이 루프가 작동하려면 사이클 종료 시 REPORT.html 을 한 번 훑는 습관이 필요하다. 마찰을 그냥 두면 다음 사이클에서 같은 비용이 반복된다.
 
 ---
 
