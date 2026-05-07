@@ -91,7 +91,7 @@ infer_project() {
         tech_json="$(printf '%s\n' "${tech_stack[@]}" | jq -R . | jq -s .)"
     fi
 
-    # PAD-6: 프로젝트별 기본 브랜치 자동 감지. 우선순위:
+    # 프로젝트별 기본 브랜치 자동 감지. 우선순위:
     #   1) git remote show origin 의 'HEAD branch' (네트워크 — 가장 정확).
     #   2) git symbolic-ref refs/remotes/origin/HEAD (로컬 캐시 — clone 시점 값이라 stale 가능).
     #   3) 흔한 후보 (develop / main / master) 중 origin 에 존재하는 것.
@@ -178,7 +178,7 @@ new_settings="$(jq -n \
 )"
 
 # --update: 기존 값 보존, 새 프로젝트만 추가, 기존 프로젝트는 그대로.
-# 단 PAD-6 이후 신규 default_base_branch 필드는 기존 프로젝트에도 누락 시 추론값으로 보강한다
+# 단 default_base_branch 필드는 기존 프로젝트에도 누락 시 추론값으로 보강한다
 # (override 가 이미 있으면 그대로 유지).
 if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
     new_settings="$(jq --slurpfile cur "$ORCH_SETTINGS" '

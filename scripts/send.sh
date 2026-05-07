@@ -77,7 +77,7 @@ fi
 msg_id="$(orch_append_message "$from" "$target" "$body")"
 orch_notify "$target" "$msg_id"
 
-# PAD-8: Slack 알림 — worker → orch 메시지는 사용자가 봐야 할 신호.
+# Slack 알림 — worker → orch 메시지는 사용자가 봐야 할 신호.
 # 본문에 "PR # ... ready for review" 패턴 있으면 pr_open 이 더 구체적이라 그쪽 우선.
 if [ "$from" != "orch" ]; then
     scope="$(orch_wid_scope "$from" 2>/dev/null || true)"

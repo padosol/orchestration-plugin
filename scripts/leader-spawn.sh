@@ -68,7 +68,7 @@ else
     echo "INFO: fetch origin/$base_branch from $project_path"
     git -C "$project_path" fetch origin "$base_branch" 2>&1 | tail -5 || true
 
-    # PAD-6: fetch 실패는 silent || true 였다. origin/<base_branch> 가 실제로 없으면 fail-loud.
+    # origin/<base_branch> 가 실제로 없으면 fail-loud (silent || true 로 묵살하지 않음).
     # 없으면 잘못된 base 에서 worktree 가 만들어지거나 (HEAD 기준), 'invalid reference' 로 죽는다.
     if ! git -C "$project_path" rev-parse --verify --quiet "refs/remotes/origin/$base_branch" >/dev/null; then
         global_default="$(orch_settings_global default_base_branch 2>/dev/null || true)"

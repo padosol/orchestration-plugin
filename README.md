@@ -112,7 +112,7 @@ mp-13/server      ← MP-13 산하 server 프로젝트 워커
 
 ## Slack 알림 (선택)
 
-워커 / leader 들이 동시다발로 끝나면 "지금 무엇을 확인해야 하는지" 헷갈린다 (PAD-8). 주요 이벤트마다 Slack incoming webhook 으로 즉시 push.
+워커 / leader 들이 동시다발로 끝나면 "지금 무엇을 확인해야 하는지" 헷갈린다. 주요 이벤트마다 Slack incoming webhook 으로 즉시 push.
 
 | 이모지 | 카테고리 | 트리거 |
 |---|---|---|
@@ -167,7 +167,7 @@ mp-13/server      ← MP-13 산하 server 프로젝트 워커
 ├── archive/<scope>-YYYY-MM-DD/    # mp-down 시 scope dir 통째 archive
 ├── workers/<id>.json              # orch / leader registry
 ├── errors.jsonl                   # top-level 에러 로그
-└── runs/<scope>/                  # 진행 중 MP 들 (PAD-3 wrapper)
+└── runs/<scope>/                  # 진행 중 MP 들 (wrapper)
     └── mp-13/
         ├── inbox/<role>.md
         ├── archive/<role>-YYYY-MM-DD.md
@@ -177,7 +177,7 @@ mp-13/server      ← MP-13 산하 server 프로젝트 워커
         └── errors.jsonl
 ```
 
-- **`runs/` wrapper**: 동시 진행 MP 가 많아져도 `.orch/` 루트가 정돈됨 (PAD-3).
+- **`runs/` wrapper**: 동시 진행 MP 가 많아져도 `.orch/` 루트가 정돈됨.
 - **inbox 0 bytes = 정상**: `inbox-archive.sh` 가 처리된 메시지를 archive 로 옮기고 inbox 를 truncate. 처리 흔적은 archive 에서 확인.
 
 ---
@@ -200,7 +200,7 @@ mp-13/server      ← MP-13 산하 server 프로젝트 워커
 }
 ```
 
-- `default_base_branch` 결정 우선순위: 프로젝트별 override → 글로벌 → `develop` (PAD-6).
+- `default_base_branch` 결정 우선순위: 프로젝트별 override → 글로벌 → `develop`.
 - `/orch:setup` 이 `git symbolic-ref refs/remotes/origin/HEAD` 로 자동 감지. 한 워크스페이스에 develop / main 플로우 섞여 있어도 안전.
 - `/orch:validate-settings` 로 description / tech_stack 이 실제 repo 와 어긋나는지 점검.
 
@@ -215,10 +215,10 @@ mp-13/server      ← MP-13 산하 server 프로젝트 워커
 → 마지막 30줄 + 활동 시각 + inbox 카운트. claude 가 사용자 입력 대기 중인지 확인.
 
 **`fatal: invalid reference: origin/<base>`**:
-프로젝트 entry 의 `default_base_branch` 가 원격에 없는 경우. `/orch:setup` 재실행 또는 `settings.json` 직접 수정 (PAD-6).
+프로젝트 entry 의 `default_base_branch` 가 원격에 없는 경우. `/orch:setup` 재실행 또는 `settings.json` 직접 수정.
 
 **머지된 worktree / 로컬 브랜치 잔재**:
-`/orch:mp-down` 이 자동 정리 (PAD-20). 그래도 남아 있으면 `git worktree prune` + `git branch -D <branch>` 수동.
+`/orch:mp-down` 이 자동 정리. 그래도 남아 있으면 `git worktree prune` + `git branch -D <branch>` 수동.
 
 **inbox 메시지 본문에 따옴표·괄호·줄바꿈**:
 슬래시 `/orch:send` 대신 Bash + heredoc:
@@ -242,5 +242,5 @@ ORCH_MSG
 - 라이프사이클 / 라우팅 코드: `scripts/lib.sh`
 - MP 시작·종료: `scripts/mp-up.sh`, `scripts/mp-down.sh`
 - PR 머지 대기: `scripts/wait-merge.sh`
-- REPORT 렌더러: `scripts/render_report.py` (PAD-13)
+- REPORT 렌더러: `scripts/render_report.py`
 - 설정 검증: `skills/validate-settings/SKILL.md`

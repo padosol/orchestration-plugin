@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# notify-slack.sh — orch 이벤트를 Slack incoming webhook 으로 즉시 POST (PAD-8).
+# notify-slack.sh — orch 이벤트를 Slack incoming webhook 으로 즉시 POST.
 #
 # 목적: 워커들이 동시다발로 끝났을 때 "지금 무엇을 확인해야 하는지" 사용자가
 # 노트북 닫고 있어도 폰으로 알 수 있도록. 디바운스/큐 없음 — fire-and-forget.
@@ -21,7 +21,7 @@
 # 사용:
 #   notify-slack.sh <category> [mp_id] [title] [link]
 #
-# category (PAD-8 합의):
+# category:
 #   mp_select        🤔  MP plan 컨펌 필요 (leader 가 막 떴고 plan 보낼 예정)
 #   pr_open          🟡  PR 새로 생성됨, review 마커 부재 (리뷰 작업 남음)
 #   pr_ready         🟢  PR review 마커 있음, 머지 가능

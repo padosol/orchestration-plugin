@@ -123,7 +123,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 - 6번 (AI-Ready 영향 검사 + 후속 이슈) 도 사용자 컨펌 없이 자동 수행 (사용자가 폐기 결정한 경우만 SKIP — 인박스 메시지에 그 신호가 보이면 SKIP).
 
 **주의**:
-- ❌ HTML / CSS 직접 작성 — 매번 양식 달라짐 (PAD-13 가 해결한 문제)
+- ❌ HTML / CSS 직접 작성 — 매번 양식 달라짐 (결정적 템플릿 렌더러가 따로 있음)
   ✅ JSON 만 만들고 render_report.py 에 위임. 양식은 스크립트에 고정
 - ❌ 단순 복붙 — 데이터 그대로 붙이기
   ✅ 데이터를 **해석**해 사용자 관점 narrative 로 풀어쓰기 (특히 summary.narrative, as_is_to_be, observations)

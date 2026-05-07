@@ -19,10 +19,9 @@
 #   .orch/runs/<scope>/leader-archive.md           leader inbox archive (mp-down 시 함께 archive)
 #   .orch/runs/<scope>/errors.jsonl                scope 별 에러 로그
 #
-# **PAD-3** 이후 신규 MP scope 는 `.orch/runs/<scope>/` 아래에 묶인다 — 동시 진행 MP 가
-# 많아져도 .orch 루트가 어수선하지 않도록 wrapper 한 단계 추가. 변경 전에 만들어진 활성
-# MP 는 `.orch/<scope>/` 평탄 위치에 그대로 있고, orch_scope_dir 가 양쪽을 본다 — 신규는
-# runs/, legacy 는 평탄 path. 진행중인 MP 가 mp-down 으로 종료되면 자연스럽게 정리됨.
+# 신규 MP scope 는 `.orch/runs/<scope>/` 아래에 묶인다 — 동시 진행 MP 가 많아져도 .orch
+# 루트가 어수선하지 않도록 wrapper 한 단계 추가. 후방호환: 평탄 `.orch/<scope>/` 도 함께
+# 인식 — orch_scope_dir 가 양쪽을 본다.
 #
 # **inbox 빈 파일 = 처리할 메시지 없음 (정상 상태).** inbox-archive.sh 가 처리된 메시지
 # 를 archive/ 로 옮긴 뒤 inbox/<role>.md 를 truncate 한다. 처리 흔적은 archive 쪽 확인.
@@ -196,10 +195,10 @@ orch_worker_path() {
 }
 
 # scope 디렉토리 (mp-13 sandbox 전체).
-# PAD-3: `.orch/runs/<scope>/` 가 신규 위치. legacy `.orch/<scope>/` 도 fallback 으로 유지.
+# `.orch/runs/<scope>/` 가 기본 위치. 평탄 `.orch/<scope>/` 도 fallback 으로 인식.
 # 결정 순서:
 #   1) runs/<scope> 디렉토리 존재 → runs path
-#   2) legacy <scope> 디렉토리 존재 → legacy path (PAD-3 이전 활성 MP)
+#   2) 평탄 <scope> 디렉토리 존재 → 평탄 path (legacy)
 #   3) 둘 다 없음 → runs path (mp-up 이 mkdir 할 위치)
 orch_scope_dir() {
     local s="$1"
@@ -268,7 +267,7 @@ orch_settings_project_exists() {
 # 프로젝트의 기본 브랜치 결정 — projects.<alias>.default_base_branch > global default_base_branch > "develop".
 # 모든 워크스페이스가 develop 플로우는 아니다 (예: lol-db-schema 는 main). 프로젝트별 override 가
 # 핵심 안전장치 — 없으면 leader-spawn 이 origin/develop fetch 에서 silently fail 한 뒤 worktree
-# add 가 'fatal: invalid reference: origin/develop' 로 죽는다 (PAD-6).
+# add 가 'fatal: invalid reference: origin/develop' 로 죽는 것을 막는다.
 orch_settings_project_base_branch() {
     local project="$1"
     orch_settings_require || return 1
@@ -553,7 +552,7 @@ orch_branch_merged() {
 # merge_verified=0 (기본): dirty 면 보존, branch -d 로 unmerged 보호.
 # merge_verified=1: 호출자가 PR 머지를 이미 확인 — 빌드 산출물 등 untracked 는 버리고
 #   --force 로 worktree remove, squash-merge 인식 못 하는 -d 거부 시 -D 폴백.
-#   (PAD-20: squash-merge 시 git 메타·로컬 브랜치 잔재 누적 방지.)
+#   (squash-merge 시 git 메타·로컬 브랜치 잔재 누적 방지.)
 orch_worktree_cleanup() {
     local project_path="$1" worktree_path="$2" branch="$3" merge_verified="${4:-0}"
 
@@ -605,11 +604,11 @@ orch_cleanup_merged_worktrees() {
         return 0
     fi
 
-    local base_branch
-    base_branch="$(orch_settings_global default_base_branch 2>/dev/null || true)"
-    [ -n "$base_branch" ] || base_branch="develop"
+    local default_base
+    default_base="$(orch_settings_global default_base_branch 2>/dev/null || true)"
+    [ -n "$default_base" ] || default_base="develop"
 
-    local sub_wid role worktree_path project_path branch any=0
+    local sub_wid role worktree_path project_path branch project_base current_branch any=0
     declare -A pulled_paths=()
     for sub_wid in $(orch_active_sub_workers "$mp_id"); do
         any=1
@@ -626,13 +625,27 @@ orch_cleanup_merged_worktrees() {
             continue
         fi
 
-        # base 머지 검사 정확도를 위해 project_path 에서 base 를 최신화 (project당 1회)
+        # 각 프로젝트의 default_base_branch override 우선, 없으면 글로벌.
+        project_base="$(orch_settings_project_base_branch "$role" 2>/dev/null || true)"
+        [ -n "$project_base" ] || project_base="$default_base"
+
+        # project_path 의 local <base> ref 갱신 (project당 1회). 현재 체크아웃이 base 면
+        # pull --ff-only, 다른 브랜치에 있으면 fetch <base>:<base> 로 working tree 안
+        # 건드리고 ref 만 ff. 어느 쪽이든 결과를 명시적으로 로깅.
         if [ -z "${pulled_paths[$project_path]+x}" ]; then
-            git -C "$project_path" fetch origin "$base_branch" >/dev/null 2>&1 || true
-            if git -C "$project_path" pull --ff-only origin "$base_branch" >/dev/null 2>&1; then
-                echo "  pull OK $project_path (origin/$base_branch)"
+            current_branch="$(git -C "$project_path" symbolic-ref --short HEAD 2>/dev/null || true)"
+            if [ "$current_branch" = "$project_base" ]; then
+                if git -C "$project_path" pull --ff-only origin "$project_base" >/dev/null 2>&1; then
+                    echo "  pull OK $project_path ($project_base — current checkout, working tree 갱신)"
+                else
+                    echo "  pull skip $project_path ($project_base — ff-only 불가: 로컬 분기 / dirty)"
+                fi
             else
-                echo "  pull skip $project_path (ff-only 불가 — dirty 또는 분기 — 머지 검사가 부정확할 수 있음)"
+                if git -C "$project_path" fetch origin "${project_base}:${project_base}" >/dev/null 2>&1; then
+                    echo "  fetch OK $project_path (origin/$project_base → local $project_base, 현재 $current_branch 안 건드림)"
+                else
+                    echo "  fetch skip $project_path ($project_base — local ref 가 origin 보다 앞서 있거나 분기)"
+                fi
             fi
             pulled_paths[$project_path]=1
         fi
@@ -643,9 +656,9 @@ orch_cleanup_merged_worktrees() {
             continue
         fi
 
-        if orch_branch_merged "$project_path" "$branch" "$base_branch"; then
+        if orch_branch_merged "$project_path" "$branch" "$project_base"; then
             if orch_worktree_cleanup "$project_path" "$worktree_path" "$branch" 1; then
-                echo "  cleanup OK $sub_wid: $branch → $base_branch 머지 확인, worktree+local branch 정리"
+                echo "  cleanup OK $sub_wid: $branch → $project_base 머지 확인, worktree+local branch 정리"
             else
                 echo "  cleanup partial $sub_wid: 머지됐지만 정리 도중 일부 실패 (위 WARN)"
             fi
@@ -655,7 +668,7 @@ orch_cleanup_merged_worktrees() {
     done
     [ "$any" -eq 0 ] && echo "  cleanup: 산하 워커 등록 없음 — skip"
 
-    # PAD-20: 루프 중 worktree remove 가 부분 실패한 경우라도, 방문한 project 마다 prune
+    # 루프 중 worktree remove 가 부분 실패한 경우라도, 방문한 project 마다 prune
     # 1회 실행해 dangling 메타 (gitdir points to non-existent location) 정리.
     local pruned_path
     for pruned_path in "${!pulled_paths[@]}"; do
@@ -671,7 +684,7 @@ orch_cleanup_merged_worktrees() {
 # project 에 대해 (1) git worktree prune (메타데이터만 정리, 안전) 실행하고 (2) mp_id 패턴
 # 과 일치하는 로컬 브랜치 후보를 PR 머지 상태와 함께 출력만 한다. 사용자가 결과를 보고
 # 직접 git branch -D 실행하도록.
-# (PAD-20: cascade 흐름이 깨져 leader 가 archive 만 mv 하고 죽었을 때 잔재 보강.)
+# (cascade 흐름이 깨져 leader 가 archive 만 mv 하고 죽었을 때 잔재 보강.)
 orch_orphan_cleanup_suggest() {
     local mp_id="$1"
     [ -n "$mp_id" ] || return 0
@@ -775,7 +788,7 @@ orch_log_error() {
             "$ts" "$wid" "$src" "$rc" "$esc_err" >> "$log_path" 2>/dev/null || true
     fi
 
-    # PAD-8: Slack 알림 — 에러 발생 시. notify-slack.sh 자체가 무한루프 방지를 위해
+    # Slack 알림 — 에러 발생 시. notify-slack.sh 자체가 무한루프 방지를 위해
     # ORCH_NOTIFY_ENABLED=0 또는 webhook 미설정 시 조용히 종료한다.
     local notify_dir notify_script
     notify_dir="$(dirname "${BASH_SOURCE[0]}")"
@@ -790,7 +803,7 @@ orch_log_error() {
 
 # 모든 errors.jsonl 모으기 — top-level + 모든 mp-*/errors.jsonl (live + archive).
 # stdout 으로 한 줄 JSON 들 출력. /orch:errors 가 사용.
-# PAD-3 이후: 신규 위치 runs/mp-*/ 와 후방호환 평탄 mp-*/ 둘 다 스캔.
+# 기본 위치 runs/mp-*/ 와 후방호환 평탄 mp-*/ 둘 다 스캔.
 orch_collect_all_errors() {
     [ -f "$ORCH_ERRORS_LOG" ] && cat "$ORCH_ERRORS_LOG" 2>/dev/null
     local f

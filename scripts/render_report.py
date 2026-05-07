@@ -3,7 +3,7 @@
 
 orch 가 /orch:report <mp> 의 raw markdown 데이터를 해석해 구조화된 JSON 으로
 요약하면, 이 스크립트가 항상 동일한 HTML 골격 + CSS 로 렌더해 매번 양식이
-달라지는 문제를 없앤다 (PAD-13).
+달라지는 문제를 없앤다.
 
 사용:
     render_report.py <input.json> <output.html>

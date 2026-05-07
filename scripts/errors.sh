@@ -53,7 +53,7 @@ fi
 
 # 데이터 소스 결정
 if [ -n "$filter_mp" ]; then
-    # 그 MP 의 errors.jsonl (live 또는 archive). PAD-3: runs/ 와 legacy 양쪽.
+    # 그 MP 의 errors.jsonl (live 또는 archive). runs/ 와 평탄 legacy 양쪽 검색.
     candidates=(
         "$(orch_scope_dir "$filter_mp" 2>/dev/null)/errors.jsonl"
         "$ORCH_RUNS_DIR/$filter_mp/errors.jsonl"

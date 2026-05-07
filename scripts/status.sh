@@ -58,7 +58,7 @@ else
 fi
 
 # orphan 검출: <scope>/workers/ 에 leader가 없는 산하 워커
-# PAD-3: runs/<scope>/ 와 legacy <scope>/ 양쪽 스캔.
+# runs/<scope>/ 와 평탄 <scope>/ 양쪽 스캔.
 echo
 orphans=()
 shopt -s nullglob
