@@ -1,160 +1,246 @@
-# orch — tmux 멀티 세션 오케스트레이션 plugin
+# orch — Claude Code 멀티-워커 오케스트레이션
 
-한 사용자가 `orch` 윈도우에서 운전하고, 워커 세션들이 파일 메일박스로 메시지를 주고받는다.
+**한 명의 PM (orch) + 여러 개의 팀리더 (leader) + 그 산하 프로젝트 워커들** 을 tmux pane / git worktree / 파일 메일박스 위에 얹어 한 사람이 동시에 굴리도록 만든 Claude Code 플러그인.
 
-## Install
+```
+사용자 ─ orch ─┬─ MP-13 (leader) ─┬─ mp-13/server  → PR #142
+              │                   ├─ mp-13/ui      → PR #143
+              │                   └─ mp-13/repo    → PR #144
+              └─ MP-37 (leader) ─┬─ mp-37/server  → PR #97
+                                 └─ mp-37/ui      → PR #166
+```
+
+각 leader / worker 는 자기 worktree + 자기 Claude 세션을 가진다. orch 는 사용자에게서 받은 큰 이슈를 leader 에 위임하고, leader 는 산하 워커에 작업을 분배한다. 모든 메시지는 hub-and-spoke — 워커끼리 직접 통신은 차단되고 항상 leader 를 경유.
+
+---
+
+## 무엇을 풀어주는가
+
+- **컨텍스트 분리**: 큰 이슈를 한 Claude 세션에 통째로 넣으면 컨텍스트 압박으로 품질이 떨어진다. orch 가 분해해서 워커 별로 깨끗한 컨텍스트를 준다.
+- **병렬 작업**: lol-server / lol-ui / lol-repository 등 여러 repo 에 걸친 이슈를 워커가 독립적으로 동시 진행.
+- **PR 라이프사이클 자동화**: PR 생성 → CI 통과 대기 → 깨끗한 컨텍스트의 reviewer 워커 자동 spawn → LGTM 라우팅 → 머지 대기 → 자동 cascade shutdown + worktree 정리 + REPORT.html 자동 작성.
+- **사람 알림**: 동시다발로 끝나는 워커들 사이에서 "지금 뭐 봐야 하지?" 가 안 되도록 Slack 알림 옵션 (이벤트 6 카테고리, 즉시 발송).
+
+---
+
+## 빠른 시작
+
+### 1. 설치
 
 ```
 /plugin marketplace add padosol/padosol-marketplace
 /plugin install orch
 ```
 
-설치 시 scope를 **project**로 선택하면 `<project>/.claude/settings.json`에 `enabledPlugins`로 등록된다 (그 프로젝트에서만 활성화).
+scope 는 **project** 권장 (`<project>/.claude/settings.json` 에 등록 → 그 워크스페이스에서만 활성화).
 
-## 구성 요소
+### 2. 워크스페이스 셋업
 
-- `commands/send.md` → `/orch:send <target> <message>`
-- `commands/check-inbox.md` → `/orch:check-inbox`
-- `commands/status.md` → `/orch:status`
-- `hooks/session-start.sh` → SessionStart hook (`LOL_ROLE` 환경변수 기반)
-- `scripts/up.sh` / `scripts/down.sh` → tmux 세션 시작/종료 (셸에서 직접 실행)
-
-## 사용
-
-### tmux 세션 시작
-
-셸에서 직접 실행 (Claude 안이 아님):
+워크스페이스 루트 (여러 repo 들의 부모 디렉토리) 에서:
 
 ```bash
 "$CLAUDE_PLUGIN_ROOT/scripts/up.sh"
 ```
 
-→ `metapick` tmux 세션이 뜨고 4개 윈도우(orch/server/ui/repo)에서 claude가 자동 실행된다.
-각 워커 윈도우는 `LOL_ROLE` 환경변수로 자기 역할을 안다.
-
-### orch 윈도우에서 작업 분배
+→ `metapick` tmux 세션이 뜨고 orch pane 에서 Claude 가 자동 실행. orch pane 에서:
 
 ```
-/orch:send server "새 매치 통계 API 만들어줘. 응답 스키마는 ui와 협의."
+/orch:setup
 ```
 
-→ inbox에 추가되고 server 윈도우에 자동으로 `/orch:check-inbox`가 입력된다.
-server 워커는 메시지를 처리하고, 필요하면 `/orch:send ui "..."`로 협의를 시작한다.
+→ 산하 git repo 들을 자동 발견해 `.orch/settings.json` 작성 (alias, path, kind, default_base_branch 자동 감지).
 
-### 상태 확인
+### 3. 첫 MP 위임
+
+orch 와 평소처럼 대화하다가 큰 이슈가 떴을 때:
 
 ```
-/orch:status
+/orch:mp-up MP-13
 ```
 
-### 종료
+→ MP-13 leader pane 이 뜨고 Linear 이슈를 읽어 plan 을 orch 인박스로 보고 → 사용자가 confirm → leader 가 `/orch:leader-spawn server fix` 등으로 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:mp-down MP-13` 으로 정리.
 
-```bash
-"$CLAUDE_PLUGIN_ROOT/scripts/down.sh"
+---
+
+## Slash 명령 한눈에
+
+| 명령 | 호출자 | 용도 |
+|---|---|---|
+| `/orch:setup` | 사용자 (orch) | `.orch/settings.json` 자동 생성 |
+| `/orch:up` | 사용자 (orch) | 현재 pane 을 orch 로 등록 (1회) |
+| `/orch:down` | 사용자 | tmux 세션 통째 종료 |
+| `/orch:mp-up <id>` | orch | MP-NN leader 띄움 |
+| `/orch:mp-down <id>` | orch / leader | MP cascade shutdown + 정리 + REPORT |
+| `/orch:leader-spawn <project> [type]` | leader | 산하 프로젝트 워커 spawn |
+| `/orch:review-spawn <project> <pr>` | leader | PR 리뷰 전용 워커 (단발성) |
+| `/orch:send <target> <msg>` | 누구나 | hub-and-spoke 메시지 |
+| `/orch:check-inbox [id]` | 누구나 | 자기 인박스 처리 |
+| `/orch:status` | 누구나 | 전체 위계 + inbox 상태 |
+| `/orch:peek <wid>` | 사용자 | 워커 pane 마지막 30줄 — 응답 없는 워커 진단 |
+| `/orch:errors [...]` | 사용자 | 통합 에러 로그 |
+| `/orch:report <id>` | 사용자 | REPORT-data.md → REPORT.html 렌더 |
+| `/orch:validate-settings` | 사용자 | settings.json 과 실제 repo 정합성 검사 |
+
+---
+
+## 핵심 개념
+
+### 2-tier hub-and-spoke
+
+- **orch** — 사용자와 대화하는 PM. 큰 이슈를 받아 leader 에 위임.
+- **leader (mp-NN)** — 한 MP 의 책임자. 산하 프로젝트 워커들을 spawn / 라우팅 / shutdown.
+- **worker (mp-NN/&lt;project&gt;)** — 한 repo 의 작업자. 자기 worktree + 자기 PR 라이프사이클 책임.
+
+워커끼리는 직접 통신 안 됨. `/orch:send` 가 라우팅 가드로 막는다. 다른 프로젝트와 의존 생기면 leader 가 라우팅하거나 orch 로 escalate.
+
+### worker_id 표기
+
+```
+orch              ← PM
+mp-13             ← leader
+mp-13/server      ← MP-13 산하 server 프로젝트 워커
 ```
 
-### Slack 알림 (선택)
+### PR 라이프사이클 (4 단계)
 
-워커 / leader 들이 동시다발로 끝나면 "지금 무엇을 확인해야 하는지" 헷갈린다 (PAD-8). orch 가 주요 이벤트마다 Slack incoming webhook 으로 즉시 push 하도록 켤 수 있다.
+1. **CI 통과** — 워커가 PR 생성 후 `gh pr checks --watch --required` 로 자기 책임. 통과하면 leader 에 `PR #N ready for review + URL` 답신.
+2. **코드 리뷰** — leader 가 `/orch:review-spawn <project> <pr>` → 깨끗한 컨텍스트 reviewer 가 LGTM 또는 needs-changes 답신 후 자기 종료.
+3. **머지 대기** — 워커가 LGTM 받으면 자동으로 `wait-merge.sh` 진입 (30s 폴링). 사용자가 GitHub 에서 머지하면 워커 자기 종료.
+4. **cascade shutdown** — 모든 산하 워커 종료 확인 후 `/orch:mp-down`. worktree / 머지 브랜치 자동 정리, REPORT.html 작성, leader 자기 pane 까지 통째 종료.
 
-**카테고리** (이벤트 발생 즉시 1회 POST, 디바운스 없음):
+---
+
+## Slack 알림 (선택)
+
+워커 / leader 들이 동시다발로 끝나면 "지금 무엇을 확인해야 하는지" 헷갈린다 (PAD-8). 주요 이벤트마다 Slack incoming webhook 으로 즉시 push.
 
 | 이모지 | 카테고리 | 트리거 |
 |---|---|---|
-| 🤔 | `mp_select` | `mp-up` 직후 (leader 떴음, plan 컨펌 메시지 곧 도착) |
-| 🟡 | `pr_open` | 워커 → leader 메시지에 `PR #N ready for review` 패턴 매치 |
-| 🟢 | `pr_ready` | reviewer 워커 (`role` 이 `review-` 시작) 가 `worker-shutdown` 직전 |
+| 🤔 | `mp_select` | `mp-up` 직후 — leader 떴음, plan 컨펌 곧 도착 |
+| 🟡 | `pr_open` | 워커 → leader 메시지에 `PR #N ready for review` 매치 |
+| 🟢 | `pr_ready` | reviewer 워커가 `worker-shutdown` 직전 (머지 가능) |
 | ❓ | `worker_question` | 워커 → orch 메시지 송신 |
 | ✅ | `mp_done` | `mp-down` 종료 |
 | 🔴 | `error` | `errors.jsonl` 새 entry (자동 트랩) |
 
-**활성화 조건** (둘 다 만족해야 POST — 둘 중 하나라도 빠지면 자동 silent noop):
+**활성화 조건** (둘 다 만족해야 POST):
 
-1. **`.orch/settings.json` 의 `notify.slack_enabled: true`** — master 토글. `cat .orch/settings.json` 한 번에 켜져 있는지 확인 가능.
-2. **webhook URL 이 환경변수 또는 파일에 설정됨**.
+1. `.orch/settings.json` 에 `notify.slack_enabled: true` (master 토글 — `cat` 한 번에 켜져 있는지 확인)
+2. webhook URL 이 환경변수 (`ORCH_SLACK_WEBHOOK`) 또는 `${ORCH_ROOT}/notify.local.json` (gitignore 필수) 에 설정
 
-기본값은 `notify.slack_enabled: false` 이므로, **셋업 안 한 사용자는 알림이 절대 발생하지 않는다** (소음 없음).
+기본값 `false` — 셋업 안 한 사용자는 절대 알림 안 발생 (소음 없음).
 
 **셋업**:
 
-1. Slack workspace 의 채널에서 *Incoming Webhooks* 앱 추가 → 채널 선택 → webhook URL 발급 (`https://hooks.slack.com/services/T.../B.../...`).
-2. `.orch/settings.json` 에 master 토글 추가:
+1. Slack workspace 채널에 *Incoming Webhooks* 추가 → URL 발급.
+2. `.orch/settings.json`:
    ```json
-   {
-     "default_base_branch": "develop",
-     "notify": { "slack_enabled": true },
-     "projects": { ... }
-   }
+   { "notify": { "slack_enabled": true } }
    ```
-3. webhook URL 을 환경변수 또는 파일에 보관 (settings.json 에 직접 박지 않는다 — settings.json 은 보통 커밋되니 secret 노출):
-   - **환경변수** (권장 — 셸 rc 에 한 줄):
-     ```bash
-     export ORCH_SLACK_WEBHOOK='https://hooks.slack.com/services/.../.../...'
-     ```
-   - **또는 파일**: `${ORCH_ROOT}/notify.local.json` (`{"slack_webhook_url": "..."}`). `.gitignore` 에 `notify.local.json` 한 줄 추가 필수.
-4. tmux 세션을 새로 시작 (또는 `source ~/.bashrc`) — orch / leader / worker pane 모두 환경변수 상속.
-5. 동작 확인 — `.orch/settings.json` 이 있는 디렉토리에서:
+3. webhook URL — 셸 rc 에:
+   ```bash
+   export ORCH_SLACK_WEBHOOK='https://hooks.slack.com/services/.../.../...'
+   ```
+4. tmux 세션 재시작 → 모든 pane 환경변수 상속.
+5. 동작 확인:
    ```bash
    "$CLAUDE_PLUGIN_ROOT/scripts/notify-slack.sh" mp_done MP-test "동작 확인"
    ```
 
 **비활성화**:
-- 영구 끄기 → `settings.json` 에서 `notify.slack_enabled: false` (또는 `notify` 섹션 통째 삭제).
-- 이 셸에서만 임시 끄기 → `export ORCH_NOTIFY_ENABLED=0`.
+- 영구: `settings.json` 에서 `slack_enabled: false`.
+- 셸 단위 임시: `export ORCH_NOTIFY_ENABLED=0`.
 
-**주의**:
-- 실패는 조용히 흡수 (호출자 본 흐름 절대 안 막음). curl 5초 timeout.
-- webhook URL 은 **민감 정보** — git 커밋 / 공유 채널 노출 금지. settings.json 은 토글만 (URL 박지 말 것).
+**주의**: 실패는 silent (호출자 본 흐름 안 막음). webhook URL 은 secret — settings.json 에 박지 말 것 (커밋 누출 위험).
 
-## 메일박스 / 디스크 레이아웃
+---
 
-프로젝트 루트의 `.orch/` 디렉토리에 생성된다.
+## 디스크 레이아웃
+
+워크스페이스 루트의 `.orch/`:
 
 ```
 .orch/
-├── settings.json                          # 프로젝트 메타데이터
-├── inbox/<id>.md                          # orch / leader 인박스
-├── archive/<id>-YYYY-MM-DD.md             # orch / leader 메시지 archive
-├── archive/<scope>-YYYY-MM-DD/            # mp-down 시 scope dir 통째 archive
-├── workers/<id>.json                      # orch / leader registry
-├── errors.jsonl                           # top-level 에러 로그
-└── runs/                                  # 진행 중 MP scope 들 (PAD-3 wrapper)
-    └── <scope>/                           # ex. mp-13
-        ├── inbox/<role>.md                # leader 산하 워커 인박스
+├── settings.json                  # 프로젝트 메타데이터
+├── inbox/<id>.md                  # orch / leader 인박스
+├── archive/<id>-YYYY-MM-DD.md     # 처리 완료 메시지
+├── archive/<scope>-YYYY-MM-DD/    # mp-down 시 scope dir 통째 archive
+├── workers/<id>.json              # orch / leader registry
+├── errors.jsonl                   # top-level 에러 로그
+└── runs/<scope>/                  # 진행 중 MP 들 (PAD-3 wrapper)
+    └── mp-13/
+        ├── inbox/<role>.md
         ├── archive/<role>-YYYY-MM-DD.md
         ├── workers/<role>.json
-        ├── worktrees/<project>/           # git worktree
+        ├── worktrees/<project>/   # git worktree
         ├── leader-archive.md
-        └── errors.jsonl                   # scope 별 에러 로그
+        └── errors.jsonl
 ```
 
-- 동시 진행 MP 가 많아져도 `.orch/` 루트가 어수선해지지 않도록 `runs/` 한 단계 wrapper 사용.
-- 후방호환: PAD-3 이전에 만들어진 활성 MP 는 `.orch/<scope>/` 평탄 경로에 그대로 남아 있고, 코드가 양쪽을 본다. 진행중인 MP 가 `mp-down` 으로 종료되면 자연 정리.
+- **`runs/` wrapper**: 동시 진행 MP 가 많아져도 `.orch/` 루트가 정돈됨 (PAD-3).
+- **inbox 0 bytes = 정상**: `inbox-archive.sh` 가 처리된 메시지를 archive 로 옮기고 inbox 를 truncate. 처리 흔적은 archive 에서 확인.
 
-### 기본 브랜치 (default_base_branch)
+---
 
-워커가 워크트리를 만들 때 base 브랜치는 다음 순서로 결정한다 (PAD-6):
+## 설정 (.orch/settings.json)
 
-1. `.orch/settings.json` 의 `projects.<alias>.default_base_branch` (프로젝트별 override)
-2. 글로벌 `.orch/settings.json` 의 `.default_base_branch`
-3. 하드코드 `develop`
+```json
+{
+  "default_base_branch": "develop",
+  "notify": { "slack_enabled": false },
+  "projects": {
+    "server": {
+      "path": "/abs/path/to/lol-server",
+      "kind": "spring-boot",
+      "description": "매치 통계 / 유저 API 책임",
+      "tech_stack": ["Java", "Spring Boot", "JPA"],
+      "default_base_branch": "develop"
+    }
+  }
+}
+```
 
-`/orch:setup` 은 각 프로젝트의 `git symbolic-ref refs/remotes/origin/HEAD` 로 기본 브랜치를 자동 감지해 프로젝트 entry 에 기록한다. 한 워크스페이스 안에서 `develop` 플로우 repo 와 `main` 플로우 repo 가 섞여 있어도 안전.
+- `default_base_branch` 결정 우선순위: 프로젝트별 override → 글로벌 → `develop` (PAD-6).
+- `/orch:setup` 이 `git symbolic-ref refs/remotes/origin/HEAD` 로 자동 감지. 한 워크스페이스에 develop / main 플로우 섞여 있어도 안전.
+- `/orch:validate-settings` 로 description / tech_stack 이 실제 repo 와 어긋나는지 점검.
 
-원격에 해당 브랜치가 없으면 `leader-spawn` 이 즉시 fail-loud 로 멈춘다 (이전엔 `git fetch` 가 silent 실패한 뒤 `worktree add` 가 `fatal: invalid reference: origin/<base>` 로 죽었다).
+---
 
-### inbox 가 비어 보일 때
+## 트러블슈팅
 
-`runs/<scope>/inbox/<role>.md` 파일이 0 bytes 면 **현재 처리할 메시지가 없다는 뜻** — 정상 상태다. 처리된 메시지는 `inbox-archive.sh` 가 `archive/<role>-YYYY-MM-DD.md` 로 옮긴 뒤 inbox 파일을 truncate 하므로 빈 파일은 "직전 메시지를 다 처리했다" 는 흔적. 처리 흔적은 archive 파일에서 확인.
+**워커가 응답 없음**:
+```
+/orch:peek mp-13/server
+```
+→ 마지막 30줄 + 활동 시각 + inbox 카운트. claude 가 사용자 입력 대기 중인지 확인.
+
+**`fatal: invalid reference: origin/<base>`**:
+프로젝트 entry 의 `default_base_branch` 가 원격에 없는 경우. `/orch:setup` 재실행 또는 `settings.json` 직접 수정 (PAD-6).
+
+**머지된 worktree / 로컬 브랜치 잔재**:
+`/orch:mp-down` 이 자동 정리 (PAD-20). 그래도 남아 있으면 `git worktree prune` + `git branch -D <branch>` 수동.
+
+**inbox 메시지 본문에 따옴표·괄호·줄바꿈**:
+슬래시 `/orch:send` 대신 Bash + heredoc:
+```bash
+"$ORCH_BIN_DIR/send.sh" <target> <<'ORCH_MSG'
+여러 줄 메시지
+'따옴표' 와 `백틱` 그대로 안전
+ORCH_MSG
+```
+
+---
 
 ## 핑퐁 방지
 
-답신이 필요 없는 알림성 메시지는 본문 끝에 `**[답신 불필요]**`를 붙인다. 받는 워커는 이를 보고 자동 답신을 보내지 않는다.
+답신이 필요 없는 알림성 메시지는 본문 끝에 `**[답신 불필요]**` 를 붙인다. 받는 워커는 이를 보고 자동 답신을 보내지 않는다.
 
-## 역할 추론
+---
 
-각 워커 세션은 자기 역할을 다음 우선순위로 알아낸다:
-1. `LOL_ROLE` 환경변수 (up.sh가 설정)
-2. `cwd` 경로 (lol-server / lol-ui / lol-repository / lol)
+## 더 깊이
 
-따라서 `up.sh` 없이 수동으로 띄운 세션도 cwd만 맞으면 정상 동작한다.
+- 라이프사이클 / 라우팅 코드: `scripts/lib.sh`
+- MP 시작·종료: `scripts/mp-up.sh`, `scripts/mp-down.sh`
+- PR 머지 대기: `scripts/wait-merge.sh`
+- REPORT 렌더러: `scripts/render_report.py` (PAD-13)
+- 설정 검증: `skills/validate-settings/SKILL.md`
