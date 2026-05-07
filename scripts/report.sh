@@ -142,10 +142,13 @@ if [ "$scope_kind" = "live" ]; then
     done < <(orch_active_sub_workers "$mp_id")
 fi
 
-# archive 의 workers 도 스캔 (또는 live 라도 보충)
+# archive 의 workers 도 스캔 (또는 live 라도 보충).
+# workers/ = 살아있는 워커 등록, workers-archive/ = self-shutdown 후 보존된 워커 (PAD-22).
 workers_dir="$scope_dir/workers"
-if [ -d "$workers_dir" ]; then
-    for f in "$workers_dir"/*.json; do
+workers_archive_dir="$scope_dir/workers-archive"
+for d in "$workers_dir" "$workers_archive_dir"; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*.json; do
         [ -f "$f" ] || continue
         role="$(basename "$f" .json)"
         wid="$mp_id/$role"
@@ -156,7 +159,7 @@ if [ -d "$workers_dir" ]; then
         done
         [ "$already" -eq 0 ] && sub_workers+=("$wid")
     done
-fi
+done
 
 if [ "${#sub_workers[@]}" -eq 0 ]; then
     printf '_(산하 워커 등록 없음)_\n'
@@ -168,9 +171,15 @@ fi
 printf '\n## 워커별 상세\n'
 for sub_wid in "${sub_workers[@]+"${sub_workers[@]}"}"; do
     role="${sub_wid##*/}"
-    # registry 파일 위치: live 면 <scope>/workers/<role>.json (.orch/runs/<mp>/workers/<role>.json
-    # 또는 legacy .orch/<mp>/workers/<role>.json), archive 면 <archive_dir>/workers/<role>.json
-    reg="$workers_dir/$role.json"
+    # registry 위치: 살아있는 워커는 <scope>/workers/, 종료된 워커는 <scope>/workers-archive/.
+    # archive 모드에선 둘 다 archive_dir 안에서 찾는다 (scope_dir 통째로 mv 됐기 때문).
+    if [ -f "$workers_dir/$role.json" ]; then
+        reg="$workers_dir/$role.json"
+    elif [ -f "$workers_archive_dir/$role.json" ]; then
+        reg="$workers_archive_dir/$role.json"
+    else
+        reg="$workers_dir/$role.json"
+    fi
     worker_section "$sub_wid" "$reg"
 done
 
