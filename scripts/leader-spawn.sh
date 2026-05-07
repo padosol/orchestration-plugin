@@ -113,6 +113,7 @@ sleep 4
 
 desc="$(orch_settings_project_field "$project" description)"
 stack="$(orch_settings_project_field "$project" tech_stack)"
+guidelines_path="$(dirname "$LIB_DIR")/references/coding-guidelines.md"
 
 first_msg="너는 ${worker_id} 워커다.
 
@@ -124,6 +125,7 @@ first_msg="너는 ${worker_id} 워커다.
 [작업]
 - leader($mp_id) 가 곧 inbox 에 작업 지시. /orch:check-inbox 로 받아 처리.
 - 코드 수정은 worktree 안에서. 커밋은 safe-commit 스킬.
+- 분석 단계 시작 시 ${guidelines_path} 1회 Read — 4원칙 (Think Before / Simplicity / Surgical / Goal-Driven) 의식적 적용.
 
 [브랜치 prefix — spawn 시 type=$type]
 작업 내용이 다른 type 에 더 가까우면 leader 보고 후 재spawn 요청 (직접 rename 금지).
