@@ -127,6 +127,12 @@ first_msg="너는 ${worker_id} 워커다.
 - 코드 수정은 worktree 안에서. 커밋은 safe-commit 스킬.
 - 분석 단계 시작 시 ${guidelines_path} 1회 Read — 4원칙 (Think Before / Simplicity / Surgical / Goal-Driven) 의식적 적용.
 
+[HOLD 체크포인트 — 필수]
+leader 의 HOLD/취소가 묻히지 않도록 다음 두 마디에서 /orch:check-inbox 1회:
+1. **분석 → 편집 전환 직전** — 코드 수정 시작 전. spec 재검토 + HOLD 도착 여부 확인.
+2. **push 직전** — 로컬 커밋 끝났지만 origin push 전. push 후엔 PR/CI 비용 발생.
+HOLD/취소/방향 전환 발견 → 즉시 중단, leader 에 ack 후 다음 지시 대기. 새 메시지 0건 → 그대로 진행.
+
 [브랜치 prefix — spawn 시 type=$type]
 작업 내용이 다른 type 에 더 가까우면 leader 보고 후 재spawn 요청 (직접 rename 금지).
 - feat 신규 기능 / fix 버그 / refactor 동작 동일 구조 개선 / chore 코드 외 부속 (audit, deps, CI) / docs 문서·주석 / test 테스트만
