@@ -64,7 +64,8 @@ if orch_worker_exists "$mp_id"; then
     fi
 fi
 
-# scope skeleton
+# scope skeleton (PAD-3: runs/ wrapper 가 신규 위치)
+mkdir -p "$ORCH_RUNS_DIR"
 scope_dir="$(orch_scope_dir "$mp_id")"
 mkdir -p "$scope_dir/inbox" "$scope_dir/archive" "$scope_dir/workers" "$scope_dir/worktrees"
 mkdir -p "$ORCH_INBOX" "$ORCH_ARCHIVE" "$ORCH_WORKERS"
@@ -106,7 +107,7 @@ first_msg="너는 ${mp_id} 팀리더(leader)다.
 [워커 spawn]
   /orch:leader-spawn <project-alias> [type]
   예: /orch:leader-spawn server fix
-  → .orch/${mp_id}/worktrees/<project> 에 git worktree 생성
+  → .orch/runs/${mp_id}/worktrees/<project> 에 git worktree 생성
   → ${mp_id} tmux 윈도우 안에서 워커 pane 시작
   → 워커는 ORCH_WORKER_ID=${mp_id}/<project> 로 식별됨
 

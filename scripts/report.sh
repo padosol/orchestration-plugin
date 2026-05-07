@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # /orch:report <mp-id>
 # MP 운영 데이터를 모아 markdown 으로 stdout 에 출력. orch 가 이걸 읽어 REPORT.md 작성.
-# 활성 scope (.orch/<mp_id>/) 또는 가장 최근 archive (.orch/archive/<mp_id>-YYYY-MM-DD/) 중 하나를 자동 선택.
+# 활성 scope (.orch/runs/<mp_id>/ 또는 legacy .orch/<mp_id>/) 또는 가장 최근 archive
+# (.orch/archive/<mp_id>-YYYY-MM-DD/) 중 하나를 자동 선택.
 
 set -euo pipefail
 
@@ -167,7 +168,8 @@ fi
 printf '\n## 워커별 상세\n'
 for sub_wid in "${sub_workers[@]+"${sub_workers[@]}"}"; do
     role="${sub_wid##*/}"
-    # registry 파일 위치: live 면 .orch/<mp>/workers/<role>.json, archive 면 <archive_dir>/workers/<role>.json
+    # registry 파일 위치: live 면 <scope>/workers/<role>.json (.orch/runs/<mp>/workers/<role>.json
+    # 또는 legacy .orch/<mp>/workers/<role>.json), archive 면 <archive_dir>/workers/<role>.json
     reg="$workers_dir/$role.json"
     worker_section "$sub_wid" "$reg"
 done
