@@ -76,34 +76,24 @@ desc="$(orch_settings_project_field "$project" description)"
 stack="$(orch_settings_project_field "$project" tech_stack)"
 mp_upper="${mp_id^^}"
 
-first_msg="너는 ${worker_id} reviewer 워커다 (PR #${pr} 리뷰 전용, 단발성).
+first_msg="너는 ${worker_id} reviewer 다 (PR #${pr} 단발성). **읽기 전용** — 코드 수정·커밋·push·PR 코멘트 금지. leader($mp_id) 에 코멘트 텍스트만 답신.
 
-[리뷰 컨텍스트]
-- 이슈: ${mp_upper}
-- PR: #${pr}
-- 대상 프로젝트: $project ($project_path)
-- tech_stack: $stack
-- 설명: $desc
-
-[권한]
-- **읽기 전용**. 코드 수정 / 커밋 / push / PR 코멘트 직접 달기 금지.
-- 너는 leader($mp_id) 에게 코멘트 텍스트만 답신하고, leader 가 작업 워커에게 전달한다.
+[컨텍스트]
+- 이슈 ${mp_upper} / PR #${pr} / $project ($project_path)
+- tech: $stack / 설명: $desc
 
 [리뷰 체크리스트]
-1. **코드 정확성** — diff 가 의도된 변경을 정확히 구현하는가? off-by-one / null / 분기 누락 없나?
-2. **사이드이펙트** — 변경 범위가 의도 외 영역에 영향 안 주는가? 공용 유틸 / API 시그니처 변경 시 호출자 영향?
-3. **테스트 커버리지** — 변경에 대응하는 테스트가 있나? 누락된 엣지 케이스?
-4. **회귀 가능성** — 기존 기능 회귀 위험? 데이터 마이그레이션 / 호환성 우려?
-5. **스타일·가독성** — 네이밍·구조·주석 — repo 컨벤션과 일치?
+1. 코드 정확성 — diff 가 의도된 변경을 정확히 구현? off-by-one / null / 분기 누락?
+2. 사이드이펙트 — 변경이 의도 외 영역에 영향? 공용 유틸 / API 시그니처 변경 시 호출자 영향?
+3. 테스트 커버리지 — 대응 테스트 있나? 누락 엣지 케이스?
+4. 회귀 — 기존 기능 회귀 위험? 데이터 마이그레이션 / 호환성?
+5. 스타일·가독성 — 네이밍·구조·주석, repo 컨벤션?
 
-[정보 수집 도구]
+[정보 도구]
 - gh pr view ${pr} --json title,body,files,headRefName,baseRefName
-- gh pr diff ${pr}
-- gh pr checks ${pr}
-- 필요하면 base 코드 탐색: $project_path 안에서 grep / Read
-
-[Linear 컨텍스트가 필요하면]
-- mcp__linear-server__get_issue ${mp_upper}
+- gh pr diff ${pr}  /  gh pr checks ${pr}
+- base 탐색: $project_path 안에서 grep / Read
+- Linear: mcp__linear-server__get_issue ${mp_upper}
 
 [답신 형식]
 bash -c \"\$ORCH_BIN_DIR/send.sh $mp_id <<'ORCH_MSG'
@@ -113,22 +103,17 @@ bash -c \"\$ORCH_BIN_DIR/send.sh $mp_id <<'ORCH_MSG'
 
 코멘트:
 - <파일:line> <지적 + 권고>
-- ...
-
 (없으면 \\\"코멘트 없음\\\" 명시)
 ORCH_MSG\"
 
 [종료 — 필수]
-- 답신 보낸 직후 다음 명령 한 번:
-    bash \$ORCH_BIN_DIR/worker-shutdown.sh
-- registry 해제 + tmux pane kill 한 번에. \`exit\` 키 입력은 Claude Code 가 떠 있어서 셸에 닿지 않으므로 사용 금지.
-- 추가 라운드가 필요하면 leader 가 다시 /orch:review-spawn 으로 새 reviewer 띄울 것 — 한 reviewer 는 1회 검토만.
+답신 직후 \`bash \$ORCH_BIN_DIR/worker-shutdown.sh\` 한 번 (registry 해제 + pane kill). \`exit\` 키 입력 금지. 추가 라운드 필요하면 leader 가 새 reviewer 띄움 — 한 reviewer 는 1회 검토.
 
-[중요]
-- 리뷰는 **이번 PR 범위 안에서만**. 'PR 밖 리팩터 권고' 는 후속 이슈 메모로 분류해 leader 에 알리되 본 PR 차단 사유로 쓰지 말 것.
-- 사소한 스타일은 LGTM 하되 코멘트로만 남기고 차단하지 않기.
+[범위]
+- 본 PR 변경분 안에서만. 'PR 밖 리팩터 권고' 는 후속 이슈 메모로 leader 에 알리되 본 PR 차단 사유로 쓰지 말 것.
+- 사소한 스타일은 LGTM + 코멘트로만 남기고 차단하지 않기.
 
-준비되면 위 도구로 PR 검토하고 답신 후 worker-shutdown.sh 실행하라."
+준비되면 PR 검토 후 답신 + worker-shutdown.sh."
 
 tmux send-keys -t "$reviewer_pane" "$first_msg"
 sleep 0.3
