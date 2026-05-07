@@ -16,9 +16,15 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/mp-down.sh:*)
 - 산하 워커마다 그 worktree 의 현재 브랜치를 검사
 - **base 머지 검사 정확도를 위해 project_path 별로 `git pull --ff-only origin <base>` 1회**
 - 머지 확인: `gh pr list --state merged --head <branch>` (squash/rebase merge 까지) → fallback: `git branch -r --merged origin/<base>`
-- 머지됨 + clean → `git worktree remove` + `git branch -d <branch>`
-- 미머지 / dirty / 검출 실패 → 보존, 위치 출력
+- 머지됨 → `git worktree remove --force` + `git branch -d <branch>` (squash-merge 인식 거부 시 `-D` 폴백)
+- 미머지 / 검출 실패 → 보존, 위치 출력
+- 루프 종료 후 방문한 project 마다 `git worktree prune` 1회 — dangling 메타 보강
 - `--no-cleanup` 플래그로 비활성화 (사용자 검토용)
+
+**leader registry 비어 있는 fallback** (PAD-20):
+- orch 가 호출했지만 leader 등록이 사라진 / leader pane 이 이미 죽은 경우
+- settings 의 모든 project 에 `git worktree prune` 1회 (안전, 메타데이터만)
+- mp_id 패턴 일치 로컬 브랜치 후보를 머지 상태와 함께 출력 — **자동 삭제 안 함, 명령 제안만**
 
 **REPORT 자동 작성 (default ON)**:
 - mp-down 시 archive 직전에 `report.sh` 가 실행 → `<archive_dir>/REPORT-data.md` 생성
@@ -30,8 +36,9 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/mp-down.sh:*)
 - `--no-report` — REPORT-data.md 덤프를 건너뜀.
 
 **안전장치**:
-- `git branch -d` (소문자) 만 사용 — unmerged 브랜치 자동 거부
-- worktree 에 미커밋·미추적 변경 있으면 보존
+- 머지 확인된 경우만 `branch -D` 폴백 — `gh pr list --state merged` 통과 못 한 브랜치는 절대 force 삭제 안 함
+- worktree 에 미커밋·미추적 변경: 머지 확인 시 `--force` 로 정리 (PR 이미 머지됐으니 untracked 는 빌드 산출물), 미확인 시 보존
+- fallback 경로의 orphan 브랜치 후보는 출력만 — 사용자 직접 실행
 - gh / git 양쪽 모두 머지 확인 못 하면 보존
 
 출력에 안내 메시지가 있으면 그대로 사용자에게 보여주세요.

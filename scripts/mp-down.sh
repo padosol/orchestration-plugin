@@ -67,6 +67,11 @@ if [ "$self" = "orch" ]; then
     if ! orch_worker_exists "$mp_id"; then
         echo "INFO: $mp_id leader 등록 없음 — 잔재만 정리"
         run_cleanup_if_enabled
+        # PAD-20: leader cascade 가 archive mv 만 하고 죽은 경우 git 메타·로컬 브랜치 잔재가
+        # 남는다. 모든 project 에 worktree prune 1회 + mp_id 패턴 머지 브랜치 후보 출력.
+        if [ "$do_cleanup" -eq 1 ]; then
+            orch_orphan_cleanup_suggest "$mp_id"
+        fi
         scope_dir_path="$(orch_scope_dir "$mp_id" 2>/dev/null || true)"
         if [ -n "$scope_dir_path" ] && [ -d "$scope_dir_path" ]; then
             run_report_if_enabled "$scope_dir_path"
@@ -99,6 +104,10 @@ if [ "$self" = "orch" ]; then
     # leader pane 죽음 — orch 가 직접 정리
     echo "INFO: leader $mp_id pane 이미 죽음 — 직접 정리"
     run_cleanup_if_enabled
+    # PAD-20: leader 가 비정상 종료한 경우 잔재 prune + 머지된 브랜치 후보 출력.
+    if [ "$do_cleanup" -eq 1 ]; then
+        orch_orphan_cleanup_suggest "$mp_id"
+    fi
     scope_dir_path="$(orch_scope_dir "$mp_id")"
     [ -d "$scope_dir_path" ] && run_report_if_enabled "$scope_dir_path"
     archive_dir="${ORCH_ARCHIVE}/${mp_id}-$(date +%Y-%m-%d)"

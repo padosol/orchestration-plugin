@@ -549,28 +549,47 @@ orch_branch_merged() {
     return 1
 }
 
-# orch_worktree_cleanup <project_path> <worktree_path> <branch>
-# 안전 삭제: dirty(미커밋·untracked) 면 SKIP, 로컬 브랜치는 git branch -d (소문자) 로 unmerged 보호.
+# orch_worktree_cleanup <project_path> <worktree_path> <branch> [merge_verified]
+# merge_verified=0 (기본): dirty 면 보존, branch -d 로 unmerged 보호.
+# merge_verified=1: 호출자가 PR 머지를 이미 확인 — 빌드 산출물 등 untracked 는 버리고
+#   --force 로 worktree remove, squash-merge 인식 못 하는 -d 거부 시 -D 폴백.
+#   (PAD-20: squash-merge 시 git 메타·로컬 브랜치 잔재 누적 방지.)
 orch_worktree_cleanup() {
-    local project_path="$1" worktree_path="$2" branch="$3"
+    local project_path="$1" worktree_path="$2" branch="$3" merge_verified="${4:-0}"
 
     if [ -d "$worktree_path" ]; then
-        local dirty
-        dirty="$(git -C "$worktree_path" status --porcelain 2>/dev/null)"
-        if [ -n "$dirty" ]; then
-            echo "    WARN: $worktree_path 에 미커밋/미추적 변경 있음 — 보존" >&2
-            return 1
+        if [ "$merge_verified" -ne 1 ]; then
+            local dirty
+            dirty="$(git -C "$worktree_path" status --porcelain 2>/dev/null)"
+            if [ -n "$dirty" ]; then
+                echo "    WARN: $worktree_path 에 미커밋/미추적 변경 있음 — 보존" >&2
+                return 1
+            fi
         fi
-        if ! git -C "$project_path" worktree remove "$worktree_path" 2>/dev/null; then
+        local rm_args=(worktree remove "$worktree_path")
+        [ "$merge_verified" -eq 1 ] && rm_args=(worktree remove --force "$worktree_path")
+        if ! git -C "$project_path" "${rm_args[@]}" 2>/dev/null; then
             echo "    WARN: worktree remove 실패: $worktree_path" >&2
-            return 1
+            git -C "$project_path" worktree prune 2>/dev/null || true
+            if [ -d "$worktree_path" ]; then
+                return 1
+            fi
         fi
     fi
 
     if git -C "$project_path" show-ref --verify --quiet "refs/heads/$branch"; then
         if ! git -C "$project_path" branch -d "$branch" 2>/dev/null; then
-            echo "    WARN: 로컬 브랜치 '$branch' 삭제 거부 (-d 가 unmerged 보호) — 보존" >&2
-            return 1
+            if [ "$merge_verified" -eq 1 ]; then
+                if git -C "$project_path" branch -D "$branch" 2>/dev/null; then
+                    echo "    INFO: '$branch' squash-merge 인식 안 됨 — -D 폴백 (머지 확인됨)" >&2
+                else
+                    echo "    WARN: 로컬 브랜치 '$branch' 삭제 실패 — 수동 정리 필요" >&2
+                    return 1
+                fi
+            else
+                echo "    WARN: 로컬 브랜치 '$branch' 삭제 거부 (-d 가 unmerged 보호) — 보존" >&2
+                return 1
+            fi
         fi
     fi
     return 0
@@ -625,7 +644,7 @@ orch_cleanup_merged_worktrees() {
         fi
 
         if orch_branch_merged "$project_path" "$branch" "$base_branch"; then
-            if orch_worktree_cleanup "$project_path" "$worktree_path" "$branch"; then
+            if orch_worktree_cleanup "$project_path" "$worktree_path" "$branch" 1; then
                 echo "  cleanup OK $sub_wid: $branch → $base_branch 머지 확인, worktree+local branch 정리"
             else
                 echo "  cleanup partial $sub_wid: 머지됐지만 정리 도중 일부 실패 (위 WARN)"
@@ -635,6 +654,71 @@ orch_cleanup_merged_worktrees() {
         fi
     done
     [ "$any" -eq 0 ] && echo "  cleanup: 산하 워커 등록 없음 — skip"
+
+    # PAD-20: 루프 중 worktree remove 가 부분 실패한 경우라도, 방문한 project 마다 prune
+    # 1회 실행해 dangling 메타 (gitdir points to non-existent location) 정리.
+    local pruned_path
+    for pruned_path in "${!pulled_paths[@]}"; do
+        if git -C "$pruned_path" worktree prune 2>/dev/null; then
+            echo "  prune OK $pruned_path"
+        fi
+    done
+    return 0
+}
+
+# orch_orphan_cleanup_suggest <mp_id>
+# leader registry 에서 leader 가 사라진 fallback 경로용. 자동 삭제 안 함 — settings 의 모든
+# project 에 대해 (1) git worktree prune (메타데이터만 정리, 안전) 실행하고 (2) mp_id 패턴
+# 과 일치하는 로컬 브랜치 후보를 PR 머지 상태와 함께 출력만 한다. 사용자가 결과를 보고
+# 직접 git branch -D 실행하도록.
+# (PAD-20: cascade 흐름이 깨져 leader 가 archive 만 mv 하고 죽었을 때 잔재 보강.)
+orch_orphan_cleanup_suggest() {
+    local mp_id="$1"
+    [ -n "$mp_id" ] || return 0
+
+    if ! orch_settings_exists; then
+        echo "  orphan: settings.json 없음 — skip"
+        return 0
+    fi
+
+    # MP-37 같은 표시 이름. branch 패턴엔 대·소문자 양쪽 매칭.
+    local mp_upper="${mp_id^^}"
+    mp_upper="${mp_upper#MP-}"
+    mp_upper="MP-${mp_upper}"
+    local mp_lower="${mp_upper,,}"
+
+    local project alias_path
+    local suggestions=()
+    for alias_path in $(orch_settings_projects 2>/dev/null); do
+        project="$(orch_settings_project_field "$alias_path" path 2>/dev/null || true)"
+        [ -z "$project" ] || [ ! -d "$project" ] && continue
+        [ -d "$project/.git" ] || [ -f "$project/.git" ] || continue
+
+        if git -C "$project" worktree prune 2>/dev/null; then
+            echo "  orphan prune OK $project"
+        fi
+
+        # for-each-ref 의 '*' 는 / 를 넘지 못해 fix/MP-77 같은 브랜치를 못 잡는다.
+        # 모든 ref 를 받아 grep 으로 패턴 매칭 (대소문자 무시, MP-NN 토큰).
+        local b base_branch
+        base_branch="$(orch_settings_project_base_branch "$alias_path" 2>/dev/null || echo develop)"
+        while IFS= read -r b; do
+            [ -z "$b" ] && continue
+            if orch_branch_merged "$project" "$b" "$base_branch"; then
+                suggestions+=("git -C $project branch -D $b   # ${alias_path}: 머지 확인됨")
+            else
+                suggestions+=("# git -C $project branch -D $b   # ${alias_path}: 머지 미확인 — 직접 검토")
+            fi
+        done < <(git -C "$project" for-each-ref --format='%(refname:short)' refs/heads/ 2>/dev/null \
+            | grep -i -E "(^|[/_-])${mp_upper}([/_-]|$)" || true)
+    done
+
+    if [ "${#suggestions[@]}" -gt 0 ]; then
+        echo "  orphan 브랜치 후보 ($mp_id) — 검토 후 직접 실행:"
+        printf '    %s\n' "${suggestions[@]}"
+    else
+        echo "  orphan: '$mp_id' 패턴 일치 브랜치 없음"
+    fi
     return 0
 }
 
