@@ -14,11 +14,46 @@ source "${LIB_DIR}/lib.sh"
 orch_install_error_trap "$0"
 
 UPDATE_MODE=0
-case "${1:-}" in
-    --update) UPDATE_MODE=1 ;;
-    "") ;;
-    *) echo "사용법: /orch:setup [--update]" >&2; exit 2 ;;
-esac
+ISSUE_TRACKER=""
+GITHUB_ISSUE_REPO=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --update) UPDATE_MODE=1 ;;
+        --issue-tracker)
+            shift
+            ISSUE_TRACKER="${1:-}"
+            case "$ISSUE_TRACKER" in
+                linear|github|none) ;;
+                *) echo "ERROR: --issue-tracker 는 linear|github|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
+            esac
+            ;;
+        --issue-tracker=*)
+            ISSUE_TRACKER="${1#--issue-tracker=}"
+            case "$ISSUE_TRACKER" in
+                linear|github|none) ;;
+                *) echo "ERROR: --issue-tracker 는 linear|github|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
+            esac
+            ;;
+        --github-repo)
+            shift
+            GITHUB_ISSUE_REPO="${1:-}"
+            ;;
+        --github-repo=*)
+            GITHUB_ISSUE_REPO="${1#--github-repo=}"
+            ;;
+        *) echo "사용법: /orch:setup [--update] [--issue-tracker linear|github|none] [--github-repo owner/repo]" >&2; exit 2 ;;
+    esac
+    shift
+done
+
+if [ "$ISSUE_TRACKER" = "github" ] && [ -z "$GITHUB_ISSUE_REPO" ]; then
+    echo "ERROR: --issue-tracker github 는 --github-repo owner/repo 도 함께 필요" >&2
+    exit 2
+fi
+if [ "$ISSUE_TRACKER" != "github" ] && [ -n "$GITHUB_ISSUE_REPO" ]; then
+    echo "WARN: --github-repo 는 --issue-tracker github 일 때만 의미 있음 — 무시" >&2
+    GITHUB_ISSUE_REPO=""
+fi
 
 BASE_DIR="$(dirname "$ORCH_ROOT")"
 
@@ -171,23 +206,39 @@ for d in "${candidates[@]}"; do
     projects_json="$(jq --arg a "$alias" --argjson p "$proj_json" '.[$a] = $p' <<<"$projects_json")"
 done
 
+tracker_for_init="${ISSUE_TRACKER:-none}"
 new_settings="$(jq -n \
     --arg base "$BASE_DIR" \
+    --arg tracker "$tracker_for_init" \
+    --arg gh_repo "$GITHUB_ISSUE_REPO" \
     --argjson projects "$projects_json" \
-    '{version: 1, base_dir: $base, default_base_branch: "develop", projects: $projects}'
+    '{version: 1, base_dir: $base, default_base_branch: "develop", issue_tracker: $tracker, projects: $projects}
+     | if $gh_repo != "" then .github_issue_repo = $gh_repo else . end'
 )"
 
 # --update: 기존 값 보존, 새 프로젝트만 추가, 기존 프로젝트는 그대로.
 # 단 default_base_branch 필드는 기존 프로젝트에도 누락 시 추론값으로 보강한다
 # (override 가 이미 있으면 그대로 유지).
 if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
-    new_settings="$(jq --slurpfile cur "$ORCH_SETTINGS" '
+    # 인자로 받은 ISSUE_TRACKER 가 있으면 override, 없으면 기존 값 유지
+    new_settings="$(jq \
+        --slurpfile cur "$ORCH_SETTINGS" \
+        --arg tracker "$ISSUE_TRACKER" \
+        --arg gh_repo "$GITHUB_ISSUE_REPO" \
+        '
         . as $new |
         ($cur[0] // {}) as $old |
+        ( if $tracker != "" then $tracker
+          else ($old.issue_tracker // $new.issue_tracker // "none") end ) as $final_tracker |
+        ( if $tracker == "github" or ($tracker == "" and $final_tracker == "github")
+          then ( if $gh_repo != "" then $gh_repo
+                 else ($old.github_issue_repo // "") end )
+          else "" end ) as $final_gh_repo |
         {
           version: ($old.version // $new.version),
           base_dir: ($old.base_dir // $new.base_dir),
           default_base_branch: ($old.default_base_branch // $new.default_base_branch),
+          issue_tracker: $final_tracker,
           projects: ($new.projects | to_entries | map(
             .key as $k | .value as $v |
             {key: $k, value: (
@@ -199,6 +250,8 @@ if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
             )}
           ) | from_entries)
         }
+        | if $final_gh_repo != "" then .github_issue_repo = $final_gh_repo else . end
+        | if ($old.notify // null) != null then .notify = $old.notify else . end
     ' <<<"$new_settings")"
 fi
 
@@ -208,7 +261,12 @@ echo "OK: $ORCH_SETTINGS 작성 완료"
 echo "── 추론된 내용 (직접 편집해 보강하세요) ──"
 cat "$ORCH_SETTINGS"
 echo "──────────────────────────────────────────"
+final_tracker="$(jq -r '.issue_tracker // "none"' "$ORCH_SETTINGS")"
 echo "다음 단계:"
 echo "  1. 위 settings.json 의 description / tech_stack 손보세요"
 echo "  2. /orch:up 으로 orch pane 등록"
-echo "  3. /orch:issue-up MP-XX 로 첫 leader 띄우기"
+case "$final_tracker" in
+    linear) echo "  3. /orch:issue-up MP-XX (Linear 이슈 ID) 로 첫 leader 띄우기" ;;
+    github) echo "  3. /orch:issue-up <issue-num> (GitHub Issue 번호) 로 첫 leader 띄우기" ;;
+    *)      echo "  3. /orch:issue-up <num> 로 첫 leader 띄움 — leader 가 orch 에 spec 요청 (트래커 없음)" ;;
+esac

@@ -259,6 +259,23 @@ orch_settings_global() {
     jq -r --arg f "$field" '.[$f] // ""' "$ORCH_SETTINGS"
 }
 
+# 이슈 트래커 — linear | github | none. 누락/잘못된 값은 none.
+orch_settings_issue_tracker() {
+    orch_settings_require || { printf 'none'; return 1; }
+    local v
+    v="$(jq -r '.issue_tracker // "none"' "$ORCH_SETTINGS")"
+    case "$v" in
+        linear|github|none) printf '%s' "$v" ;;
+        *) printf 'none' ;;
+    esac
+}
+
+# github 모드에서만 의미. settings.github_issue_repo (예: "owner/repo"). 없으면 빈 문자열.
+orch_settings_github_issue_repo() {
+    orch_settings_require || return 1
+    jq -r '.github_issue_repo // ""' "$ORCH_SETTINGS"
+}
+
 orch_settings_project_exists() {
     local project="$1"
     orch_settings_exists || return 1

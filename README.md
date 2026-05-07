@@ -68,15 +68,16 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 /orch:setup
 ```
 
-→ 산하 git repo 자동 발견해 `.orch/settings.json` 생성 (alias / path / kind / default_base_branch).
+→ 산하 git repo 자동 발견해 `.orch/settings.json` 생성 (alias / path / kind / default_base_branch). 셋업 도중 **이슈 트래커 선택** (Linear / GitHub Issues / 없음) 을 묻는다 — 자세한 차이는 [이슈 트래커 선택](#이슈-트래커-선택) 절 참조.
 
 이후 orch 와 평소처럼 대화하다가 큰 이슈가 떴을 때:
 
 ```
-/orch:issue-up MP-13
+/orch:issue-up MP-13     # Linear / 없음 모드
+/orch:issue-up 142       # GitHub Issues 모드 (이슈 번호)
 ```
 
-→ leader pane 이 떠서 Linear 이슈를 읽고 plan 을 orch 인박스로 보고 → 사용자 confirm → leader 가 `/orch:leader-spawn repo-a fix` 등으로 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:issue-down MP-13` 으로 정리 + REPORT.html.
+→ leader pane 이 떠서 트래커별로 이슈 컨텍스트를 가져와 plan 을 orch 인박스로 보고 → 사용자 confirm → leader 가 `/orch:leader-spawn repo-a fix` 등으로 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:issue-down MP-13` 으로 정리 + REPORT.html.
 
 ---
 
@@ -188,7 +189,7 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 
 #### 3. 페인포인트 → 이슈 트래커
 
-사용자가 REPORT.html 의 페인포인트 / Follow-up 섹션을 보고 Linear 등 이슈 트래커에 `[orch] …` 류로 등록. 워커가 이미 자신의 마찰을 회고에 기록해 두었으면 그대로 ticketize.
+사용자가 REPORT.html 의 페인포인트 / Follow-up 섹션을 보고 이슈 트래커에 `[orch] …` 류로 등록 (Linear / GitHub Issues / 사내 트래커 무관). 워커가 이미 자신의 마찰을 회고에 기록해 두었으면 그대로 ticketize.
 
 #### 4. plugin 개선 → 다음 사이클 적용
 
@@ -278,6 +279,8 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 ```json
 {
   "default_base_branch": "develop",
+  "issue_tracker": "linear",
+  "github_issue_repo": "owner/repo",
   "notify": { "slack_enabled": false },
   "projects": {
     "repo-a": {
@@ -294,6 +297,19 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 - `default_base_branch` 결정 우선순위: 프로젝트별 override → 글로벌 → `develop`.
 - `/orch:setup` 이 `git symbolic-ref refs/remotes/origin/HEAD` 로 자동 감지. 한 워크스페이스에 develop / main 플로우 섞여 있어도 안전.
 - `/orch:validate-settings` 로 description / tech_stack 이 실제 repo 와 어긋나는지 점검.
+- `issue_tracker` / `github_issue_repo` 는 다음 절 참조.
+
+### 이슈 트래커 선택
+
+`/orch:setup` 시 한 번 선택. 변경하려면 `/orch:setup --update --issue-tracker <new>` (github 면 `--github-repo owner/repo` 도).
+
+| 값 | leader 가 하는 일 | 추가 셋업 |
+|---|---|---|
+| `linear` | `mcp__linear-server__get_issue MP-N` 으로 컨텍스트 fetch. issue-down 시 Done 처리, REPORT 의 stale docs → Linear sub-issue 자동 생성. | Linear MCP 서버 등록 (`~/.claude.json` 의 mcpServers). |
+| `github` | `gh issue view N --repo <github_issue_repo>` 로 fetch. stale docs → `gh issue create` 로 GitHub issue 생성. | `github_issue_repo` 필수 (이슈가 사는 저장소). 이미 `gh auth login` 되어있어야. |
+| `none` | 트래커 호출 없음. leader 가 orch 에 spec 직접 요청 → orch 가 사용자에게 묻고 spec 을 leader inbox 로 전달. stale docs 는 REPORT.html 에만 기록 (자동 이슈 생성 안 함). | 없음. 가장 가벼움. |
+
+내부적으로 worker_id 는 항상 `mp-NN` 형식 — 트래커 종류와 무관 (`MP` 는 multi-project 의 약자, Linear-specific 아님). `/orch:issue-up <num>` 의 `<num>` 만 트래커별 의미가 다르다 (Linear MP-N / GitHub issue # / 자유 식별자).
 
 ---
 
