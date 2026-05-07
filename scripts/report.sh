@@ -250,29 +250,34 @@ for sub in pr-drafts reports; do
     fi
 done
 
-cat <<'EOF'
+cat <<EOF
 
 ---
 
-## orch 가 이 데이터로 작성할 REPORT.html 항목
+## 이 데이터를 REPORT.html 로 변환하는 절차 (orch 만 수행)
 
-위 원본을 바탕으로 다음 7개 섹션의 한국어 단일 파일 HTML 회고를 작성하세요. 단순 복붙 X — 데이터를 **해석**하고 사용자 관점으로 요약.
+위 원본을 **해석**해 7개 섹션의 한국어 회고로 요약하되, HTML 을 직접 작성하지 말 것. 매번 양식이 달라지는 문제 (PAD-13) 를 막기 위해 결정적 템플릿 렌더러가 따로 있음.
 
-1. **요약** — 이슈 무엇이었나, 산하 워커 / 경과 시간 / 결과 한 줄
-2. **변경 내용** — 워커별 diff stat 보고 핵심 변경만 한 줄씩 (10줄 이내). 구현 상세는 PR description 참고 안내.
-3. **as-is / to-be** — 코드 변경(diff stat + commit 메시지)을 보고 "원래 어땠는데 → 어떻게 바뀌었나" 를 사용자 시점으로 요약.
-4. **테스트 결과** — pr-drafts/reports 또는 archive 메시지에서 워커 자가 보고가 있으면 인용. 없으면 "워커 자가보고 없음" 명시.
-5. **토큰·시간 분석** — 위 토큰 합계 표를 그대로 / 도구 호출 분포에서 비대칭 의심 / 큰 tool_result top-5 위치.
-6. **핸드오프 페인포인트** — errors.jsonl 패턴 + 메시지 흐름의 재질문 빈도. 없으면 "발견된 마찰 없음".
-7. **후속 이슈 메모** — SKIP 된 케이스(E2E 등) + 발견된 버그/리팩터 후보.
+**흐름**:
 
-HTML 형식 요구사항:
-- `<!doctype html>` + `<meta charset="utf-8">` + `<title>${mp_id} 회고</title>` + 인라인 `<style>` (외부 CDN/CSS 의존 금지)
-- 폰트: `system-ui, -apple-system, "Segoe UI", sans-serif` / 코드 블록은 monospace
-- 섹션마다 카드 스타일 (배경 색·padding·rounded border 정도) + h2 제목
-- 토큰 합계는 `<table>` 또는 grid 정렬
-- 색은 자제 — 본문은 무채색, 강조만 한두 곳 색상
-- 한국어 콘텐츠
+1. 위 raw 데이터를 해석해 **JSON** 으로 정리 (스키마는 \`render_report.py\` 상단 docstring 참조 / 필수 필드는 \`mp_id\` 만, 나머지는 optional). 7개 섹션 콘텐츠를 다음 키에 매핑:
+   - summary / changes / as_is_to_be / test_results / token_analysis / handoff / follow_ups / ai_ready_check
+2. JSON 을 임시 파일에 저장 (예: \`/tmp/orch-report-${mp_id}.json\`).
+3. 렌더러 호출:
 
-저장 위치: `<scope_dir>/REPORT.html` (위 메타의 scope_dir 그대로 사용).
+   \`\`\`bash
+   python3 \${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py \\
+     /tmp/orch-report-${mp_id}.json \\
+     ${scope_dir}/REPORT.html
+   \`\`\`
+
+   HTML 골격·CSS·섹션 순서는 스크립트가 고정. orch 의 작업은 콘텐츠 JSON 까지.
+
+4. 사용자에게 \`${scope_dir}/REPORT.html\` 경로 + 한 줄 요약 보고.
+
+**해석 시 유의**:
+- 단순 복붙 X — 데이터를 사용자 관점 narrative 로 풀어쓰기 (특히 summary.narrative / as_is_to_be / observations)
+- 토큰 분포에서 Read 가 같은 파일 반복 / 도구 쏠림 보이면 \`token_analysis.observations\` 에 명시적으로 짚기
+- 워커 자가보고 인용은 archive 메시지 / pr-drafts / reports 에서 발췌
+- 핸드오프 페인포인트는 errors.jsonl + 메시지 흐름의 재질문 빈도로 추정. 없으면 \`handoff.narrative\` 에 "발견된 마찰 없음"
 EOF
