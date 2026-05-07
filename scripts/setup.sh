@@ -91,12 +91,46 @@ infer_project() {
         tech_json="$(printf '%s\n' "${tech_stack[@]}" | jq -R . | jq -s .)"
     fi
 
-    jq -n \
-        --arg path "$dir" \
-        --arg kind "$kind" \
-        --arg desc "$desc" \
-        --argjson tech "$tech_json" \
-        '{path: $path, kind: $kind, tech_stack: $tech, description: $desc}'
+    # PAD-6: 프로젝트별 기본 브랜치 자동 감지. 우선순위:
+    #   1) git remote show origin 의 'HEAD branch' (네트워크 — 가장 정확).
+    #   2) git symbolic-ref refs/remotes/origin/HEAD (로컬 캐시 — clone 시점 값이라 stale 가능).
+    #   3) 흔한 후보 (develop / main / master) 중 origin 에 존재하는 것.
+    # 사용자가 결과 미더우면 settings.json 직접 편집 가능.
+    local base_branch=""
+    if [ -d "$dir/.git" ] || git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
+        base_branch="$(timeout 5 git -C "$dir" remote show origin 2>/dev/null \
+            | awk '/HEAD branch:/ {print $NF; exit}')"
+        if [ -z "$base_branch" ] || [ "$base_branch" = "(unknown)" ]; then
+            base_branch="$(git -C "$dir" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null \
+                | sed 's@^origin/@@' || true)"
+        fi
+        if [ -z "$base_branch" ]; then
+            local cand
+            for cand in develop main master; do
+                if git -C "$dir" rev-parse --verify --quiet "refs/remotes/origin/$cand" >/dev/null 2>&1; then
+                    base_branch="$cand"
+                    break
+                fi
+            done
+        fi
+    fi
+
+    if [ -n "$base_branch" ]; then
+        jq -n \
+            --arg path "$dir" \
+            --arg kind "$kind" \
+            --arg desc "$desc" \
+            --arg base "$base_branch" \
+            --argjson tech "$tech_json" \
+            '{path: $path, kind: $kind, tech_stack: $tech, default_base_branch: $base, description: $desc}'
+    else
+        jq -n \
+            --arg path "$dir" \
+            --arg kind "$kind" \
+            --arg desc "$desc" \
+            --argjson tech "$tech_json" \
+            '{path: $path, kind: $kind, tech_stack: $tech, description: $desc}'
+    fi
 }
 
 # 프로젝트 후보 — 환경변수 ORCH_PROJECT_GLOB 으로 패턴 지정 가능 (기본 *)
@@ -143,7 +177,9 @@ new_settings="$(jq -n \
     '{version: 1, base_dir: $base, default_base_branch: "develop", projects: $projects}'
 )"
 
-# --update: 기존 값 보존, 새 프로젝트만 추가, 기존 프로젝트는 그대로
+# --update: 기존 값 보존, 새 프로젝트만 추가, 기존 프로젝트는 그대로.
+# 단 PAD-6 이후 신규 default_base_branch 필드는 기존 프로젝트에도 누락 시 추론값으로 보강한다
+# (override 가 이미 있으면 그대로 유지).
 if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
     new_settings="$(jq --slurpfile cur "$ORCH_SETTINGS" '
         . as $new |
@@ -154,7 +190,13 @@ if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
           default_base_branch: ($old.default_base_branch // $new.default_base_branch),
           projects: ($new.projects | to_entries | map(
             .key as $k | .value as $v |
-            {key: $k, value: ($old.projects[$k] // $v)}
+            {key: $k, value: (
+              ($old.projects[$k] // $v) as $merged |
+              if ($merged.default_base_branch // "") == "" and ($v.default_base_branch // "") != ""
+              then $merged + {default_base_branch: $v.default_base_branch}
+              else $merged
+              end
+            )}
           ) | from_entries)
         }
     ' <<<"$new_settings")"
