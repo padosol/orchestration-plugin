@@ -1,7 +1,7 @@
 ---
-description: MP 운영 데이터 덤프 (토큰·도구·diff·메시지·에러) — 회고 REPORT.html 작성용 입력
+description: MP 운영 데이터 덤프 + 결정적 템플릿으로 REPORT.html 작성
 argument-hint: <mp-id>
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Write
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*), Write
 ---
 
 다음 명령으로 데이터 덤프를 받습니다.
@@ -12,29 +12,29 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Write
 
 **다음 단계 (orch 만 수행)**:
 
-1. 위 데이터를 해석해 한국어 단일 파일 HTML 회고 작성
-2. 다음 7개 섹션 포함:
+1. 위 데이터를 해석해 **구조화된 JSON 객체**로 요약 (HTML 직접 작성 금지 — 양식 드리프트 방지)
+2. JSON 은 다음 7개 섹션 콘텐츠를 담음 (스키마는 아래 "JSON 스키마" 참조):
    - **요약** — 이슈 무엇이었나, 산하 워커 / 경과 시간 / 결과 한 줄
-   - **변경 내용** — 워커별 diff stat 보고 핵심 변경만 한 줄씩 (10줄 이내). 구현 상세는 PR description 참고 안내
-   - **as-is / to-be** — 코드 변경(diff stat + commit 메시지)을 보고 "원래 어땠는데 → 어떻게 바뀌었나" 를 사용자 시점으로 요약
-   - **테스트 결과** — pr-drafts/reports 또는 archive 메시지에서 워커 자가 보고 인용. 없으면 "워커 자가보고 없음" 명시
-   - **토큰·시간 분석** — 위 토큰 합계 표 그대로 / 도구 호출 분포에서 비대칭(Read 가 같은 파일 반복 등) 의심 / 큰 tool_result top-5 위치 평가
+   - **변경 내용** — 워커별 diff stat 보고 핵심 변경만 한 줄씩 (10줄 이내)
+   - **as-is / to-be** — 코드 변경(diff stat + commit 메시지)을 보고 "원래 어땠는데 → 어떻게 바뀌었나" 사용자 시점 요약
+   - **테스트 결과** — pr-drafts/reports 또는 archive 메시지의 워커 자가보고 인용. 없으면 narrative 비움 → "워커 자가보고 없음" 자동 표시
+   - **토큰·시간 분석** — 모델별 토큰 합계 + 도구 분포 + 큰 tool_result top-5 + 관찰 (Read 반복 / 도구 쏠림 의심)
    - **핸드오프 페인포인트** — errors.jsonl 패턴 + 메시지 흐름의 재질문 빈도. 없으면 "발견된 마찰 없음"
-   - **후속 이슈 메모** — SKIP 된 케이스 (E2E, 다른 영역) + 발견된 버그/리팩터 후보
+   - **후속 이슈 메모** — SKIP 된 케이스 + 발견된 버그/리팩터 후보
 
-3. **HTML 형식 요구사항** (오프라인 열람 가능 단일 파일):
-   - `<!doctype html>` + `<meta charset="utf-8">` + `<title>${mp_id} 회고</title>` + 인라인 `<style>` 만 (외부 CDN / CSS / JS / 폰트 로드 금지)
-   - 폰트: `system-ui, -apple-system, "Segoe UI", sans-serif`. 코드/숫자 블록은 monospace.
-   - 섹션마다 카드 스타일 — 흰 배경 / 연한 1px 보더 / 8-12px rounded / padding 16-24px
-   - 본문은 무채색 (회색 계열). 강조는 한두 곳만 색상 (e.g., 머지 PR 번호 강조).
-   - 토큰 합계 / 도구 분포 / 큰 tool_result 는 `<table>` 또는 CSS grid 정렬. 표 헤더 굵게.
-   - PR / commit / 파일 경로는 `<code>` 모노스페이스.
-   - 외부 링크(PR URL 등)는 `<a target="_blank" rel="noreferrer">` 로 새 탭 열기.
+3. JSON 을 임시 파일에 저장 (예: `/tmp/orch-report-<mp-id>.json`)
 
-4. **저장 경로**: 데이터 메타의 `scope_dir` + `/REPORT.html`
-   - 예: `/home/padosol/lol/.orch/archive/mp-9-2026-05-06/REPORT.html`
+4. 렌더러 호출 — HTML 골격 / CSS / 섹션 순서가 고정되어 매번 동일한 양식이 보장됨:
 
-5. `Write` 도구로 작성 후, 사용자에게 경로와 한 줄 요약만 전달
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py \
+     /tmp/orch-report-<mp-id>.json \
+     <scope_dir>/REPORT.html
+   ```
+
+   `<scope_dir>` 는 위 데이터 메타의 `scope_dir` 값 그대로 사용. 예: `/home/padosol/lol/.orch/archive/mp-9-2026-05-06/REPORT.html`
+
+5. 사용자에게 경로와 한 줄 요약만 전달
 
 6. **AI-Ready 영향 검사 — 후속 Linear 이슈 자동 생성** (REPORT.html 직후 자동 수행):
 
@@ -59,16 +59,75 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Write
       - labels: `docs`, `ai-ready` (팀에 라벨이 존재할 때만)
 
       stale 미발견 시 이슈 생성 안 함.
-   5. **REPORT.html 의 "후속 이슈 메모" 섹션에 결과 반영**:
-      - 자동 생성된 이슈가 있으면 "docs 갱신 자동 이슈: MP-XX [URL]" 명시
-      - 없으면 "docs/CLAUDE.md 영향 없음 — stale 항목 자동 검사 결과 X" 명시
+   5. **JSON 의 `ai_ready_check` 필드에 결과 반영** 후 4번 단계 다시 실행해 REPORT.html 갱신:
+      - 자동 생성된 이슈가 있으면 `auto_issue: {id, url}` 채움
+      - stale 위치는 `stale_items` 배열로
+      - narrative 한 줄 ("stale 항목 자동 검사 결과 X — 영향 없음" 또는 "X건 발견, 자동 이슈 생성")
+
+## JSON 스키마
+
+`render_report.py --help` (또는 스크립트 상단 docstring) 에 정식 스키마가 있음. 핵심:
+
+```json
+{
+  "mp_id":        "MP-9",
+  "scope_dir":    "/home/.../mp-9-2026-05-06",
+  "generated_at": "2026-05-07T07:30:00Z",
+
+  "summary": {
+    "issue_title": "...", "worker_count": 2, "duration": "약 47분",
+    "result_line": "PR #84 머지됨", "narrative": "한 문장 요약"
+  },
+
+  "changes": {
+    "workers": [
+      {"id": "MP-9/server", "branch": "feature/...", "diff_stat": "5 files, +123 -8",
+       "highlights": ["변경 한 줄"]}
+    ],
+    "pr_url": "https://github.com/.../pull/84"
+  },
+
+  "as_is_to_be": [{"as_is": "...", "to_be": "..."}],
+
+  "test_results": {"narrative": "..."},
+
+  "token_analysis": {
+    "by_model": [
+      {"model": "claude-opus-4-7", "messages": 412, "input": 53210, "output": 188400,
+       "cache_read": 33000000, "cache_creation": 880000, "cost_usd": 73.42}
+    ],
+    "total_cost_usd": 73.42,
+    "tool_distribution": [{"tool": "Read", "count": 134}],
+    "large_tool_results_top5": [{"target": "src/x.go", "size": 41200, "note": "..."}],
+    "observations": ["Read 반복 의심"]
+  },
+
+  "handoff": {"errors_count": 0, "narrative": "발견된 마찰 없음"},
+
+  "follow_ups": [
+    {"category": "skipped|bug|refactor|docs", "title": "...", "detail": "..."}
+  ],
+
+  "ai_ready_check": {
+    "narrative": "...",
+    "stale_items": [{"file": "CLAUDE.md", "lines": "12-20", "reason": "..."}],
+    "auto_issue": {"id": "PAD-XX", "url": "https://linear.app/..."}
+  }
+}
+```
+
+필수 필드: `mp_id`. 나머지는 모두 optional — 누락된 섹션은 "X 없음" 으로 자동 표시.
 
 **자동 호출**:
-- `mp-down` 이 종료 보고 메시지에 "REPORT.html 자동 작성 요청" 을 명시함. orch 가 인박스 처리할 때 그 메시지를 보면 별도 사용자 지시 없이 `/orch:report <mp-id>` 실행해 작성하면 됨.
+- `mp-down` 이 종료 보고 메시지에 "REPORT.html 자동 작성 요청" 을 명시함. orch 가 인박스 처리할 때 그 메시지를 보면 별도 사용자 지시 없이 `/orch:report <mp-id>` 실행해 작성.
 - 6번 (AI-Ready 영향 검사 + 후속 이슈) 도 사용자 컨펌 없이 자동 수행 (사용자가 폐기 결정한 경우만 SKIP — 인박스 메시지에 그 신호가 보이면 SKIP).
 
 **주의**:
-- 단순 복붙 X — 데이터를 **해석**해 사용자 관점 narrative 로 풀어쓰기
-- 토큰 분석에서 Read 가 같은 파일 반복 / 도구 호출이 한 종류에 쏠림 같은 패턴이 보이면 명시적으로 짚기
-- 핸드오프 페인포인트는 errors.jsonl + 메시지 흐름의 재질문 빈도로 추정 (없으면 "발견 안 됨")
-- pr-drafts 가 있으면 PR 결과·리뷰 코멘트 흐름도 살펴서 테스트 결과 / 페인포인트에 반영
+- ❌ HTML / CSS 직접 작성 — 매번 양식 달라짐 (PAD-13 가 해결한 문제)
+  ✅ JSON 만 만들고 render_report.py 에 위임. 양식은 스크립트에 고정
+- ❌ 단순 복붙 — 데이터 그대로 붙이기
+  ✅ 데이터를 **해석**해 사용자 관점 narrative 로 풀어쓰기 (특히 summary.narrative, as_is_to_be, observations)
+- ❌ 토큰 분석에서 Read 가 같은 파일 반복 / 도구 호출 쏠림 발견했는데 침묵
+  ✅ token_analysis.observations 에 명시적으로 짚기
+- ❌ 핸드오프 페인포인트가 없을 때 빈 문자열
+  ✅ narrative 에 "발견된 마찰 없음" 명시 (또는 handoff 객체 자체를 누락 — 둘 다 같은 표시)
