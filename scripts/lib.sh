@@ -690,6 +690,18 @@ orch_log_error() {
         printf '{"ts":"%s","worker_id":"%s","script":"%s","exit_code":%s,"stderr":"%s"}\n' \
             "$ts" "$wid" "$src" "$rc" "$esc_err" >> "$log_path" 2>/dev/null || true
     fi
+
+    # PAD-8: Slack 알림 — 에러 발생 시. notify-slack.sh 자체가 무한루프 방지를 위해
+    # ORCH_NOTIFY_ENABLED=0 또는 webhook 미설정 시 조용히 종료한다.
+    local notify_dir notify_script
+    notify_dir="$(dirname "${BASH_SOURCE[0]}")"
+    notify_script="${notify_dir}/notify-slack.sh"
+    if [ -x "$notify_script" ]; then
+        local first_err scope
+        first_err="$(printf '%s' "$stderr_text" | head -n1 | cut -c1-120)"
+        scope="$(orch_wid_scope "$wid" 2>/dev/null || true)"
+        "$notify_script" error "${scope:-${wid}}" "${src} rc=${rc}: ${first_err}" 2>/dev/null || true
+    fi
 }
 
 # 모든 errors.jsonl 모으기 — top-level + 모든 mp-*/errors.jsonl (live + archive).
