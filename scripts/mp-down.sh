@@ -107,6 +107,8 @@ if [ "$self" = "orch" ]; then
     [ -d "$scope_dir_path" ] && mv "$scope_dir_path" "$archive_dir"
     orch_worker_unregister "$mp_id"
     echo "OK archived $archive_dir"
+    # PAD-8: Slack 알림 — leader pane 이미 죽어서 orch 가 직접 정리한 경로.
+    "${LIB_DIR}/notify-slack.sh" mp_done "$mp_id" "leader 이미 종료, 정리 완료" "$archive_dir" || true
     exit 0
 fi
 
@@ -156,6 +158,9 @@ fi
 # orch에 종료 보고 (leader pane 이 곧 죽으므로 stdout 은 남지 않음 — 보고는 inbox 통해 전달)
 orch_append_message "$mp_id" "orch" "[mp-down] $mp_id cascade shutdown 완료. archive: $archive_dir. 머지 worktree 자동 정리(+pull), 미머지는 보존.$report_hint" >/dev/null
 orch_notify "orch" || true
+
+# PAD-8: Slack 알림 — MP 완료. archive 경로 + REPORT 작성 안내.
+"${LIB_DIR}/notify-slack.sh" mp_done "$mp_id" "cascade shutdown 완료. /orch:report 로 REPORT.html 작성 권유" "$archive_dir" || true
 
 # 마지막: mp-id 윈도우(leader 자기 pane 포함) 통째로 kill — self-shutdown.
 # 동기 kill 이 자기 pane 을 즉시 죽이면 이 스크립트 종료 후 잔여 명령이 없어 안전.

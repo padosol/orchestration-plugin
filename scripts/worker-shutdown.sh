@@ -49,5 +49,13 @@ echo "[shutdown] worker_id=$self pane=$pane_id self-terminating" >&2
 # registry 삭제 (실패해도 진행 — pane kill 이 본질)
 orch_worker_unregister "$self" || true
 
+# PAD-8: reviewer 워커가 종료할 때는 PR 리뷰 코멘트를 막 게시한 직후라 머지 가능 상태.
+# 작업 워커 종료(머지 완료 후)는 mp-down 의 mp_done 알림이 대신 처리하므로 여기선 noop.
+role="$(orch_wid_role "$self" 2>/dev/null || true)"
+if [ "${role#review-}" != "$role" ]; then
+    scope="$(orch_wid_scope "$self" 2>/dev/null || true)"
+    "${LIB_DIR}/notify-slack.sh" pr_ready "$scope" "${self}: 리뷰 코멘트 게시 완료, 머지 가능" || true
+fi
+
 # 마지막 명령: 자기 pane kill. 이 명령 이후로는 stdout/stderr 모두 사라진다.
 exec tmux kill-pane -t "$pane_id"
