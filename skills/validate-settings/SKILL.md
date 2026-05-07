@@ -66,7 +66,7 @@ major 차이가 있으면 drift 로 보고. 마이너만 다르면(예: Spring B
 
 #### D. default_base_branch
 - `declared.default_base_branch` 미지정이고 `actual.actual_base_branch` 가 글로벌 `default_base_branch` 와 다르면 → **drift 보고 + override 추가 제안**. (예: 글로벌 `develop` 인데 어떤 프로젝트 actual 이 `main` → `projects.<alias>.default_base_branch: "main"` 추가)
-- `declared.default_base_branch` 와 `actual.actual_base_branch` 둘 다 있고 다르면 → **불일치 보고**. 사용자에게 어느 쪽이 맞는지 확인. 보통 actual (실제 git 원격) 이 정답이라 declared 를 갱신.
+- `declared.default_base_branch` 와 `actual.actual_base_branch` 둘 다 있고 다르면 → **불일치 보고**. **`AskUserQuestion` 도구로 TUI 선택지 제시** (header `Base branch`, options: `actual 채택 (Recommended)` / `declared 유지` — actual 이 git 원격 진실 소스라 보통 정답). plain text "어느 쪽이 맞나요?" 질문 금지.
 - 둘 다 같거나 declared 가 글로벌 default 와 동일하면 OK.
 
 #### E. kind 정합성
@@ -111,7 +111,7 @@ drift 가 하나라도 있으면 다음 형식으로 보고:
 - **description 의 책임/도메인 부분을 손대지 말 것**. 너의 일은 버전 숫자·프레임워크 정합성만이지, "헥사고날 (core/infra 단방향)" 같은 사용자가 직접 쓴 도메인 설명은 절대 재작성 금지.
 - **tech_stack 에 너무 자세히 적지 말 것**. `Java`, `Gradle`, `Spring Boot` 정도면 충분 — `JUnit`, `Lombok` 같은 사소한 라이브러리까지 추가 제안하면 노이즈.
 - **build_files 가 비어있다고 무조건 kind=unknown 으로 강제하지 말 것**. 사용자가 의도적으로 deploy/infra 디렉토리에 description 만 쓴 경우가 있다.
-- **자동 적용 금지**. 항상 사용자에게 표로 보여주고 "수정할까요?" 묻고 한 건씩 처리. 한 번에 모두 수정하면 사용자가 어떤 변경이 일어났는지 추적하기 어렵다.
+- **자동 적용 금지**. 항상 사용자에게 표로 먼저 보여주고, drift 항목별로 **`AskUserQuestion` 도구** (header `Drift fix`, options: `수정 적용` / `보류` / `무시`) 로 TUI 선택을 받아 한 건씩 처리. 한 번에 모두 수정하면 사용자가 어떤 변경이 일어났는지 추적하기 어렵다. plain text "수정할까요?" 질문 금지.
 
 ## 보고 후 다음 단계
 
