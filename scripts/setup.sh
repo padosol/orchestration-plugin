@@ -22,7 +22,7 @@ esac
 
 BASE_DIR="$(dirname "$ORCH_ROOT")"
 
-mkdir -p "$ORCH_ROOT" "$ORCH_INBOX" "$ORCH_ARCHIVE" "$ORCH_WORKERS"
+mkdir -p "$ORCH_ROOT" "$ORCH_INBOX" "$ORCH_ARCHIVE" "$ORCH_WORKERS" "$ORCH_RUNS_DIR"
 
 if orch_settings_exists && [ "$UPDATE_MODE" -eq 0 ]; then
     echo "ERROR: $ORCH_SETTINGS 이미 존재합니다." >&2

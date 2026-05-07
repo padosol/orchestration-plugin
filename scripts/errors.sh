@@ -53,8 +53,10 @@ fi
 
 # 데이터 소스 결정
 if [ -n "$filter_mp" ]; then
-    # 그 MP 의 errors.jsonl (live 또는 archive)
+    # 그 MP 의 errors.jsonl (live 또는 archive). PAD-3: runs/ 와 legacy 양쪽.
     candidates=(
+        "$(orch_scope_dir "$filter_mp" 2>/dev/null)/errors.jsonl"
+        "$ORCH_RUNS_DIR/$filter_mp/errors.jsonl"
         "$ORCH_ROOT/$filter_mp/errors.jsonl"
     )
     # archive 들도 포함 (날짜별)
@@ -77,7 +79,7 @@ fi
 # --clear: top-level 또는 mp scope 비우기
 if [ "$do_clear" -eq 1 ]; then
     if [ -n "$filter_mp" ]; then
-        target="$ORCH_ROOT/$filter_mp/errors.jsonl"
+        target="$(orch_scope_dir "$filter_mp" 2>/dev/null)/errors.jsonl"
     else
         target="$ORCH_ERRORS_LOG"
     fi

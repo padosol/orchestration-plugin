@@ -7,14 +7,25 @@
 #   mp-NN/<project>   → MP-NN 산하 프로젝트 워커
 #
 # 디스크 레이아웃:
-#   .orch/settings.json                     프로젝트 메타데이터
-#   .orch/inbox/<id>.md                     orch / leader 인박스
-#   .orch/archive/<id>-YYYY-MM-DD.md
-#   .orch/workers/<id>.json                 orch / leader 등록
-#   .orch/<scope>/inbox/<role>.md           leader 산하 워커 인박스
-#   .orch/<scope>/archive/<role>-YYYY-MM-DD.md
-#   .orch/<scope>/workers/<role>.json
-#   .orch/<scope>/worktrees/<project>/      git worktree
+#   .orch/settings.json                            프로젝트 메타데이터
+#   .orch/inbox/<id>.md                            orch / leader 인박스
+#   .orch/archive/<id>-YYYY-MM-DD.md               orch / leader 메시지 archive
+#   .orch/archive/<scope>-YYYY-MM-DD/              mp-down 시 scope dir 통째 archive
+#   .orch/workers/<id>.json                        orch / leader 등록
+#   .orch/runs/<scope>/inbox/<role>.md             leader 산하 워커 인박스
+#   .orch/runs/<scope>/archive/<role>-YYYY-MM-DD.md
+#   .orch/runs/<scope>/workers/<role>.json
+#   .orch/runs/<scope>/worktrees/<project>/        git worktree
+#   .orch/runs/<scope>/leader-archive.md           leader inbox archive (mp-down 시 함께 archive)
+#   .orch/runs/<scope>/errors.jsonl                scope 별 에러 로그
+#
+# **PAD-3** 이후 신규 MP scope 는 `.orch/runs/<scope>/` 아래에 묶인다 — 동시 진행 MP 가
+# 많아져도 .orch 루트가 어수선하지 않도록 wrapper 한 단계 추가. 변경 전에 만들어진 활성
+# MP 는 `.orch/<scope>/` 평탄 위치에 그대로 있고, orch_scope_dir 가 양쪽을 본다 — 신규는
+# runs/, legacy 는 평탄 path. 진행중인 MP 가 mp-down 으로 종료되면 자연스럽게 정리됨.
+#
+# **inbox 빈 파일 = 처리할 메시지 없음 (정상 상태).** inbox-archive.sh 가 처리된 메시지
+# 를 archive/ 로 옮긴 뒤 inbox/<role>.md 를 truncate 한다. 처리 흔적은 archive 쪽 확인.
 
 # ─── ORCH_ROOT 추론 ───────────────────────────────────────────────────
 # 우선순위:
@@ -45,8 +56,9 @@ ORCH_WORKERS="${ORCH_ROOT}/workers"
 ORCH_SETTINGS="${ORCH_ROOT}/settings.json"
 # errors.jsonl 은 caller scope 에 따라 결정 (orch_errors_log_path 참고).
 # orch / unknown → ${ORCH_ROOT}/errors.jsonl
-# mp-NN, mp-NN/role → ${ORCH_ROOT}/<mp-NN>/errors.jsonl  (mp-down 이 scope dir 째 archive)
+# mp-NN, mp-NN/role → ${ORCH_ROOT}/runs/<mp-NN>/errors.jsonl  (mp-down 이 scope dir 째 archive)
 ORCH_ERRORS_LOG="${ORCH_ROOT}/errors.jsonl"  # legacy compat — 신규 코드는 orch_errors_log_path 사용
+ORCH_RUNS_DIR="${ORCH_ROOT}/runs"
 
 ORCH_LEADER_PATTERN='^mp-[0-9]+$'
 ORCH_WORKER_PATTERN='^mp-[0-9]+/[a-zA-Z0-9_-]+$'
@@ -140,19 +152,20 @@ orch_normalize_issue_id() {
 # ─── 경로 헬퍼 (scope-aware) ──────────────────────────────────────────
 
 orch_inbox_path() {
-    local w="$1" kind
+    local w="$1" kind scope
     kind="$(orch_wid_kind "$w" 2>/dev/null || true)"
     case "$kind" in
         orch|leader)
             printf '%s/%s.md' "$ORCH_INBOX" "$w" ;;
         worker)
-            printf '%s/%s/inbox/%s.md' "$ORCH_ROOT" "${w%%/*}" "${w##*/}" ;;
+            scope="$(orch_scope_dir "${w%%/*}")" || return 1
+            printf '%s/inbox/%s.md' "$scope" "${w##*/}" ;;
         *) return 1 ;;
     esac
 }
 
 orch_archive_path() {
-    local w="$1" kind
+    local w="$1" kind scope
     kind="$(orch_wid_kind "$w" 2>/dev/null || true)"
     case "$kind" in
         orch)
@@ -160,36 +173,53 @@ orch_archive_path() {
             printf '%s/%s-%s.md' "$ORCH_ARCHIVE" "$w" "$(date +%Y-%m-%d)" ;;
         leader)
             # leader 메시지 archive 는 자기 scope dir 안에 — mp-down 이 scope 째 archive
-            printf '%s/%s/leader-archive.md' "$ORCH_ROOT" "$w" ;;
+            scope="$(orch_scope_dir "$w")" || return 1
+            printf '%s/leader-archive.md' "$scope" ;;
         worker)
-            printf '%s/%s/archive/%s-%s.md' "$ORCH_ROOT" "${w%%/*}" "${w##*/}" "$(date +%Y-%m-%d)" ;;
+            scope="$(orch_scope_dir "${w%%/*}")" || return 1
+            printf '%s/archive/%s-%s.md' "$scope" "${w##*/}" "$(date +%Y-%m-%d)" ;;
         *) return 1 ;;
     esac
 }
 
 orch_worker_path() {
-    local w="$1" kind
+    local w="$1" kind scope
     kind="$(orch_wid_kind "$w" 2>/dev/null || true)"
     case "$kind" in
         orch|leader)
             printf '%s/%s.json' "$ORCH_WORKERS" "$w" ;;
         worker)
-            printf '%s/%s/workers/%s.json' "$ORCH_ROOT" "${w%%/*}" "${w##*/}" ;;
+            scope="$(orch_scope_dir "${w%%/*}")" || return 1
+            printf '%s/workers/%s.json' "$scope" "${w##*/}" ;;
         *) return 1 ;;
     esac
 }
 
-# scope 디렉토리 (mp-13 sandbox 전체)
+# scope 디렉토리 (mp-13 sandbox 전체).
+# PAD-3: `.orch/runs/<scope>/` 가 신규 위치. legacy `.orch/<scope>/` 도 fallback 으로 유지.
+# 결정 순서:
+#   1) runs/<scope> 디렉토리 존재 → runs path
+#   2) legacy <scope> 디렉토리 존재 → legacy path (PAD-3 이전 활성 MP)
+#   3) 둘 다 없음 → runs path (mp-up 이 mkdir 할 위치)
 orch_scope_dir() {
     local s="$1"
     [[ "$s" =~ $ORCH_LEADER_PATTERN ]] || return 1
-    printf '%s/%s' "$ORCH_ROOT" "$s"
+    local new_path="$ORCH_RUNS_DIR/$s"
+    if [ -d "$new_path" ]; then
+        printf '%s' "$new_path"; return 0
+    fi
+    local legacy_path="$ORCH_ROOT/$s"
+    if [ -d "$legacy_path" ]; then
+        printf '%s' "$legacy_path"; return 0
+    fi
+    printf '%s' "$new_path"
 }
 
 orch_scope_worktrees_dir() {
     local s="$1"
-    [[ "$s" =~ $ORCH_LEADER_PATTERN ]] || return 1
-    printf '%s/%s/worktrees' "$ORCH_ROOT" "$s"
+    local scope
+    scope="$(orch_scope_dir "$s")" || return 1
+    printf '%s/worktrees' "$scope"
 }
 
 # ─── settings.json 로더 (jq 의존) ─────────────────────────────────────
@@ -294,7 +324,9 @@ orch_active_leaders() {
 # 특정 leader 산하 worker_id 목록 (mp-NN/role 형식)
 orch_active_sub_workers() {
     local scope="$1"
-    local dir="$ORCH_ROOT/$scope/workers"
+    local scope_dir
+    scope_dir="$(orch_scope_dir "$scope")" || return 0
+    local dir="$scope_dir/workers"
     [ -d "$dir" ] || return 0
     local f
     for f in "$dir"/*.json; do
@@ -581,10 +613,11 @@ orch_errors_log_path() {
     local wid="${1:-}"
     [ -z "$wid" ] && wid="${ORCH_WORKER_ID:-${LOL_WORKER_ID:-}}"
     [ -z "$wid" ] && wid="$(orch_detect_self 2>/dev/null || true)"
-    local scope
+    local scope scope_dir
     scope="$(orch_wid_scope "$wid" 2>/dev/null || true)"
     if [ -n "$scope" ]; then
-        printf '%s/%s/errors.jsonl' "$ORCH_ROOT" "$scope"
+        scope_dir="$(orch_scope_dir "$scope")" || { printf '%s/errors.jsonl' "$ORCH_ROOT"; return; }
+        printf '%s/errors.jsonl' "$scope_dir"
     else
         printf '%s/errors.jsonl' "$ORCH_ROOT"
     fi
@@ -625,9 +658,13 @@ orch_log_error() {
 
 # 모든 errors.jsonl 모으기 — top-level + 모든 mp-*/errors.jsonl (live + archive).
 # stdout 으로 한 줄 JSON 들 출력. /orch:errors 가 사용.
+# PAD-3 이후: 신규 위치 runs/mp-*/ 와 후방호환 평탄 mp-*/ 둘 다 스캔.
 orch_collect_all_errors() {
     [ -f "$ORCH_ERRORS_LOG" ] && cat "$ORCH_ERRORS_LOG" 2>/dev/null
     local f
+    for f in "$ORCH_RUNS_DIR"/mp-*/errors.jsonl; do
+        [ -f "$f" ] && cat "$f" 2>/dev/null
+    done
     for f in "$ORCH_ROOT"/mp-*/errors.jsonl; do
         [ -f "$f" ] && cat "$f" 2>/dev/null
     done

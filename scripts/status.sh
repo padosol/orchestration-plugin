@@ -58,11 +58,14 @@ else
 fi
 
 # orphan 검출: <scope>/workers/ 에 leader가 없는 산하 워커
+# PAD-3: runs/<scope>/ 와 legacy <scope>/ 양쪽 스캔.
 echo
 orphans=()
-for d in "$ORCH_ROOT"/mp-*/; do
+shopt -s nullglob
+for d in "$ORCH_RUNS_DIR"/mp-*/ "$ORCH_ROOT"/mp-*/; do
     [ -d "$d" ] || continue
     scope="$(basename "$d")"
+    [[ "$scope" =~ ^mp-[0-9]+$ ]] || continue
     if ! orch_worker_exists "$scope"; then
         # 이 scope에 leader 없음. 산하 워커가 있다면 orphan
         for sw in "${d}workers"/*.json; do
@@ -71,6 +74,7 @@ for d in "$ORCH_ROOT"/mp-*/; do
         done
     fi
 done
+shopt -u nullglob
 if [ "${#orphans[@]}" -gt 0 ]; then
     printf 'WARN orphan workers (leader 없음): %s\n' "${orphans[*]}"
 fi
