@@ -259,14 +259,16 @@ orch_settings_global() {
     jq -r --arg f "$field" '.[$f] // ""' "$ORCH_SETTINGS"
 }
 
-# 이슈 트래커 — linear | github | none. 누락/잘못된 값은 none.
+# 이슈 트래커 — linear | github | none.
+# 필드 누락 시 'linear' (legacy 0.3.x 이하 워크스페이스 backwards-compat — 그때는 항상 Linear).
+# 잘못된 값도 'linear' 로 폴백 (안전한 기본).
 orch_settings_issue_tracker() {
-    orch_settings_require || { printf 'none'; return 1; }
+    orch_settings_require || { printf 'linear'; return 1; }
     local v
-    v="$(jq -r '.issue_tracker // "none"' "$ORCH_SETTINGS")"
+    v="$(jq -r '.issue_tracker // "linear"' "$ORCH_SETTINGS")"
     case "$v" in
         linear|github|none) printf '%s' "$v" ;;
-        *) printf 'none' ;;
+        *) printf 'linear' ;;
     esac
 }
 
