@@ -171,8 +171,9 @@ mp-13/server      ← MP-13 산하 server 프로젝트 워커
     └── mp-13/
         ├── inbox/<role>.md
         ├── archive/<role>-YYYY-MM-DD.md
-        ├── workers/<role>.json
-        ├── worktrees/<project>/   # git worktree
+        ├── workers/<role>.json         # 살아있는 워커 등록
+        ├── workers-archive/<role>.json # 종료된 워커 (sidecar 분석용 보존)
+        ├── worktrees/<project>/        # git worktree
         ├── leader-archive.md
         └── errors.jsonl
 ```

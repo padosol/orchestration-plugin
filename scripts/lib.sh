@@ -14,7 +14,8 @@
 #   .orch/workers/<id>.json                        orch / leader 등록
 #   .orch/runs/<scope>/inbox/<role>.md             leader 산하 워커 인박스
 #   .orch/runs/<scope>/archive/<role>-YYYY-MM-DD.md
-#   .orch/runs/<scope>/workers/<role>.json
+#   .orch/runs/<scope>/workers/<role>.json         살아있는 워커 등록
+#   .orch/runs/<scope>/workers-archive/<role>.json 종료된 워커 (worker-shutdown 이 보존, sidecar 분석용)
 #   .orch/runs/<scope>/worktrees/<project>/        git worktree
 #   .orch/runs/<scope>/leader-archive.md           leader inbox archive (mp-down 시 함께 archive)
 #   .orch/runs/<scope>/errors.jsonl                scope 별 에러 로그
@@ -323,6 +324,34 @@ orch_worker_unregister() {
     local wid="$1" path
     path="$(orch_worker_path "$wid")" || return 0
     rm -f "$path"
+}
+
+# 워커 종료 시 registry 를 지우지 않고 <scope>/workers-archive/<role>.json 으로 mv +
+# terminated_at 필드 추가. report.sh 가 sidecar(jsonl) 분석할 때 cwd/started_at 이
+# 필요하므로 종료 후에도 보존해야 한다. mp-down archive mv 시 디렉토리 통째로 이동.
+# leader/orch 에는 의미 없음 (top-level 등록 — scope 디렉토리 아님). worker 만 처리.
+orch_worker_archive_local() {
+    local wid="$1" path archive_dir archive_path scope role scope_dir ts
+    [ "$(orch_wid_kind "$wid")" = "worker" ] || { orch_worker_unregister "$wid"; return; }
+
+    path="$(orch_worker_path "$wid")" || return 0
+    [ -f "$path" ] || return 0
+
+    scope="$(orch_wid_scope "$wid")"
+    role="$(orch_wid_role "$wid")"
+    scope_dir="$(orch_scope_dir "$scope")" || { rm -f "$path"; return 0; }
+
+    archive_dir="$scope_dir/workers-archive"
+    mkdir -p "$archive_dir"
+    archive_path="$archive_dir/$role.json"
+    ts="$(date -Iseconds)"
+
+    if command -v jq >/dev/null 2>&1 \
+        && jq --arg t "$ts" '. + {terminated_at: $t}' "$path" >"$archive_path" 2>/dev/null; then
+        rm -f "$path"
+    else
+        mv "$path" "$archive_path" 2>/dev/null || rm -f "$path"
+    fi
 }
 
 orch_worker_exists() {
