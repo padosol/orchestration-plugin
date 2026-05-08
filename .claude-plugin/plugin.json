@@ -1,7 +1,7 @@
 {
   "name": "orch",
   "description": "tmux 멀티 세션 오케스트레이션. /orch:send, /orch:check-inbox, /orch:status 슬래시 커맨드로 다른 워커 세션과 메시지를 주고받는다.",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "author": {
     "name": "padosol"
   }
