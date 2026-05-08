@@ -100,6 +100,7 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 | `/orch:errors [...]` | 사용자 | 통합 에러 로그 |
 | `/orch:report <id>` | 사용자 | REPORT-data.md → REPORT.html 렌더 |
 | `/orch:validate-settings` | 사용자 | settings.json 과 실제 repo 정합성 검사 |
+| `/orch:prioritize` | 사용자 | 트래커(Linear/GitHub) 미완료 이슈 → 루브릭 점수 → Top N 추천 |
 
 ---
 
@@ -354,3 +355,4 @@ ORCH_MSG
 - PR 머지 대기: `scripts/wait-merge.sh`
 - REPORT 렌더러: `scripts/render_report.py`
 - 설정 검증: `skills/validate-settings/SKILL.md`
+- 우선순위 추천: `skills/prioritize-issues/SKILL.md`
