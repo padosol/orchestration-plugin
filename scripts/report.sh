@@ -290,12 +290,18 @@ cat <<EOF
 - 워커 자가보고 인용은 archive 메시지 / pr-drafts / reports 에서 발췌
 - 핸드오프 페인포인트는 errors.jsonl + 메시지 흐름의 재질문 빈도로 추정. 없으면 \`handoff.narrative\` 에 "발견된 마찰 없음"
 
-**🚫 cwd 보호 + 컨텍스트 보호 — 절대 규칙**:
+**🚫 cwd 보호 (절대 규칙)**:
 - ❌ orch 메인 pane Bash 로 \`cd <repo>\` — pane cwd 가 워크스페이스 루트에서 벗어나면 이후 \`.orch/...\` 상대 경로 / 메일박스 모두 깨짐
-- ❌ orch 메인에서 직접 \`git log\` / \`git diff\` / \`gh pr view\` / 워크스페이스 docs grep·Read — 결과가 메인 컨텍스트에 누적돼 토큰 압박
-- ✅ 추가 git 정보 필요 → \`git -C <abs-path> ...\` 또는 **Agent (general-purpose / Explore) 위임**
-- ✅ AI-Ready 영향 검사 (변경 파일 grep + docs stale 검증) 는 단일 Agent 호출로 묶어 위임 — file:line + reason JSON 만 회수
-- ✅ orch 메인은 /tmp JSON 작성 / render_report.py 호출 / Linear save_issue / inbox-archive 까지만 직접 수행
+- ✅ 다른 repo 정보 → \`git -C <abs-path> ...\` (cd 없이) 또는 단일 파일 \`Read <abs-path>\`
 
-\`/orch:prioritize\` 가 list/get 을 Agent 로 위임하는 것과 같은 이유 — 메인은 결과만 받아 의사결정.
+**📦 컨텍스트·비용 보호 (효율 규칙) — 위치 인지로 분기**:
+- 위 raw data 에 변경 파일 경로 / commits / diff stat / errors stderr / archive 메시지 다 포함됨. **추가 호출은 위치를 아는지로 분기**:
+  - 위치 명확 + 단일/소수 파일 → 메인이 직접 \`Read <abs>\` / \`git -C <abs> ...\` / \`grep <pat> <abs>\` (round-trip 낭비 X)
+  - 위치 미상 → \`Agent(subagent_type=Explore)\` 단발
+  - 큰 작업 (다파일 grep / 여러 docs 검증) → \`Agent(subagent_type=general-purpose)\` 단발 위임
+- ❌ raw data 에 이미 file:line 이 있는데 또 Agent 시켜 다시 찾게 함 — Explore 비용 낭비
+- ❌ 단발 Read 한 번이면 끝나는 일을 Agent 위임 — round-trip 낭비
+- ✅ orch 메인은 /tmp JSON 작성 / render_report.py 호출 / Linear save_issue / inbox-archive / 위 효율 규칙의 단일 Read·grep·git -C 까지 직접
+
+\`/orch:prioritize\` 의 list/get 위임은 본문 누적이 큰 케이스라 Agent. 이 단계도 같은 기준으로 — 작으면 직접, 크면 Agent.
 EOF
