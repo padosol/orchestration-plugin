@@ -159,9 +159,8 @@ ${issue_fetch_step}
 
 지금 1~3 진행하고 작업 계획을 /orch:send orch 로 보고하세요."
 
-tmux send-keys -t "$leader_pane" "$first_msg"
-sleep 0.3
-tmux send-keys -t "$leader_pane" Enter
+orch_send_keys_line "$leader_pane" "$first_msg" \
+    || echo "WARN: leader first_msg 송신 실패 (pane=$leader_pane)" >&2
 
 echo "OK leader=$mp_id pane=$leader_pane window=$leader_window"
 echo "  scope_dir: $scope_dir"

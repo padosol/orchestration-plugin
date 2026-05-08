@@ -340,6 +340,9 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 ORCH_MSG
 ```
 
+**메시지가 잘려 도착한 의심**:
+`send.sh` 의 OK 라인 끝에 `(N chars)` 가 출력된다. 송신 의도와 차이가 크면 argv 단계에서 잘린 것 — `--file` 또는 stdin/heredoc 으로 재송신.
+
 ---
 
 ## 핑퐁 방지

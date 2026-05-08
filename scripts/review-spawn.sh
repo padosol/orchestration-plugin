@@ -143,9 +143,8 @@ ORCH_MSG\"
 
 준비되면 PR 검토 후 답신 + worker-shutdown.sh."
 
-tmux send-keys -t "$reviewer_pane" "$first_msg"
-sleep 0.3
-tmux send-keys -t "$reviewer_pane" Enter
+orch_send_keys_line "$reviewer_pane" "$first_msg" \
+    || echo "WARN: reviewer first_msg 송신 실패 (pane=$reviewer_pane)" >&2
 
 echo "OK reviewer=$worker_id pane=$reviewer_pane window=$mp_window"
 echo "  PR: #$pr"

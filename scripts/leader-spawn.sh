@@ -170,9 +170,8 @@ auto-mode classifier 가 사용자 prompt 띄우고 답이 \"보류\"·\"잠시\
 
 준비되면 /orch:check-inbox 로 첫 지시 받아라."
 
-tmux send-keys -t "$worker_pane" "$first_msg"
-sleep 0.3
-tmux send-keys -t "$worker_pane" Enter
+orch_send_keys_line "$worker_pane" "$first_msg" \
+    || echo "WARN: worker first_msg 송신 실패 (pane=$worker_pane)" >&2
 
 echo "OK worker=$worker_id pane=$worker_pane window=$mp_window"
 echo "  worktree: $worktree_path"
