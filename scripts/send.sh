@@ -92,4 +92,4 @@ if [ "$from" != "orch" ]; then
     fi
 fi
 
-echo "OK [${msg_id}] ${from} → ${target}"
+echo "OK [${msg_id}] ${from} → ${target} (${#body} chars)"

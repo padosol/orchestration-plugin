@@ -8,7 +8,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/send.sh:*)
 
 !`${CLAUDE_PLUGIN_ROOT}/scripts/send.sh $ARGUMENTS`
 
-성공하면 메시지 ID와 보낸이→받는이가 출력됩니다. 차단/실패 시 에러 메시지를 사용자에게 그대로 알려주세요.
+성공하면 메시지 ID + 보낸이→받는이 + **본문 byte 수**(`(N chars)`) 가 출력됩니다. 의도한 본문 길이와 차이가 크면 호출 측 따옴표·백틱·괄호로 인자가 잘렸을 가능성 — `--file` 또는 stdin 으로 재송신하세요. 차단/실패 시 에러 메시지를 사용자에게 그대로 알려주세요.
 
 **worker_id 형식**:
 - `orch` — PM

@@ -535,10 +535,11 @@ orch_notify() {
         || echo "WARN: '$to' (pane=$pane_id) 에 ${cmd} 전달 실패" >&2
 }
 
-# pane 에 한 줄 전송 (텍스트 + Enter). race / copy-mode 흡수 방지.
+# pane 에 한 줄/multi-line 전송 (텍스트 + Enter). race / copy-mode 흡수 방지.
 # 1) copy-mode 또는 status-line modal 이면 cancel — 없으면 노옵
-# 2) 텍스트 송신 → 짧게 sleep → 별도 호출로 Enter
+# 2) 텍스트 송신 → sleep → 별도 호출로 Enter
 # 3) Enter 가 첫 호출에 흡수되는 사례 보고 잦아서 두 단계 분리는 의도적
+# 4) sleep 은 큰 first_msg paste 흡수 시간 + pane 부하 마진 (0.15 → 0.25)
 # 반환: 0=텍스트·Enter 둘 다 성공, 1=둘 중 하나라도 실패
 orch_send_keys_line() {
     local pane_id="$1" text="$2"
@@ -546,7 +547,7 @@ orch_send_keys_line() {
     tmux send-keys -t "$pane_id" -X cancel 2>/dev/null || true
     sleep 0.1
     tmux send-keys -t "$pane_id" -- "$text" 2>/dev/null || return 1
-    sleep 0.15
+    sleep 0.25
     tmux send-keys -t "$pane_id" Enter 2>/dev/null || return 1
     return 0
 }
