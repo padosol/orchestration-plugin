@@ -54,6 +54,8 @@ ORCH_INBOX="${ORCH_ROOT}/inbox"
 ORCH_ARCHIVE="${ORCH_ROOT}/archive"
 ORCH_WORKERS="${ORCH_ROOT}/workers"
 ORCH_SETTINGS="${ORCH_ROOT}/settings.json"
+# 비동기 사용자 질문 큐 — orch 가 결정 요청을 file 로 적재, 사용자가 자기 페이스로 답변.
+ORCH_QUESTIONS="${ORCH_ROOT}/questions"
 # errors.jsonl 은 caller scope 에 따라 결정 (orch_errors_log_path 참고).
 # orch / unknown → ${ORCH_ROOT}/errors.jsonl
 # mp-NN, mp-NN/role → ${ORCH_ROOT}/runs/<mp-NN>/errors.jsonl  (issue-down 이 scope dir 째 archive)
@@ -220,6 +222,25 @@ orch_scope_worktrees_dir() {
     local scope
     scope="$(orch_scope_dir "$s")" || return 1
     printf '%s/worktrees' "$scope"
+}
+
+# ─── 비동기 사용자 질문 큐 ────────────────────────────────────────────
+# 위치: ${ORCH_QUESTIONS}/<id>.json — 한 파일 = 한 질문, status 필드로 open/answered 분리.
+# - orch 가 ask.sh 로 등록 → status=open
+# - 사용자가 questions.sh 로 목록 조회, answer.sh 로 답변 → status=answered + orch inbox 메시지
+# id 포맷: q-<unix-ts>-<rand6>
+
+orch_question_path() {
+    local id="$1"
+    [ -n "$id" ] || return 1
+    printf '%s/%s.json' "$ORCH_QUESTIONS" "$id"
+}
+
+orch_new_question_id() {
+    local rand
+    rand="$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c 6 || true)"
+    [ -z "$rand" ] && rand="$(printf '%06x' "$RANDOM$RANDOM" | head -c 6)"
+    printf 'q-%s-%s' "$(date +%s)" "$rand"
 }
 
 # ─── settings.json 로더 (jq 의존) ─────────────────────────────────────
