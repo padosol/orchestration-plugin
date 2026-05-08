@@ -236,6 +236,20 @@ orch_question_path() {
     printf '%s/%s.json' "$ORCH_QUESTIONS" "$id"
 }
 
+# 종료된 leader 의 top-level inbox 파일 + lock 정리.
+# 워커 inbox 는 scope_dir/inbox/<role>.md 라 scope archive 와 함께 보존 — 호출 noop.
+# orch_worker_unregister 직후 호출하면 라우팅이 차단된 후라 race 없음.
+orch_inbox_cleanup() {
+    local wid="$1"
+    local path
+    path="$(orch_inbox_path "$wid" 2>/dev/null || true)"
+    [ -n "$path" ] || return 0
+    # 워커 inbox 는 scope_dir 안이라 issue-down 의 scope archive 가 이미 처리. 손대지 않음.
+    case "$path" in
+        "${ORCH_INBOX}/"*) rm -f "$path" "${path}.lock" ;;
+    esac
+}
+
 orch_new_question_id() {
     local rand
     rand="$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c 6 || true)"

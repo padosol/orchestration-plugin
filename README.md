@@ -105,6 +105,7 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 | `/orch:ask "<context>" "<question>" --option ...` | orch | 사용자 결정 비동기 큐 등록 (선택지 또는 자유 답변) |
 | `/orch:questions [<q-id>]` | 사용자 | 미답 질문 목록 / 단건 본문 |
 | `/orch:answer <q-id> <key>` | 사용자 | 큐에 등록된 질문에 답변 — orch inbox 로 전달 |
+| `/orch:inbox-prune [--dry-run]` | 사용자 | 종료된 leader 의 orphan inbox 파일 일괄 청소 |
 
 ---
 
