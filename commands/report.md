@@ -10,6 +10,28 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 
 **역할**: 위 출력은 해당 MP 의 운영 흐름·코드 변경·토큰 사용량·도구 분포·에러·메시지 카운트가 담긴 **원본 데이터** 입니다. orch 가 이를 해석해 회고 REPORT.html 을 작성합니다.
 
+**🚫 cwd 보호 + 컨텍스트 보호 — 절대 규칙**:
+
+orch 메인 pane 의 cwd 는 워크스페이스 루트 (예: `/home/padosol/lol`) 에 고정. 본 절차 내내 다음 위반 금지:
+
+- ❌ `cd <repo>` 또는 `cd <subproject>` — 한 번이라도 실행하면 이후 `.orch/...` 상대 경로 / 메일박스 모두 깨짐
+- ❌ orch 메인 Bash 로 직접 `git log`, `git diff`, `gh pr view`, 워크스페이스 docs grep/Read — 결과가 메인 컨텍스트에 누적돼 토큰 압박 (특히 step 6/7 의 영향 검사는 변경 파일 다수 + docs 다수 grep)
+
+**대신 다음 패턴 사용**:
+
+- 추가 git 정보 필요 → `git -C <abs-path> ...` (cd 없이) 또는 **Agent (subagent_type=general-purpose 또는 Explore) 로 위임**
+- 변경 파일 grep / docs Read / 외부 repo 탐색 → 모두 Agent 로 위임. 메인은 Agent 결과 (요약 markdown) 만 받음
+- 위임 시 프롬프트에 절대경로 + 어떤 정보를 어떤 형식으로 회수할지 명시 (예: "리스트 + file:line 만 회수, 본문 인용 X")
+
+**orch 메인 pane 이 직접 하는 작업 (cwd 무관 / 컨텍스트 부담 작음) 만**:
+
+- `/tmp/orch-report-<mp-id>.json` 작성 (Write)
+- `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py` 호출 (절대경로)
+- Linear `mcp__linear-server__save_issue` (MCP, cwd 무관)
+- `inbox-archive.sh <id>` (절대경로)
+
+`/orch:prioritize` 가 list/get 호출을 Agent 로 위임하는 것과 같은 이유 — 메인은 결과만 받아 의사결정.
+
 **다음 단계 (orch 만 수행)**:
 
 1. 위 데이터를 해석해 **구조화된 JSON 객체**로 요약 (HTML 직접 작성 금지 — 양식 드리프트 방지)
@@ -39,6 +61,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 6. **자가진단 — errors.jsonl 영향 검사 + 개선 액션** (REPORT.html 직후 자동 수행, AI-Ready 검사보다 먼저):
 
    이번 사이클 동안 누적된 에러를 **개선 루프에 실제로 반영**하는 단계. 단순히 `handoff.narrative` 에 "에러 N건" 한 줄로 끝내지 말고, 패턴을 식별하고 액션을 도출해 후속 이슈로 박아라 — 그래야 다음 사이클에서 같은 함정을 안 밟는다.
+
+   **위임 규칙**: scope errors.jsonl entry 가 5건 이상이거나 stderr 가 길면 패턴 분석을 **Agent (general-purpose) 로 위임** — 메인은 patterns + suggested_fix 요약만 받음. entry 가 적으면 메인에서 직접 그룹화 OK.
 
    절차:
    1. **scope errors.jsonl 스캔** — 위 raw 데이터의 "에러 로그 (이 MP scope)" 섹션 entry 모두. 비어 있으면 narrative "이번 사이클 에러 0건 — 개선할 패턴 없음" 으로 마무리하고 후속 이슈 SKIP.
@@ -70,6 +94,18 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 
    변경 파일 목록을 보고 CLAUDE.md / 핵심 docs 가 stale 해질 후보를 식별 → 발견 시 후속 이슈 자동 생성. 매번 ai-ready-audit 100점 루브릭을 돌리는 게 아니라, **이번 변경분에 한정한 가벼운 영향 검사**.
 
+   **위임 규칙 (필수)**: 본 단계의 grep / Read / git fetch 는 **모두 Agent (subagent_type=Explore 또는 general-purpose) 로 위임**. 변경 파일 5개 이상 또는 grep 대상 docs 3개 이상이면 단일 Agent 호출로 묶어 한 번에 stale 위치 (file:line + 사유) 만 회수. orch 메인이 직접 grep/Read 하면 본 이슈(PAD-36) 의 cwd 오염 / 컨텍스트 누적 재발.
+
+   **Agent 프롬프트 예시 (그대로 차용)**:
+   ```
+   변경 파일 N개: [절대경로 리스트]
+   각 파일을 mention 하는 다음 docs 안에서 stale 위치 식별:
+   - <repo>/CLAUDE.md
+   - <repo>/AGENTS.md
+   - <repo>/docs/**/*.md
+   회수 형식: [{file: "path", lines: "12-20", reason: "한 줄"}] JSON. 본문 인용 금지.
+   ```
+
    절차:
    1. **변경 파일 목록** — 위 데이터의 워커별 diff stat 에서 변경된 파일 경로 모두 모음.
    2. **영향 후보 식별** — 다음 중 하나라도 해당하면 "docs 갱신 후보" 로 마크:
@@ -79,7 +115,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
       - 핵심 dependency 추가 또는 메이저 버전 변경
       - Build/CI 설정 변경 (gradle, package.json scripts, github workflow)
       - 기존 CLAUDE.md / AGENTS.md / docs/ 에서 변경 파일이 mention 됨
-   3. **stale 여부 직접 확인** — 후보 파일을 mention 하는 CLAUDE.md/`*.md` 를 grep 한 뒤 본문이 변경 이후에도 정확한지 Read 로 검증. 부정확/누락 발견 시 stale 위치 (file:line) 명시.
+   3. **stale 여부 확인 — Agent 위임** — 후보 파일을 mention 하는 CLAUDE.md/`*.md` grep + 본문 정확성 Read 검증을 Agent 한 번에 위임 (위 "Agent 프롬프트 예시" 그대로 사용). orch 메인은 결과 JSON 만 받음. **메인 pane Bash 로 grep/Read 직접 호출 금지**.
    4. **stale 발견 시 후속 이슈 자동 생성** — settings.json 의 `issue_tracker` 값에 따라 분기:
       - `linear` → `mcp__linear-server__save_issue`:
         - title: `[docs] MP-N 변경에 따른 CLAUDE.md / docs 갱신`

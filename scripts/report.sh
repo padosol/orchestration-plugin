@@ -289,4 +289,13 @@ cat <<EOF
 - 토큰 분포에서 Read 가 같은 파일 반복 / 도구 쏠림 보이면 \`token_analysis.observations\` 에 명시적으로 짚기
 - 워커 자가보고 인용은 archive 메시지 / pr-drafts / reports 에서 발췌
 - 핸드오프 페인포인트는 errors.jsonl + 메시지 흐름의 재질문 빈도로 추정. 없으면 \`handoff.narrative\` 에 "발견된 마찰 없음"
+
+**🚫 cwd 보호 + 컨텍스트 보호 — 절대 규칙**:
+- ❌ orch 메인 pane Bash 로 \`cd <repo>\` — pane cwd 가 워크스페이스 루트에서 벗어나면 이후 \`.orch/...\` 상대 경로 / 메일박스 모두 깨짐
+- ❌ orch 메인에서 직접 \`git log\` / \`git diff\` / \`gh pr view\` / 워크스페이스 docs grep·Read — 결과가 메인 컨텍스트에 누적돼 토큰 압박
+- ✅ 추가 git 정보 필요 → \`git -C <abs-path> ...\` 또는 **Agent (general-purpose / Explore) 위임**
+- ✅ AI-Ready 영향 검사 (변경 파일 grep + docs stale 검증) 는 단일 Agent 호출로 묶어 위임 — file:line + reason JSON 만 회수
+- ✅ orch 메인은 /tmp JSON 작성 / render_report.py 호출 / Linear save_issue / inbox-archive 까지만 직접 수행
+
+\`/orch:prioritize\` 가 list/get 을 Agent 로 위임하는 것과 같은 이유 — 메인은 결과만 받아 의사결정.
 EOF
