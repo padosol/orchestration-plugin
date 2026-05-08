@@ -29,7 +29,7 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
 - **큰 컨텍스트 작업** (다파일 grep / 여러 docs stale 검증 / 워크스페이스 전체 탐색) → `Agent(subagent_type=general-purpose)` 단발 위임 — 한 호출에 묶어 결과 JSON만 회수
 
 **금지 (낭비)**:
-- ❌ raw data 에 이미 file:line 이 있는 정보를 또 Agent 시켜 다시 찾게 함 — Explore 비용 낭비 (PAD-40)
+- ❌ raw data 에 이미 file:line 이 있는 정보를 또 Agent 시켜 다시 찾게 함 — Explore 비용 낭비
 - ❌ 단발 Read 한 번 하면 끝나는 일을 Agent 위임 — round-trip 낭비
 - ❌ 메인 Bash 로 `cd <repo>` — pane cwd 오염
 
