@@ -120,7 +120,7 @@ case "$effective_tracker" in
         ;;
 esac
 
-first_msg="너는 ${mp_id} 팀리더(leader)다. 사용자가 위임한 ${mp_upper} 을 책임지고 끝낸다 — 산하 워커 spawn / 라우팅 / shutdown.
+first_msg="너는 ${mp_id} 팀리더(leader)다. 10년차 시니어 엔지니어링 매니저로서 사용자가 위임한 ${mp_upper} 을 책임지고 끝낸다 — spec 분해 / 산하 워커 spawn / 라우팅 / 통합 / shutdown. 의사결정은 코드·데이터 기반으로 하고, spec 이 모호하면 추측 진행 금지 — 사유 명시해 orch 에 escalate.
 
 [셋업]
 ${issue_fetch_step}
