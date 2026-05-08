@@ -60,6 +60,15 @@ JSON 스키마 (필수: mp_id, scope_dir / 나머지 optional, 누락 시 섹션
     {"category": "skipped|bug|refactor|docs", "title": "...", "detail": "..."}
   ],
 
+  "errors_check": {
+    "narrative": "이번 사이클 에러 N건 / 반복 패턴 K개 / 자동 이슈 X건 생성",
+    "patterns": [
+      {"script": "send.sh", "exit_code": 1, "count": 3,
+       "first_line": "ERROR: ...", "suggested_fix": "..."}
+    ],
+    "auto_issue": {"id": "PAD-XX", "url": "https://linear.app/..."}
+  },
+
   "ai_ready_check": {
     "narrative": "stale 항목 자동 검사 결과 X — 영향 없음",
     "stale_items": [{"file": "CLAUDE.md", "lines": "12-20", "reason": "..."}],
@@ -313,6 +322,39 @@ def render_follow_ups(items: list | None) -> str:
     return section("후속 이슈 메모", "<ul>" + "".join(rows) + "</ul>")
 
 
+def render_errors_check(d: dict | None) -> str:
+    if not d:
+        return section("자가진단 — errors.jsonl 영향 검사", "<p>검사 정보 없음.</p>", empty=True)
+    parts = []
+    if d.get("narrative"):
+        parts.append(f"<p>{esc(d['narrative'])}</p>")
+    patterns = d.get("patterns") or []
+    if patterns:
+        parts.append("<h3>반복 패턴 + 개선 액션</h3>")
+        head = ('<table><thead><tr><th>script</th><th class="num">rc</th>'
+                '<th class="num">count</th><th>stderr 첫 줄</th><th>fix 액션</th>'
+                '</tr></thead><tbody>')
+        rows = "".join(
+            f'<tr><td><code>{esc(p.get("script"))}</code></td>'
+            f'<td class="num">{esc(p.get("exit_code"))}</td>'
+            f'<td class="num">{fmt_int(p.get("count"))}</td>'
+            f'<td>{esc(p.get("first_line", ""))}</td>'
+            f'<td>{esc(p.get("suggested_fix", ""))}</td></tr>'
+            for p in patterns
+        )
+        parts.append(head + rows + "</tbody></table>")
+    issue = d.get("auto_issue")
+    if issue:
+        url = issue.get("url", "")
+        iid = issue.get("id", "")
+        link = (f'<a href="{esc(url)}" target="_blank" rel="noreferrer">{esc(iid)}</a>'
+                if url else esc(iid))
+        parts.append(f"<p>자동 생성 이슈: {link}</p>")
+    return section("자가진단 — errors.jsonl 영향 검사",
+                   "".join(parts) if parts else "<p>검사 결과 없음.</p>",
+                   empty=not parts)
+
+
 def render_ai_ready(d: dict | None) -> str:
     if not d:
         return section("AI-Ready 영향 검사", "<p>검사 정보 없음.</p>", empty=True)
@@ -355,6 +397,7 @@ def render_html(data: dict) -> str:
         render_token_analysis(data.get("token_analysis")),
         render_handoff(data.get("handoff")),
         render_follow_ups(data.get("follow_ups")),
+        render_errors_check(data.get("errors_check")),
         render_ai_ready(data.get("ai_ready_check")),
     ])
 
