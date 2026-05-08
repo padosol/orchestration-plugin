@@ -168,7 +168,12 @@ filter_expr='.'
 [ -n "$filter_worker" ] && filter_expr="${filter_expr} | select(.worker_id == \"$filter_worker\")"
 [ -n "$filter_script" ] && filter_expr="${filter_expr} | select(.script == \"$filter_script\")"
 
-matched="$(printf '%s\n' "$raw_input" | jq -c "$filter_expr" 2>/dev/null | tail -n "$tail_n")"
+# tail 직전 ts 정렬 — file iteration 순서가 아니라 chronologically latest N 건이 표시되도록.
+# (ts 누락 entry 는 빈 문자열로 정렬돼 가장 위로 떨어진다 — 즉 먼저 잘린다.)
+matched="$(printf '%s\n' "$raw_input" \
+    | jq -c "$filter_expr" 2>/dev/null \
+    | jq -s -c 'sort_by(.ts // "") | .[]' \
+    | tail -n "$tail_n")"
 
 if [ -z "$matched" ]; then
     echo "조건에 맞는 로그 없음 (전체 $total 건)"
@@ -178,7 +183,29 @@ fi
 shown_count="$(printf '%s\n' "$matched" | grep -c . || true)"
 label="전체"
 [ -n "$filter_mp" ] && label="$filter_mp"
-printf '── orch errors ── (%s, 전체 %d건 중 %d건 표시)\n\n' "$label" "$total" "$shown_count"
+
+# source breakdown — 사용자가 "live 에 안 잡혔나?" 의심 줄임. 필터 없는 모드에서만.
+breakdown_suffix=""
+if [ -z "$filter_mp" ]; then
+    n_top=0; n_live=0; n_legacy=0; n_archive=0
+    [ -f "$ORCH_ERRORS_LOG" ] && n_top="$(grep -c . "$ORCH_ERRORS_LOG" 2>/dev/null || echo 0)"
+    for f in "$ORCH_RUNS_DIR"/mp-*/errors.jsonl; do
+        [ -f "$f" ] || continue
+        n_live=$((n_live + $(grep -c . "$f" 2>/dev/null || echo 0)))
+    done
+    for f in "$ORCH_ROOT"/mp-*/errors.jsonl; do
+        [ -f "$f" ] || continue
+        n_legacy=$((n_legacy + $(grep -c . "$f" 2>/dev/null || echo 0)))
+    done
+    for f in "$ORCH_ARCHIVE"/mp-*/errors.jsonl; do
+        [ -f "$f" ] || continue
+        n_archive=$((n_archive + $(grep -c . "$f" 2>/dev/null || echo 0)))
+    done
+    breakdown_suffix=" [top=$n_top live=$n_live legacy=$n_legacy archive=$n_archive]"
+fi
+
+printf '── orch errors ── (%s, 전체 %d건 중 %d건 표시 — ts 오름차순, 마지막 줄이 최신)%s\n\n' \
+    "$label" "$total" "$shown_count" "$breakdown_suffix"
 
 printf '%s\n' "$matched" | while IFS= read -r line; do
     ts="$(printf '%s' "$line" | jq -r '.ts // "?"')"
