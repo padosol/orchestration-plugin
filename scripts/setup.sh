@@ -219,6 +219,11 @@ new_settings="$(jq -n \
 # --update: 기존 값 보존, 새 프로젝트만 추가, 기존 프로젝트는 그대로.
 # 단 default_base_branch 필드는 기존 프로젝트에도 누락 시 추론값으로 보강한다
 # (override 가 이미 있으면 그대로 유지).
+#
+# 머지 정책 — alias 가 아니라 path 기준 매칭 (PAD-27):
+#   ORCH_PROJECT_PREFIX 가 셋업 시점과 다르면 동일 디렉토리가 다른 alias 로 잡혀
+#   $old 의 description/tech_stack/override 가 통째로 사라지는 사고가 있었음.
+#   path 는 절대경로로 stable 식별자라 prefix/glob 변동에 강함.
 if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
     # 인자로 받은 ISSUE_TRACKER 가 있으면 override, 없으면 기존 값 유지
     new_settings="$(jq \
@@ -230,27 +235,53 @@ if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
         ($cur[0] // {}) as $old |
         ( if $tracker != "" then $tracker
           # legacy file 에 issue_tracker 없으면 "linear" 로 명시 백필 (0.3.x 이하 = 항상 Linear).
-          # 사용자가 fresh 셋업으로 'none' 을 명시적으로 골랐던 경우는 $old 에 그 값이 남아있음.
+          # 사용자가 fresh 셋업으로 '"'"'none'"'"' 을 명시적으로 골랐던 경우는 $old 에 그 값이 남아있음.
           else ($old.issue_tracker // "linear") end ) as $final_tracker |
         ( if $tracker == "github" or ($tracker == "" and $final_tracker == "github")
           then ( if $gh_repo != "" then $gh_repo
                  else ($old.github_issue_repo // "") end )
           else "" end ) as $final_gh_repo |
+
+        # ── projects 머지 (alias-by-path) ──
+        # 1) old 를 path 로 인덱스. path 비어있는 entry 는 alias 그대로 가는 orphan 트랙.
+        ([ $old.projects // {} | to_entries[]
+           | select((.value.path // "") != "")
+           | {key: .value.path, value: {alias: .key, value: .value}}
+         ] | from_entries) as $old_by_path |
+
+        # 2) new 순회: path 매치 있으면 old alias + old value (default_base_branch 보강만), 없으면 new 그대로.
+        ([ $new.projects | to_entries[]
+           | .key as $new_alias | .value as $new_v
+           | ($new_v.path // "") as $p
+           | ($old_by_path[$p] // null) as $hit
+           | if $hit != null then
+               $hit.value as $old_v
+               | {
+                   key: $hit.alias,
+                   value: (
+                     if ($old_v.default_base_branch // "") == "" and ($new_v.default_base_branch // "") != ""
+                     then $old_v + {default_base_branch: $new_v.default_base_branch}
+                     else $old_v
+                     end
+                   )
+                 }
+             else
+               {key: $new_alias, value: $new_v}
+             end
+         ]) as $merged_new |
+
+        # 3) new 에 매치 안 된 old entry (glob 좁아져 못 잡혔거나 path 비어있던 orphan) 보존.
+        ([$merged_new[] | .key]) as $taken_aliases |
+        ([ $old.projects // {} | to_entries[]
+           | select(([.key] | inside($taken_aliases)) | not)
+         ]) as $orphan_olds |
+
         {
           version: ($old.version // $new.version),
           base_dir: ($old.base_dir // $new.base_dir),
           default_base_branch: ($old.default_base_branch // $new.default_base_branch),
           issue_tracker: $final_tracker,
-          projects: ($new.projects | to_entries | map(
-            .key as $k | .value as $v |
-            {key: $k, value: (
-              ($old.projects[$k] // $v) as $merged |
-              if ($merged.default_base_branch // "") == "" and ($v.default_base_branch // "") != ""
-              then $merged + {default_base_branch: $v.default_base_branch}
-              else $merged
-              end
-            )}
-          ) | from_entries)
+          projects: (($merged_new + $orphan_olds) | from_entries)
         }
         | if $final_gh_repo != "" then .github_issue_repo = $final_gh_repo else . end
         | if ($old.notify // null) != null then .notify = $old.notify else . end
