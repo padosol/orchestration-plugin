@@ -1,17 +1,28 @@
 ---
 description: orch 프로젝트 메타데이터(.orch/settings.json) 자동 추론 + 작성
 argument-hint: [--update] [--issue-tracker linear|github|none] [--github-repo owner/repo]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-settings.sh:*), Read, Edit, AskUserQuestion
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-settings.sh:*), Read, Edit, AskUserQuestion, ToolSearch
 ---
 
 **먼저 — 이슈 트래커 선택 (인자에 `--issue-tracker` 가 없을 때)**:
 
-`$ARGUMENTS` 에 `--issue-tracker` 가 이미 들어있으면 그대로 setup.sh 호출. 없으면 `AskUserQuestion` 으로 사용자에게 묻는다 (update 모드에서 기존 값 유지하려는 경우는 `--issue-tracker` 생략 가능 — 기존 값 보존됨).
+`$ARGUMENTS` 에 `--issue-tracker` 가 이미 들어있으면 그대로 setup.sh 호출. 없으면 **`AskUserQuestion` (TUI) 로 사용자에게 묻는다** (update 모드에서 기존 값 유지하려는 경우는 `--issue-tracker` 생략 가능 — 기존 값 보존됨).
 
-질문 옵션:
-- **Linear** — `mcp__linear-server__get_issue MP-N` 으로 이슈 컨텍스트 자동 fetch (Linear MCP 서버 필요)
-- **GitHub Issues** — `gh issue view N` 로 fetch. 추가로 어느 repo 의 이슈인지 (owner/repo) 묻기
-- **없음 (트래커 사용 안 함)** — leader 가 orch 에 spec 직접 요청. 가장 가벼움
+**🔧 `AskUserQuestion` 호출 절차 (필수 — 단축 금지)**:
+
+`AskUserQuestion` 은 fresh session 에서 **deferred tool** (스키마 미로드) 로 시작한다. 그냥 호출하면 `InputValidationError` 또는 무반응. 다음 절차 그대로:
+
+1. **스키마 로드** — `ToolSearch` 호출:
+   - `query`: `select:AskUserQuestion`
+   - `max_results`: `1`
+   - 결과의 `<functions>` 블록에 `AskUserQuestion` 정의가 등장해야 호출 가능. 등장 안 하면 폴백 plain text 허용 (단 사용자에게 "AskUserQuestion 도구 로드 실패" 명시).
+2. **호출** — header ≤ 12자 (예: `Issue tracker`), options 2-4개 (label 1-5단어 + description), 권장 옵션 첫 번째에 라벨 끝 `(Recommended)` 표시.
+3. **plain text 폴백 금지** — "어떻게 할까요?" / "1/2/3 골라주세요" 같은 텍스트 질문 절대 사용 X (1번 단계 실패 보고 시에만 허용).
+
+질문 옵션 (이 슬래시 한정):
+- **Linear (Recommended)** — `mcp__linear-server__get_issue <key>` 로 이슈 컨텍스트 자동 fetch (Linear MCP 서버 필요)
+- **GitHub Issues** — `gh issue view N` 로 fetch. 추가로 어느 repo (owner/repo) 인지 묻기
+- **없음** — 트래커 사용 안 함, leader 가 orch 에 spec 직접 요청
 
 선택 결과를 `--issue-tracker <value>` 로, github 선택 시 `--github-repo <owner/repo>` 도 함께 인자에 추가해 setup.sh 호출.
 
