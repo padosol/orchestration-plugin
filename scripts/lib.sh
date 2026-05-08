@@ -32,7 +32,7 @@
 #   1) 환경변수 ORCH_ROOT 명시
 #   2) PWD 부터 부모 traverse — .orch 디렉토리가 있는 첫 위치의 ${dir}/.orch
 #   3) ${PWD}/.orch (setup 시 새로 생성될 위치)
-# 후방호환: 기존 /home/padosol/lol/.orch 가 있고 위 추론이 실패해도 그대로 동작.
+# 후방호환: 기존 워크스페이스에 .orch 가 이미 있고 위 추론이 실패해도 그대로 동작.
 _orch_find_root() {
     if [ -n "${ORCH_ROOT:-}" ]; then
         printf '%s' "$ORCH_ROOT"

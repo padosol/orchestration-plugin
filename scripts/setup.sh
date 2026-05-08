@@ -297,9 +297,12 @@ echo "────────────────────────�
 final_tracker="$(jq -r '.issue_tracker // "none"' "$ORCH_SETTINGS")"
 echo "다음 단계:"
 echo "  1. 위 settings.json 의 description / tech_stack 손보세요"
-echo "  2. /orch:up 으로 orch pane 등록"
+echo "  2. /orch:validate-settings — settings.json 이 실제 프로젝트와 일치하는지 검증"
+echo "  3. /orch:up 으로 orch pane 등록"
 case "$final_tracker" in
-    linear) echo "  3. /orch:issue-up MP-XX (Linear 이슈 ID) 로 첫 leader 띄우기" ;;
-    github) echo "  3. /orch:issue-up <issue-num> (GitHub Issue 번호) 로 첫 leader 띄우기" ;;
-    *)      echo "  3. /orch:issue-up <num> 로 첫 leader 띄움 — leader 가 orch 에 spec 요청 (트래커 없음)" ;;
+    linear) echo "  4. /orch:issue-up <issue-id> (Linear 이슈 키 / 예: MP-13) 로 첫 leader 띄우기" ;;
+    github) echo "  4. /orch:issue-up <issue-num> (GitHub Issue 번호) 로 첫 leader 띄우기" ;;
+    *)      echo "  4. /orch:issue-up <num> 로 첫 leader 띄움 — leader 가 orch 에 spec 요청 (트래커 없음)" ;;
 esac
+echo
+echo "TIP: 플러그인 자체 위생이 의심되면 /orch:validate-plugin (문법 + 종속어 검출)."
