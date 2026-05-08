@@ -115,6 +115,7 @@ if [ "$self" = "orch" ]; then
     mkdir -p "$ORCH_ARCHIVE"
     [ -d "$scope_dir_path" ] && mv "$scope_dir_path" "$archive_dir"
     orch_worker_unregister "$mp_id"
+    orch_inbox_cleanup "$mp_id"
     echo "OK archived $archive_dir"
     # Slack 알림 — leader pane 이미 죽어서 orch 가 직접 정리한 경로.
     "${LIB_DIR}/notify-slack.sh" mp_done "$mp_id" "leader 이미 종료, 정리 완료" "$archive_dir" || true
@@ -158,6 +159,7 @@ if [ -d "$scope_dir_path" ]; then
 fi
 
 orch_worker_unregister "$mp_id"
+orch_inbox_cleanup "$mp_id"
 
 report_hint=""
 if [ "$do_report" -eq 1 ] && [ -f "$archive_dir/REPORT-data.md" ]; then
