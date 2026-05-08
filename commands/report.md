@@ -36,7 +36,37 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 
 5. 사용자에게 경로와 한 줄 요약만 전달
 
-6. **AI-Ready 영향 검사 — 후속 이슈 자동 생성** (REPORT.html 직후 자동 수행):
+6. **자가진단 — errors.jsonl 영향 검사 + 개선 액션** (REPORT.html 직후 자동 수행, AI-Ready 검사보다 먼저):
+
+   이번 사이클 동안 누적된 에러를 **개선 루프에 실제로 반영**하는 단계. 단순히 `handoff.narrative` 에 "에러 N건" 한 줄로 끝내지 말고, 패턴을 식별하고 액션을 도출해 후속 이슈로 박아라 — 그래야 다음 사이클에서 같은 함정을 안 밟는다.
+
+   절차:
+   1. **scope errors.jsonl 스캔** — 위 raw 데이터의 "에러 로그 (이 MP scope)" 섹션 entry 모두. 비어 있으면 narrative "이번 사이클 에러 0건 — 개선할 패턴 없음" 으로 마무리하고 후속 이슈 SKIP.
+   2. **패턴 식별** — `(script, exit_code, stderr 첫 줄)` 로 그룹화. 다음 중 하나라도 해당하면 후보:
+      - 같은 그룹 2회 이상 (반복 마찰)
+      - 단발이라도 root cause 가 스크립트 / 슬래시 / first_msg / 라우팅 가이드 결함으로 추정 가능 (예: 워커가 `/orch:send` 를 특수문자 그대로 호출해 깨진 케이스 → first_msg 의 heredoc 안내 누락)
+   3. **개선 액션 도출** — 각 후보 패턴마다 한 줄 fix 제안 (어디를 어떻게 — 스크립트 함수명 / first_msg 절 / 슬래시 옵션 등 구체적으로).
+   4. **후속 이슈 자동 생성** — settings.json 의 `issue_tracker` 분기 (AI-Ready 검사와 동일 패턴):
+      - `linear` → `mcp__linear-server__save_issue`:
+        - title: `[orch-fix] MP-N 사이클 errors.jsonl 패턴 개선`
+        - description: 패턴별 (script · rc · 횟수 · stderr 첫 줄) + 도출된 fix 액션 + 본 MP 링크
+        - team: 본 MP 와 동일한 team
+        - parent: 본 MP issue
+        - priority: 3 (Medium)
+        - labels: `bug`, `orch-fix` (팀에 라벨이 존재할 때만)
+      - `github` → `gh issue create --repo <github_issue_repo> --title '...' --body '...' --label bug`
+        - title / body 형식 동일. parent 링크는 body 에 텍스트로 (`Related: #N`).
+      - `none` → 이슈 자동 생성 SKIP. 패턴만 REPORT.html 의 `errors_check.patterns` 에 기록.
+   5. **JSON 의 `errors_check` 필드에 결과 반영** 후 4번 단계(렌더러 호출) 다시 실행해 REPORT.html 갱신:
+      - `narrative`: "이번 사이클 에러 N건 / 반복 패턴 K개 / 자동 이슈 X건 생성" 또는 "에러 0건 — 개선할 패턴 없음"
+      - `patterns`: `[{script, exit_code, count, first_line, suggested_fix}]`
+      - `auto_issue`: `{id, url}` (생성됐을 때만, 트래커 linear/github)
+
+   **금지**:
+   - ❌ errors.jsonl 0건이 아닌데 patterns 비워둔 채 narrative "에러 N건" 한 줄로 종결 — 매번 사용자가 직접 패턴 분석해야 함
+   - ❌ 후속 이슈 본문에 stderr 전체 dump — 첫 줄 + 그룹 횟수 + fix 액션 까지만 (raw 는 errors.jsonl 에 이미 있음)
+
+7. **AI-Ready 영향 검사 — 후속 이슈 자동 생성** (REPORT.html 직후 자동 수행):
 
    변경 파일 목록을 보고 CLAUDE.md / 핵심 docs 가 stale 해질 후보를 식별 → 발견 시 후속 이슈 자동 생성. 매번 ai-ready-audit 100점 루브릭을 돌리는 게 아니라, **이번 변경분에 한정한 가벼운 영향 검사**.
 
@@ -112,6 +142,15 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
     {"category": "skipped|bug|refactor|docs", "title": "...", "detail": "..."}
   ],
 
+  "errors_check": {
+    "narrative": "이번 사이클 에러 N건 / 반복 패턴 K개 / 자동 이슈 X건 생성",
+    "patterns": [
+      {"script": "send.sh", "exit_code": 1, "count": 3,
+       "first_line": "ERROR: ...", "suggested_fix": "..."}
+    ],
+    "auto_issue": {"id": "PAD-XX", "url": "https://linear.app/..."}
+  },
+
   "ai_ready_check": {
     "narrative": "...",
     "stale_items": [{"file": "CLAUDE.md", "lines": "12-20", "reason": "..."}],
@@ -124,7 +163,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 
 **자동 호출**:
 - `issue-down` 이 종료 보고 메시지에 "REPORT.html 자동 작성 요청" 을 명시함. orch 가 인박스 처리할 때 그 메시지를 보면 별도 사용자 지시 없이 `/orch:report <mp-id>` 실행해 작성.
-- 6번 (AI-Ready 영향 검사 + 후속 이슈) 도 사용자 컨펌 없이 자동 수행 (사용자가 폐기 결정한 경우만 SKIP — 인박스 메시지에 그 신호가 보이면 SKIP).
+- 6번 (errors.jsonl 자가진단) / 7번 (AI-Ready 영향 검사) 도 사용자 컨펌 없이 자동 수행. 둘 다 후속 이슈 생성까지 끝내고 REPORT.html 갱신 1회로 마무리 (사용자가 폐기 결정한 경우만 SKIP — 인박스 메시지에 그 신호가 보이면 SKIP).
 
 **주의**:
 - ❌ HTML / CSS 직접 작성 — 매번 양식 달라짐 (결정적 템플릿 렌더러가 따로 있음)
