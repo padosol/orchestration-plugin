@@ -12,7 +12,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 
 **🚫 cwd 보호 + 컨텍스트 보호 — 절대 규칙**:
 
-orch 메인 pane 의 cwd 는 워크스페이스 루트 (예: `/home/padosol/lol`) 에 고정. 본 절차 내내 다음 위반 금지:
+orch 메인 pane 의 cwd 는 워크스페이스 루트 (`/orch:up` 으로 등록한 위치) 에 고정. 본 절차 내내 다음 위반 금지:
 
 - ❌ `cd <repo>` 또는 `cd <subproject>` — 한 번이라도 실행하면 이후 `.orch/...` 상대 경로 / 메일박스 모두 깨짐
 - ❌ orch 메인 Bash 로 직접 `git log`, `git diff`, `gh pr view`, 워크스페이스 docs grep/Read — 결과가 메인 컨텍스트에 누적돼 토큰 압박 (특히 step 6/7 의 영향 검사는 변경 파일 다수 + docs 다수 grep)
@@ -54,7 +54,7 @@ orch 메인 pane 의 cwd 는 워크스페이스 루트 (예: `/home/padosol/lol`
      <scope_dir>/REPORT.html
    ```
 
-   `<scope_dir>` 는 위 데이터 메타의 `scope_dir` 값 그대로 사용. 예: `/home/padosol/lol/.orch/archive/mp-9-2026-05-06/REPORT.html`
+   `<scope_dir>` 는 위 데이터 메타의 `scope_dir` 값 그대로 사용. 예: `<workspace>/.orch/archive/mp-9-2026-05-06/REPORT.html`
 
 5. 사용자에게 경로와 한 줄 요약만 전달
 

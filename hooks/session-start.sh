@@ -17,9 +17,14 @@ if [ ! -t 0 ]; then
     fi
 fi
 
-LIB_PATH="${CLAUDE_PLUGIN_ROOT:-/home/padosol/.claude-marketplaces/local/plugins/orch}/scripts/lib.sh"
+if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    # plugin hook 으로 실행되면 CLAUDE_PLUGIN_ROOT 가 자동 export 됨.
+    # 환경변수 미설정 = 비정상 호출 (수동 실행 등) — 안내 없이 조용히 종료.
+    exit 0
+fi
+LIB_PATH="${CLAUDE_PLUGIN_ROOT}/scripts/lib.sh"
 [ -f "$LIB_PATH" ] || exit 0
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
+# shellcheck source=/dev/null
 source "$LIB_PATH"
 
 wid="$WORKER_ID"

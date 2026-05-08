@@ -30,4 +30,4 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/errors.sh:*)
 3. 수정 후 다시 운영하며 로그 누적 → 다시 1번
 
 **stderr 전체가 필요하면**:
-바로 raw 파일 보기: `tail -n 1 /home/padosol/lol/.orch/errors.jsonl | jq .`
+바로 raw 파일 보기: `tail -n 1 <workspace>/.orch/errors.jsonl | jq .`
