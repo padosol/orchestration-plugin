@@ -46,15 +46,20 @@ else
             echo "=== END ==="
         else
             count="$(printf '%s\n' "$summary" | grep -c .)"
+            reply_needed="$(python3 "${LIB_DIR}/inbox-parse.py" reply-needed "$inbox" 2>/dev/null || echo 0)"
             # summary 는 reverse 정렬돼 있음 (최신 위) — 첫 줄이 가장 최신 ID.
             first_id="$(printf '%s\n' "$summary" | head -1 | cut -f1)"
-            echo "=== INBOX worker_id=$self count=$count (최신 위) ==="
-            printf 'id\tfrom\tts\tfirst-50\n'
+            echo "=== INBOX worker_id=$self count=$count reply_needed=$reply_needed (최신 위) ==="
+            printf 'id\treply\tfrom\tts\tfirst-50\n'
             printf '%s\n' "$summary"
             echo "=== END ==="
             echo ""
             echo "▶ 다음 호출 (필수): /orch:check-inbox $first_id   ← message_id 인자 강제"
             echo "  단건 archive: \$ORCH_BIN_DIR/inbox-archive.sh <id>"
+            echo "  reply: ● = 답신 필요 / ○ = [답신 불필요] 마커 있음."
+            if [ "$reply_needed" -gt 0 ]; then
+                echo "  ⚠ 답신 필요 (●) 메시지 ${reply_needed}건 — 답신 보내기 전 다음 작업 진행 금지."
+            fi
             echo "  ⚠ 이 요약 출력만 보고 종료/답신/archive 절대 금지."
             echo "  ⚠ 사용자에게 보고할 때는 반드시 [id=xxx] 형식으로 message_id 명시."
         fi

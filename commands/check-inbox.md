@@ -11,7 +11,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLU
 **모드 두 가지**:
 
 ### 1. 인자 없음 (`/orch:check-inbox`) → 요약 표
-- `id`, `from`, `ts`, `첫 50자` 컬럼의 표 (최신 위 정렬).
+- `id`, **`reply`** (`●` 답신 필요 / `○` 답신 불필요), `from`, `ts`, `첫 50자` 컬럼의 표 (최신 위 정렬).
+- 헤더 라인의 `reply_needed=N` 이 답신 필요 (`●`) 메시지 수.
 - **요약만 보고 종료/답신/archive 절대 금지** — 본문을 모르고 처리하면 메시지 의미를 놓칩니다.
 - 출력 끝의 "▶ 다음 단계" 가 가리키는 ID 로 단건 모드 호출하세요.
 
@@ -46,6 +47,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLU
 - ❌ `inbox-archive.sh --all` 호출 (평소 사용 금지)
 - ❌ 한 턴에 여러 메시지를 묶어 처리
 - ❌ 보고에 message_id 누락
+- ❌ **답신 필요 (`●`) 메시지가 미답 상태인데 다음 작업 단계 진행** — 본문 의도와 다른 방향으로 일이 진행되어 PR 비용 회수 불가능 사고로 이어집니다. `●` 메시지는 답신 보낸 후에야 다음 마디로 이동.
 
 **worker_id 별 책임 범위**:
 - `orch` (PM): 사용자와 대화 + leader 에 위임. 워커에 직접 송신 불가 → leader 경유.

@@ -8,13 +8,19 @@ inbox 메시지 블록 형식 (orch_append_message 가 만드는 것):
 (--- → from: → to: → ts: → id: → ---) 일 때만 메시지 시작으로 인식한다.
 
 사용:
-    inbox-parse.py summary <file>          한 건당 한 줄 (id\\tfrom\\tts\\tfirst50)
+    inbox-parse.py summary <file>          한 건당 한 줄 (id\\treply\\tfrom\\tts\\tfirst50)
+                                           reply: ● = 답신 필요, ○ = [답신 불필요] 마커
+    inbox-parse.py reply-needed <file>     답신 필요 (●) 메시지 수만 출력
     inbox-parse.py ids <file>              id 목록만 (개행 구분)
     inbox-parse.py body <file> <id>        해당 메시지 frontmatter + 본문 출력
     inbox-parse.py extract <file> <id>     archive 에 append 할 raw 블록 (앞 \\n 포함)
     inbox-parse.py remove <file> <id>      해당 블록만 빼고 새 inbox 내용 stdout
 """
 import sys
+
+
+# 본문 끝에 이 마커가 있으면 답신 불필요로 간주. 없으면 default = 답신 필요.
+NO_REPLY_MARKER = '**[답신 불필요]**'
 
 
 def parse(text):
@@ -65,10 +71,18 @@ def parse(text):
 def cmd_summary(text):
     # 표시 순서는 최신이 위(reverse). 파일 저장 순서는 append 그대로 보존 — parse 가
     # 순차 스캔이라 파일을 뒤집으면 깨진다.
+    # reply 컬럼: ● = 답신 필요 (default), ○ = [답신 불필요] 마커 본문에 있음.
     msgs, _ = parse(text)
     for m in reversed(msgs):
         first = m['body'].split('\n', 1)[0][:50]
-        print(f"{m['id']}\t{m['from']}\t{m['ts']}\t{first}")
+        reply = '○' if NO_REPLY_MARKER in m['body'] else '●'
+        print(f"{m['id']}\t{reply}\t{m['from']}\t{m['ts']}\t{first}")
+
+
+def cmd_reply_needed(text):
+    msgs, _ = parse(text)
+    n = sum(1 for m in msgs if NO_REPLY_MARKER not in m['body'])
+    print(n)
 
 
 def cmd_ids(text):
@@ -125,6 +139,8 @@ def main():
 
     if cmd == 'summary':
         cmd_summary(text)
+    elif cmd == 'reply-needed':
+        cmd_reply_needed(text)
     elif cmd == 'ids':
         cmd_ids(text)
     elif cmd in ('body', 'extract', 'remove'):
