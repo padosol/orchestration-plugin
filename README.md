@@ -102,6 +102,9 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 | `/orch:validate-settings` | 사용자 | settings.json 과 실제 repo 정합성 검사 |
 | `/orch:validate-plugin` | 사용자 | 플러그인 자체 위생 검증 (문법 + 종속어 검출) |
 | `/orch:prioritize` | 사용자 | 트래커(Linear/GitHub) 미완료 이슈 → 루브릭 점수 → Top N 추천 |
+| `/orch:ask "<context>" "<question>" --option ...` | orch | 사용자 결정 비동기 큐 등록 (선택지 또는 자유 답변) |
+| `/orch:questions [<q-id>]` | 사용자 | 미답 질문 목록 / 단건 본문 |
+| `/orch:answer <q-id> <key>` | 사용자 | 큐에 등록된 질문에 답변 — orch inbox 로 전달 |
 
 ---
 
@@ -201,6 +204,42 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 - 다음 issue-up 사이클부터 워커 first_msg / reviewer 가이드 / 정리 로직 등이 갱신된 동작으로 spawn
 
 이 루프가 작동하려면 사이클 종료 시 REPORT.html 을 한 번 훑는 습관이 필요하다. 마찰을 그냥 두면 다음 사이클에서 같은 비용이 반복된다.
+
+---
+
+## 비동기 사용자 질문 큐 (`/orch:ask`)
+
+orch (PM) 가 사용자에게 결정을 요청할 때 한 흐름에 질문이 여러 개 쌓이면 어느 질문에 답하는지 헷갈린다. `/orch:ask` 로 큐에 등록하면 사용자가 자기 페이스로 `/orch:questions` 로 미답 목록 확인 → `/orch:answer <q-id> <key>` 로 답변하면 q-id 로 매핑 명확.
+
+```bash
+# orch 등록
+/orch:ask "MP-12 follow-up 결정" \
+  "권장 follow-up 6건을 전부 등록할까요?" \
+  --option all="전부 등록" \
+  --option high_only="High priority 만" \
+  --option skip="폐기" \
+  --allow-freeform
+
+# → q-1778208900-abc 등록됨
+
+# 사용자 (다른 작업 후 돌아와서)
+/orch:questions               # open 목록 표
+/orch:questions q-1778208900-abc   # 단건 본문 + 옵션
+/orch:answer   q-1778208900-abc all
+# → orch inbox 에 [answer q-1778208900-abc] key=all 메시지 + check-inbox 트리거
+```
+
+**언제 사용할지**:
+- 결정이 multiline / 여러 선택지인데 plain text 메시지로 묻기 부담
+- 사용자가 다른 작업 중이라 즉답을 받기 어려움
+- 한 흐름에 결정이 여러 개 쌓이는 패턴
+
+**언제 사용하지 않을지**:
+- 단발성 yes/no, 사전 옵션 2-4개, 즉답 가능 → `AskUserQuestion` (TUI 동기) 가 더 적합
+- 자유 텍스트 짧은 답 (PR 번호 / 임의 텍스트) → plain text 한 줄
+- 즉답이 필수인 차단 결정 → orch 가 inbox 답 도착할 때까지 정말 멈춰야 함
+
+질문 파일은 `<workspace>/.orch/questions/<id>.json` — answered 후에도 보존 (의사결정 트레이서빌리티).
 
 ---
 
