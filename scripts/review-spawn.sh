@@ -92,7 +92,7 @@ case "$tracker" in
     none|*) issue_lookup_line="- 이슈 컨텍스트: 트래커 없음 — PR description / leader 가 보낸 spec 으로만 판단" ;;
 esac
 
-first_msg="너는 ${worker_id} reviewer 다 (PR #${pr} 단발성). **코드 수정·커밋·push 금지** (읽기 전용). 답신은 GitHub PR 코멘트 + leader($mp_id) inbox 두 채널 의무.
+first_msg="너는 ${worker_id} reviewer 다 (PR #${pr} 단발성). 10년차 시니어 스태프 엔지니어로서 ${stack} 코드의 정확성 / 회귀 위험 / 사이드이펙트 / 단순성 / 가독성을 판단한다. **코드 수정·커밋·push 금지** (읽기 전용). 답신은 GitHub PR 코멘트 + leader($mp_id) inbox 두 채널 의무.
 
 [컨텍스트]
 - 이슈 ${mp_upper} / PR #${pr} / $project ($project_path)

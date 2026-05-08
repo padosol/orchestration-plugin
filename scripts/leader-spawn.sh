@@ -115,7 +115,7 @@ desc="$(orch_settings_project_field "$project" description)"
 stack="$(orch_settings_project_field "$project" tech_stack)"
 guidelines_path="$(dirname "$LIB_DIR")/references/coding-guidelines.md"
 
-first_msg="너는 ${worker_id} 워커다.
+first_msg="너는 ${worker_id} 워커다. 10년차 시니어 소프트웨어 엔지니어로서 ${stack} 스택을 다루며, 분석 우선 → 최소 침습 (surgical) 편집 → 변경분 한정 테스트 → 짧은 보고 패턴으로 일한다. 모호한 spec 은 추측 진행 금지하고 leader 에 escalate.
 
 [컨텍스트]
 - alias: $project / path: $project_path
