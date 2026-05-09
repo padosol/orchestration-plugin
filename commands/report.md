@@ -45,12 +45,13 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
 **다음 단계 (orch 만 수행)**:
 
 1. 위 데이터를 해석해 **구조화된 JSON 객체**로 요약 (HTML 직접 작성 금지 — 양식 드리프트 방지)
-2. JSON 은 다음 7개 섹션 콘텐츠를 담음 (스키마는 아래 "JSON 스키마" 참조):
+2. JSON 은 다음 8개 섹션 콘텐츠를 담음 (스키마는 아래 "JSON 스키마" 참조):
    - **요약** — 이슈 무엇이었나, 산하 워커 / 경과 시간 / 결과 한 줄
    - **변경 내용** — 워커별 diff stat 보고 핵심 변경만 한 줄씩 (10줄 이내)
    - **as-is / to-be** — 코드 변경(diff stat + commit 메시지)을 보고 "원래 어땠는데 → 어떻게 바뀌었나" 사용자 시점 요약
    - **테스트 결과** — pr-drafts/reports 또는 archive 메시지의 워커 자가보고 인용. 없으면 narrative 비움 → "워커 자가보고 없음" 자동 표시
    - **토큰·시간 분석** — 모델별 토큰 합계 + 도구 분포 + 큰 tool_result top-5 + 관찰 (Read 반복 / 도구 쏠림 의심)
+   - **토큰 효율 분석** — 도구별 누적 byte / 파일별 read 빈도 / 워커별 cost 점유 / 낭비 hint. 부적절한 토큰 사용 패턴 식별 후 후속 개선 액션 도출 (다음 사이클에서 절감 효과 측정)
    - **핸드오프 페인포인트** — errors.jsonl 패턴 + 메시지 흐름의 재질문 빈도. 없으면 "발견된 마찰 없음"
    - **후속 이슈 메모** — SKIP 된 케이스 + 발견된 버그/리팩터 후보
 
@@ -68,7 +69,23 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
 
 5. 사용자에게 경로와 한 줄 요약만 전달
 
-6. **자가진단 — errors.jsonl 영향 검사 + 개선 액션** (REPORT.html 직후 자동 수행, AI-Ready 검사보다 먼저):
+6. **토큰 효율 분석 — token_efficiency 필드 작성** (REPORT.html 직후 자동 수행):
+
+   부적절하게 낭비되는 토큰을 매 사이클마다 식별 → 후속 개선 액션 도출. 별도 grep 불필요 — raw 데이터의 워커별 jsonl 분석 섹션에 이미 도구별 누적 byte / 파일별 read / 낭비 hint 가 들어있다.
+
+   **데이터 매핑 (raw markdown → token_efficiency JSON)**:
+
+   1. **`tool_size`** — raw 의 "도구별 tool_result 누적 byte top-10" 섹션을 그대로 매핑. share 는 0.0~1.0 float
+   2. **`file_reads`** — raw 의 "파일별 누적 read top-5" 섹션을 그대로 매핑. count ≥ 3 인 항목은 자동으로 high 색상 카드로 렌더됨
+   3. **`worker_share`** — 워커마다 by_model cost 합계로 환산해 전체 대비 share 계산. ≥ 0.70 인 워커는 자동으로 high (warn 색) 카드로 렌더됨
+   4. **`waste_hints`** — raw 의 "낭비 패턴 hint" 섹션 + 메인이 워커 분석으로 보강 (예: "MP-9/server 워커가 비용의 72% 점유")
+   5. **`narrative`** — "도구·파일·워커 3축 분석. 낭비 hint N건" 한 줄
+
+   **JSON 직접 호출이 더 정확하면**: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/analyze-jsonls.py <jsonl-dir> --json` (또는 워커 분리 시 `--since <started_at>` 추가). markdown 재해석보다 정확한 share/bytes 숫자 회수.
+
+   **자동 이슈 생성 안 함** — errors_check 와 달리 토큰 낭비 패턴은 매 사이클 거의 항상 발생하므로 자동 이슈는 노이즈. 패턴만 REPORT.html 에 기록하고 사용자가 직접 후속 결정 (예: 같은 파일 5+ 회 read → 캐싱 메모 추가, 단일 도구 80%+ → 해당 도구 SKILL 점검).
+
+7. **자가진단 — errors.jsonl 영향 검사 + 개선 액션** (REPORT.html 직후 자동 수행, AI-Ready 검사보다 먼저):
 
    이번 사이클 동안 누적된 에러를 **개선 루프에 실제로 반영**하는 단계. 단순히 `handoff.narrative` 에 "에러 N건" 한 줄로 끝내지 말고, 패턴을 식별하고 액션을 도출해 후속 이슈로 박아라 — 그래야 다음 사이클에서 같은 함정을 안 밟는다.
 
@@ -100,7 +117,7 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
    - ❌ errors.jsonl 0건이 아닌데 patterns 비워둔 채 narrative "에러 N건" 한 줄로 종결 — 매번 사용자가 직접 패턴 분석해야 함
    - ❌ 후속 이슈 본문에 stderr 전체 dump — 첫 줄 + 그룹 횟수 + fix 액션 까지만 (raw 는 errors.jsonl 에 이미 있음)
 
-7. **AI-Ready 영향 검사 — 후속 이슈 자동 생성** (REPORT.html 직후 자동 수행):
+8. **AI-Ready 영향 검사 — 후속 이슈 자동 생성** (REPORT.html 직후 자동 수행):
 
    변경 파일 목록을 보고 CLAUDE.md / 핵심 docs 가 stale 해질 후보를 식별 → 발견 시 후속 이슈 자동 생성. 매번 ai-ready-audit 100점 루브릭을 돌리는 게 아니라, **이번 변경분에 한정한 가벼운 영향 검사**.
 
@@ -186,6 +203,22 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
     "observations": ["Read 반복 의심"]
   },
 
+  "token_efficiency": {
+    "narrative": "도구·파일·워커 3축 분석. 낭비 hint N건",
+    "tool_size": [
+      {"name": "Grep", "bytes": 55015, "share": 0.70}
+    ],
+    "file_reads": [
+      {"path": "/proj/src/foo.py", "count": 3, "bytes": 24006}
+    ],
+    "worker_share": [
+      {"worker_id": "MP-9/server", "share": 0.72, "cost_usd": 295.40}
+    ],
+    "waste_hints": [
+      "같은 파일 3회 read — 캐싱 미활용 의심"
+    ]
+  },
+
   "handoff": {"errors_count": 0, "narrative": "발견된 마찰 없음"},
 
   "follow_ups": [
@@ -213,7 +246,7 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
 
 **자동 호출**:
 - `issue-down` 이 종료 보고 메시지에 "REPORT.html 자동 작성 요청" 을 명시함. orch 가 인박스 처리할 때 그 메시지를 보면 별도 사용자 지시 없이 `/orch:report <mp-id>` 실행해 작성.
-- 6번 (errors.jsonl 자가진단) / 7번 (AI-Ready 영향 검사) 도 사용자 컨펌 없이 자동 수행. 둘 다 후속 이슈 생성까지 끝내고 REPORT.html 갱신 1회로 마무리 (사용자가 폐기 결정한 경우만 SKIP — 인박스 메시지에 그 신호가 보이면 SKIP).
+- 6번 (token_efficiency) / 7번 (errors.jsonl 자가진단) / 8번 (AI-Ready 영향 검사) 모두 사용자 컨펌 없이 자동 수행. 7/8번은 후속 이슈 생성까지, 6번은 패턴 기록만. 셋 다 같은 REPORT.html 1회 갱신으로 마무리 (사용자가 폐기 결정한 경우만 SKIP — 인박스 메시지에 그 신호가 보이면 SKIP).
 
 **주의**:
 - ❌ HTML / CSS 직접 작성 — 매번 양식 달라짐 (결정적 템플릿 렌더러가 따로 있음)
