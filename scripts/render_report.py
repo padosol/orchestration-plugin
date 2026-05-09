@@ -114,6 +114,8 @@ h3 { font-size: 15px; margin: 16px 0 6px; color: var(--fg-muted); font-weight: 6
   margin-bottom: 16px;
 }
 .section.empty { color: var(--fg-muted); font-style: italic; }
+.section.section-accent { border-left: 3px solid var(--accent); }
+.section.section-warn   { border-left: 3px solid var(--warn); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px;
        background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; }
 pre  { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px;
@@ -142,9 +144,45 @@ a:hover { text-decoration: underline; }
 .muted { color: var(--fg-muted); }
 .worker { border-left: 3px solid var(--border); padding: 4px 0 4px 12px; margin: 10px 0; }
 .worker .id { font-weight: 600; }
-.asis-tobe { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
+.asis-tobe { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; margin: 8px 0; align-items: stretch; }
 .asis-tobe .col { background: var(--bg-soft); border-radius: 6px; padding: 10px 12px; }
 .asis-tobe .col h4 { margin: 0 0 4px; font-size: 12px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.asis-tobe .col-tobe { background: rgba(9,105,218,.06); }
+.asis-tobe .col-tobe h4 { color: var(--accent); }
+.asis-tobe .arrow { display: flex; align-items: center; color: var(--fg-muted); font-size: 18px; padding: 0 4px; }
+
+.pattern-card, .stale-card {
+  background: var(--bg-soft); border-radius: 8px; padding: 12px 14px;
+  margin: 8px 0; border-left: 3px solid var(--border);
+}
+.pattern-card.high { border-left-color: var(--warn); }
+.pattern-card-head, .stale-card-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 14px; margin-bottom: 6px;
+}
+.pattern-card-head .count-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-weight: 600; font-size: 12px;
+}
+.pattern-card-head .count-badge.high { background: var(--warn); }
+.pattern-card-body, .stale-card-body { font-size: 13px; line-height: 1.55; }
+.pattern-card-body p, .stale-card-body p { margin: 4px 0; }
+.pattern-card-body .label, .stale-card-body .label {
+  color: var(--fg-muted); font-weight: 500; margin-right: 4px;
+}
+
+.bar-inline {
+  display: inline-block; height: 6px; background: var(--border);
+  border-radius: 999px; vertical-align: middle; margin-left: 8px;
+  overflow: hidden; width: 80px;
+}
+.bar-inline > div { height: 100%; background: var(--accent); }
+.bar-cell { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+
+.num-short { border-bottom: 1px dotted var(--border); cursor: help; }
+
+.badge.errors-zero     { color: #1a7f37; border-color: #b4dfb4; background: #f0faf0; }
+.badge.errors-positive { color: var(--warn); border-color: #e8d27a; background: #fff8e1; }
 """.strip()
 
 
@@ -159,6 +197,24 @@ def fmt_int(n: Any) -> str:
         return esc(n)
 
 
+def fmt_int_short(n: Any) -> str:
+    """1,500,000 → '1.5M' (raw 는 title hover 로). 1000 미만은 그대로."""
+    try:
+        v = int(n)
+    except (TypeError, ValueError):
+        return esc(n)
+    raw = f"{v:,}"
+    if abs(v) >= 1_000_000_000:
+        short = f"{v / 1_000_000_000:.1f}B"
+    elif abs(v) >= 1_000_000:
+        short = f"{v / 1_000_000:.1f}M"
+    elif abs(v) >= 1_000:
+        short = f"{v / 1_000:.1f}K"
+    else:
+        return raw
+    return f'<span class="num-short" title="{raw}">{short}</span>'
+
+
 def fmt_money(n: Any) -> str:
     try:
         return f"${float(n):.4f}"
@@ -166,9 +222,17 @@ def fmt_money(n: Any) -> str:
         return "—"
 
 
-def section(title: str, body_html: str, empty: bool = False) -> str:
-    cls = "section empty" if empty else "section"
-    return f'<section class="{cls}"><h2>{esc(title)}</h2>{body_html}</section>'
+def bar_inline(ratio: float) -> str:
+    """0.0~1.0 ratio 를 막대 한 줄로. 1.0 초과는 클램프."""
+    pct = max(0, min(100, round(ratio * 100)))
+    return f'<span class="bar-inline"><div style="width:{pct}%"></div></span>'
+
+
+def section(title: str, body_html: str, empty: bool = False, variant: str = "") -> str:
+    classes = ["section"]
+    if empty: classes.append("empty")
+    if variant: classes.append(f"section-{variant}")
+    return f'<section class="{" ".join(classes)}"><h2>{esc(title)}</h2>{body_html}</section>'
 
 
 def render_summary(d: dict | None) -> str:
@@ -181,7 +245,7 @@ def render_summary(d: dict | None) -> str:
     if d.get("result_line"):    rows.append(("결과", esc(d["result_line"])))
     kv = "<dl class=\"kv\">" + "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows) + "</dl>"
     narrative = f"<p>{esc(d['narrative'])}</p>" if d.get("narrative") else ""
-    return section("요약", narrative + kv)
+    return section("요약", narrative + kv, variant="accent")
 
 
 def render_changes(d: dict | None) -> str:
@@ -217,7 +281,8 @@ def render_as_is_to_be(items: list | None) -> str:
         rows.append(
             '<div class="asis-tobe">'
             f'<div class="col"><h4>as-is</h4>{esc(it.get("as_is", ""))}</div>'
-            f'<div class="col"><h4>to-be</h4>{esc(it.get("to_be", ""))}</div>'
+            '<div class="arrow">→</div>'
+            f'<div class="col col-tobe"><h4>to-be</h4>{esc(it.get("to_be", ""))}</div>'
             '</div>'
         )
     return section("as-is / to-be", "".join(rows))
@@ -236,6 +301,11 @@ def render_token_analysis(d: dict | None) -> str:
 
     by_model = d.get("by_model") or []
     if by_model:
+        # cost share 계산 — % bar 시각화용
+        try:
+            cost_total = sum(float(m.get("cost_usd") or 0) for m in by_model)
+        except (TypeError, ValueError):
+            cost_total = 0.0
         head = ('<table><thead><tr>'
                 '<th>Model</th><th class="num">Msgs</th><th class="num">Input</th>'
                 '<th class="num">Output</th><th class="num">Cache Read</th>'
@@ -243,15 +313,21 @@ def render_token_analysis(d: dict | None) -> str:
                 '</tr></thead><tbody>')
         rows = []
         for m in by_model:
+            try:
+                cost_v = float(m.get("cost_usd") or 0)
+                share = (cost_v / cost_total) if cost_total > 0 else 0
+            except (TypeError, ValueError):
+                share = 0
+            cost_cell = f'<div class="bar-cell">{fmt_money(m.get("cost_usd"))}{bar_inline(share)}</div>'
             rows.append(
                 '<tr>'
                 f'<td><code>{esc(m.get("model"))}</code></td>'
                 f'<td class="num">{fmt_int(m.get("messages"))}</td>'
-                f'<td class="num">{fmt_int(m.get("input"))}</td>'
-                f'<td class="num">{fmt_int(m.get("output"))}</td>'
-                f'<td class="num">{fmt_int(m.get("cache_read"))}</td>'
-                f'<td class="num">{fmt_int(m.get("cache_creation"))}</td>'
-                f'<td class="num">{fmt_money(m.get("cost_usd"))}</td>'
+                f'<td class="num">{fmt_int_short(m.get("input"))}</td>'
+                f'<td class="num">{fmt_int_short(m.get("output"))}</td>'
+                f'<td class="num">{fmt_int_short(m.get("cache_read"))}</td>'
+                f'<td class="num">{fmt_int_short(m.get("cache_creation"))}</td>'
+                f'<td class="num">{cost_cell}</td>'
                 '</tr>'
             )
         total_cost = d.get("total_cost_usd")
@@ -266,12 +342,23 @@ def render_token_analysis(d: dict | None) -> str:
     tool_dist = d.get("tool_distribution") or []
     if tool_dist:
         parts.append("<h3>도구 호출 분포</h3>")
-        head = '<table><thead><tr><th>Tool</th><th class="num">Count</th></tr></thead><tbody>'
-        rows = "".join(
-            f'<tr><td><code>{esc(t.get("tool"))}</code></td><td class="num">{fmt_int(t.get("count"))}</td></tr>'
-            for t in tool_dist
-        )
-        parts.append(head + rows + "</tbody></table>")
+        try:
+            max_count = max(int(t.get("count") or 0) for t in tool_dist) or 1
+        except (TypeError, ValueError):
+            max_count = 1
+        head = '<table><thead><tr><th>Tool</th><th class="num" style="width:200px;">Count</th></tr></thead><tbody>'
+        rows = []
+        for t in tool_dist:
+            try:
+                cnt = int(t.get("count") or 0)
+                ratio = cnt / max_count
+            except (TypeError, ValueError):
+                ratio = 0
+            count_cell = f'<div class="bar-cell">{fmt_int(t.get("count"))}{bar_inline(ratio)}</div>'
+            rows.append(
+                f'<tr><td><code>{esc(t.get("tool"))}</code></td><td class="num">{count_cell}</td></tr>'
+            )
+        parts.append(head + "".join(rows) + "</tbody></table>")
 
     big = d.get("large_tool_results_top5") or []
     if big:
@@ -280,7 +367,7 @@ def render_token_analysis(d: dict | None) -> str:
                 '<th>비고</th></tr></thead><tbody>')
         rows = "".join(
             f'<tr><td><code>{esc(b.get("target"))}</code></td>'
-            f'<td class="num">{fmt_int(b.get("size"))}</td>'
+            f'<td class="num">{fmt_int_short(b.get("size"))}</td>'
             f'<td>{esc(b.get("note", ""))}</td></tr>'
             for b in big
         )
@@ -299,7 +386,14 @@ def render_handoff(d: dict | None) -> str:
         return section("핸드오프 페인포인트", "<p>발견된 마찰 없음.</p>", empty=True)
     parts = []
     if d.get("errors_count") is not None:
-        parts.append(f'<p>에러 로그 항목: <b>{fmt_int(d["errors_count"])}건</b></p>')
+        try:
+            n = int(d["errors_count"])
+        except (TypeError, ValueError):
+            n = -1
+        badge_cls = "errors-zero" if n == 0 else "errors-positive"
+        parts.append(
+            f'<p><span class="badge {badge_cls}">에러 {fmt_int(d["errors_count"])}건</span></p>'
+        )
     if d.get("narrative"):
         parts.append(f"<p>{esc(d['narrative'])}</p>")
     if not parts:
@@ -329,20 +423,30 @@ def render_errors_check(d: dict | None) -> str:
     if d.get("narrative"):
         parts.append(f"<p>{esc(d['narrative'])}</p>")
     patterns = d.get("patterns") or []
+    has_high_count = False
     if patterns:
         parts.append("<h3>반복 패턴 + 개선 액션</h3>")
-        head = ('<table><thead><tr><th>script</th><th class="num">rc</th>'
-                '<th class="num">count</th><th>stderr 첫 줄</th><th>fix 액션</th>'
-                '</tr></thead><tbody>')
-        rows = "".join(
-            f'<tr><td><code>{esc(p.get("script"))}</code></td>'
-            f'<td class="num">{esc(p.get("exit_code"))}</td>'
-            f'<td class="num">{fmt_int(p.get("count"))}</td>'
-            f'<td>{esc(p.get("first_line", ""))}</td>'
-            f'<td>{esc(p.get("suggested_fix", ""))}</td></tr>'
-            for p in patterns
-        )
-        parts.append(head + rows + "</tbody></table>")
+        for p in patterns:
+            try:
+                cnt = int(p.get("count") or 0)
+            except (TypeError, ValueError):
+                cnt = 0
+            high = cnt >= 3
+            if high: has_high_count = True
+            card_cls = "pattern-card high" if high else "pattern-card"
+            badge_cls = "count-badge high" if high else "count-badge"
+            parts.append(
+                f'<div class="{card_cls}">'
+                f'<div class="pattern-card-head">'
+                f'<span class="{badge_cls}">{fmt_int(cnt)}회</span>'
+                f'<code>{esc(p.get("script"))}</code>'
+                f'<span class="muted">rc={esc(p.get("exit_code"))}</span>'
+                f'</div>'
+                f'<div class="pattern-card-body">'
+                + (f'<p><span class="label">stderr:</span><code>{esc(p.get("first_line", ""))}</code></p>' if p.get("first_line") else "")
+                + (f'<p><span class="label">fix:</span>{esc(p.get("suggested_fix", ""))}</p>' if p.get("suggested_fix") else "")
+                + '</div></div>'
+            )
     issue = d.get("auto_issue")
     if issue:
         url = issue.get("url", "")
@@ -350,9 +454,10 @@ def render_errors_check(d: dict | None) -> str:
         link = (f'<a href="{esc(url)}" target="_blank" rel="noreferrer">{esc(iid)}</a>'
                 if url else esc(iid))
         parts.append(f"<p>자동 생성 이슈: {link}</p>")
+    variant = "warn" if has_high_count else ("accent" if patterns else "")
     return section("자가진단 — errors.jsonl 영향 검사",
                    "".join(parts) if parts else "<p>검사 결과 없음.</p>",
-                   empty=not parts)
+                   empty=not parts, variant=variant)
 
 
 def render_ai_ready(d: dict | None) -> str:
@@ -364,15 +469,17 @@ def render_ai_ready(d: dict | None) -> str:
     stale = d.get("stale_items") or []
     if stale:
         parts.append("<h3>stale 후보</h3>")
-        head = ('<table><thead><tr><th>파일</th><th>위치</th><th>사유</th>'
-                '</tr></thead><tbody>')
-        rows = "".join(
-            f'<tr><td><code>{esc(s.get("file"))}</code></td>'
-            f'<td><code>{esc(s.get("lines"))}</code></td>'
-            f'<td>{esc(s.get("reason", ""))}</td></tr>'
-            for s in stale
-        )
-        parts.append(head + rows + "</tbody></table>")
+        for s in stale:
+            parts.append(
+                '<div class="stale-card">'
+                f'<div class="stale-card-head">'
+                f'<code>{esc(s.get("file"))}</code>'
+                + (f'<span class="badge">{esc(s.get("lines"))}</span>' if s.get("lines") else "")
+                + '</div>'
+                f'<div class="stale-card-body">'
+                + (f'<p><span class="label">사유:</span>{esc(s.get("reason", ""))}</p>' if s.get("reason") else "")
+                + '</div></div>'
+            )
     issue = d.get("auto_issue")
     if issue:
         url = issue.get("url", "")
@@ -380,8 +487,9 @@ def render_ai_ready(d: dict | None) -> str:
         link = (f'<a href="{esc(url)}" target="_blank" rel="noreferrer">{esc(iid)}</a>'
                 if url else esc(iid))
         parts.append(f"<p>자동 생성 이슈: {link}</p>")
+    variant = "accent" if stale else ""
     return section("AI-Ready 영향 검사", "".join(parts) if parts else "<p>검사 결과 없음.</p>",
-                   empty=not parts)
+                   empty=not parts, variant=variant)
 
 
 def render_html(data: dict) -> str:
