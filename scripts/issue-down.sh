@@ -166,8 +166,14 @@ if [ "$do_report" -eq 1 ] && [ -f "$archive_dir/REPORT-data.md" ]; then
     report_hint=" **REPORT.html 자동 작성 요청** — 인박스 처리 시점에 \`/orch:report $mp_id\` 실행해 archive 의 REPORT-data.md 를 받아 REPORT.html 을 작성하세요."
 fi
 
+# cleanup 요약 — leader pane stdout 이 곧 사라져 운영자가 결과를 볼 수 없으므로 inbox 알림에 포함.
+cleanup_summary=""
+if [ "$do_cleanup" -eq 1 ]; then
+    cleanup_summary=" cleanup: cleaned=${ORCH_CLEANUP_SUMMARY_CLEANED:-0} kept=${ORCH_CLEANUP_SUMMARY_KEPT:-0} partial=${ORCH_CLEANUP_SUMMARY_PARTIAL:-0} skipped=${ORCH_CLEANUP_SUMMARY_SKIPPED:-0}."
+fi
+
 # orch에 종료 보고 (leader pane 이 곧 죽으므로 stdout 은 남지 않음 — 보고는 inbox 통해 전달)
-orch_append_message "$mp_id" "orch" "[issue-down] $mp_id cascade shutdown 완료. archive: $archive_dir. 머지 worktree 자동 정리(+pull), 미머지는 보존.$report_hint" >/dev/null
+orch_append_message "$mp_id" "orch" "[issue-down] $mp_id cascade shutdown 완료. archive: $archive_dir.${cleanup_summary} 머지 worktree 자동 정리(+pull), 미머지는 보존.$report_hint" >/dev/null
 orch_notify "orch" || true
 
 # Slack 알림 — MP 완료. archive 경로 + REPORT 작성 안내.

@@ -368,9 +368,19 @@ EOF
 }
 
 orch_worker_field() {
-    local wid="$1" field="$2" path
+    local wid="$1" field="$2" path kind scope_dir
     path="$(orch_worker_path "$wid")" || return 1
-    [ -f "$path" ] || return 1
+    if [ ! -f "$path" ]; then
+        # 워커가 self-shutdown 으로 workers-archive 로 이동된 경우 폴백 — read-only 라 안전.
+        kind="$(orch_wid_kind "$wid" 2>/dev/null || true)"
+        if [ "$kind" = "worker" ]; then
+            scope_dir="$(orch_scope_dir "${wid%%/*}")" || return 1
+            path="$scope_dir/workers-archive/${wid##*/}.json"
+            [ -f "$path" ] || return 1
+        else
+            return 1
+        fi
+    fi
     jq -r --arg f "$field" '.[$f] // empty' "$path"
 }
 
@@ -435,6 +445,27 @@ orch_active_sub_workers() {
     for f in "$dir"/*.json; do
         [ -f "$f" ] || continue
         printf '%s/%s\n' "$scope" "$(basename "$f" .json)"
+    done
+}
+
+# 살아있거나 self-shutdown 으로 종료된 워커 모두 (workers/ + workers-archive/).
+# 같은 role 이 양쪽에 있으면 active 만 채택 (terminated → restarted 케이스).
+# cleanup 처럼 라이프사이클 무관하게 워커가 *건드린* worktree 를 모두 잡아야 할 때 사용.
+orch_all_sub_workers() {
+    local scope="$1"
+    local scope_dir
+    scope_dir="$(orch_scope_dir "$scope")" || return 0
+    local f dir role
+    declare -A seen=()
+    for dir in "$scope_dir/workers" "$scope_dir/workers-archive"; do
+        [ -d "$dir" ] || continue
+        for f in "$dir"/*.json; do
+            [ -f "$f" ] || continue
+            role="$(basename "$f" .json)"
+            [ -n "${seen[$role]+x}" ] && continue
+            seen[$role]=1
+            printf '%s/%s\n' "$scope" "$role"
+        done
     done
 }
 
@@ -693,19 +724,24 @@ orch_cleanup_merged_worktrees() {
     [ -n "$default_base" ] || default_base="develop"
 
     local sub_wid role worktree_path project_path branch project_base current_branch any=0
+    local cleaned=0 kept=0 skipped=0 partial=0
     declare -A pulled_paths=()
-    for sub_wid in $(orch_active_sub_workers "$mp_id"); do
+    # workers-archive 도 포함 — 워커가 wait-merge 답신 후 self-shutdown 으로 archive 된 상태에서
+    # leader 가 issue-down 호출 시 active 만 보면 0개라 cleanup 이 통째로 noop 이 된다 (PAD-44).
+    for sub_wid in $(orch_all_sub_workers "$mp_id"); do
         any=1
         role="${sub_wid##*/}"
         worktree_path="$(orch_worker_field "$sub_wid" cwd 2>/dev/null || true)"
         if [ -z "$worktree_path" ] || [ ! -d "$worktree_path" ]; then
             echo "  cleanup skip $sub_wid: worktree 경로 없음"
+            skipped=$((skipped + 1))
             continue
         fi
 
         project_path="$(orch_settings_project_field "$role" path 2>/dev/null || true)"
         if [ -z "$project_path" ] || [ ! -d "$project_path" ]; then
             echo "  cleanup skip $sub_wid: settings.json 의 project '$role' path 없음"
+            skipped=$((skipped + 1))
             continue
         fi
 
@@ -737,17 +773,21 @@ orch_cleanup_merged_worktrees() {
         branch="$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
         if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
             echo "  cleanup skip $sub_wid: 현재 브랜치 미상"
+            skipped=$((skipped + 1))
             continue
         fi
 
         if orch_branch_merged "$project_path" "$branch" "$project_base"; then
             if orch_worktree_cleanup "$project_path" "$worktree_path" "$branch" 1; then
                 echo "  cleanup OK $sub_wid: $branch → $project_base 머지 확인, worktree+local branch 정리"
+                cleaned=$((cleaned + 1))
             else
                 echo "  cleanup partial $sub_wid: 머지됐지만 정리 도중 일부 실패 (위 WARN)"
+                partial=$((partial + 1))
             fi
         else
             echo "  cleanup keep $sub_wid: $branch 미머지 또는 검출 실패 — worktree 보존 ($worktree_path)"
+            kept=$((kept + 1))
         fi
     done
     [ "$any" -eq 0 ] && echo "  cleanup: 산하 워커 등록 없음 — skip"
@@ -760,6 +800,13 @@ orch_cleanup_merged_worktrees() {
             echo "  prune OK $pruned_path"
         fi
     done
+
+    # 외부에서 inbox 알림·로그에 사용 가능하도록 카운터 노출.
+    ORCH_CLEANUP_SUMMARY_CLEANED="$cleaned"
+    ORCH_CLEANUP_SUMMARY_KEPT="$kept"
+    ORCH_CLEANUP_SUMMARY_PARTIAL="$partial"
+    ORCH_CLEANUP_SUMMARY_SKIPPED="$skipped"
+    echo "  cleanup summary: cleaned=$cleaned kept=$kept partial=$partial skipped=$skipped"
     return 0
 }
 
