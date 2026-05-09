@@ -462,7 +462,7 @@ orch_split_in_current_window() {
 orch_new_window() {
     local name="$1" cwd="$2"
     local pane_id window_id
-    pane_id="$(tmux new-window -t "$ORCH_TMUX_SESSION" -n "$name" -c "$cwd" -P -F '#{pane_id}')"
+    pane_id="$(tmux new-window -d -t "$ORCH_TMUX_SESSION" -n "$name" -c "$cwd" -P -F '#{pane_id}')"
     window_id="$(tmux display-message -p -t "$pane_id" '#{window_id}')"
     printf '%s %s' "$window_id" "$pane_id"
 }
