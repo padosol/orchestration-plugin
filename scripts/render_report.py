@@ -54,6 +54,20 @@ JSON 스키마 (필수: mp_id, scope_dir / 나머지 optional, 누락 시 섹션
     "observations": ["Read 가 같은 파일 반복", "..."]
   },
 
+  "token_efficiency": {
+    "narrative": "도구·파일·워커 3축 분석. 낭비 hint N건",
+    "tool_size": [
+      {"name": "Grep", "bytes": 55015, "share": 0.7}
+    ],
+    "file_reads": [
+      {"path": "/proj/src/foo.py", "count": 3, "bytes": 24006}
+    ],
+    "worker_share": [
+      {"worker_id": "MP-9/server", "share": 0.72, "cost_usd": 295.40}
+    ],
+    "waste_hints": ["같은 파일 3회 read — 캐싱 미활용 의심"]
+  },
+
   "handoff": {"errors_count": 0, "narrative": "발견된 마찰 없음"},
 
   "follow_ups": [
@@ -492,6 +506,102 @@ def render_ai_ready(d: dict | None) -> str:
                    empty=not parts, variant=variant)
 
 
+def render_token_efficiency(d: dict | None) -> str:
+    """도구·파일·워커 3축 누적 + 낭비 hint. 토큰 낭비 줄이기 루프의 진입점."""
+    if not d:
+        return section("토큰 효율 분석", "<p>분석 데이터 없음.</p>", empty=True)
+    parts = []
+    if d.get("narrative"):
+        parts.append(f"<p>{esc(d['narrative'])}</p>")
+
+    # 도구별 누적 byte (share bar)
+    tool_size = d.get("tool_size") or []
+    if tool_size:
+        parts.append("<h3>도구별 tool_result 누적 byte</h3>")
+        head = ('<table><thead><tr><th>Tool</th><th class="num">Bytes</th>'
+                '<th class="num" style="width:200px;">Share</th></tr></thead><tbody>')
+        rows = []
+        for it in tool_size:
+            try:
+                share = float(it.get("share") or 0)
+            except (TypeError, ValueError):
+                share = 0
+            cell = (f'<div class="bar-cell">{int(share*100):d}%{bar_inline(share)}</div>')
+            rows.append(
+                '<tr>'
+                f'<td><code>{esc(it.get("name"))}</code></td>'
+                f'<td class="num">{fmt_int_short(it.get("bytes"))}</td>'
+                f'<td class="num">{cell}</td>'
+                '</tr>'
+            )
+        parts.append(head + "".join(rows) + "</tbody></table>")
+
+    # 파일별 누적 read 카드
+    file_reads = d.get("file_reads") or []
+    if file_reads:
+        parts.append("<h3>파일별 누적 read top-N</h3>")
+        for f in file_reads:
+            try:
+                cnt = int(f.get("count") or 0)
+            except (TypeError, ValueError):
+                cnt = 0
+            high = cnt >= 3
+            card_cls = "pattern-card high" if high else "pattern-card"
+            badge_cls = "count-badge high" if high else "count-badge"
+            parts.append(
+                f'<div class="{card_cls}">'
+                f'<div class="pattern-card-head">'
+                f'<span class="{badge_cls}">{cnt}회</span>'
+                f'<code>{esc(f.get("path"))}</code>'
+                f'<span class="muted">{fmt_int_short(f.get("bytes"))} byte</span>'
+                f'</div>'
+                + (
+                    '<div class="pattern-card-body"><p><span class="label">신호:</span>'
+                    '캐싱 미활용 의심 — 같은 파일 반복 read</p></div>'
+                    if high else ''
+                )
+                + '</div>'
+            )
+
+    # 워커 점유율 (선택)
+    worker_share = d.get("worker_share") or []
+    if worker_share:
+        parts.append("<h3>워커별 cost 점유율</h3>")
+        for w in worker_share:
+            try:
+                share = float(w.get("share") or 0)
+            except (TypeError, ValueError):
+                share = 0
+            high = share >= 0.70
+            card_cls = "pattern-card high" if high else "pattern-card"
+            parts.append(
+                f'<div class="{card_cls}">'
+                f'<div class="pattern-card-head">'
+                f'<code>{esc(w.get("worker_id"))}</code>'
+                f'<span class="roi-gap">{fmt_money(w.get("cost_usd"))}</span>'
+                f'<span class="muted">{int(share*100)}%</span>'
+                f'{bar_inline(share)}'
+                f'</div>'
+                + (
+                    '<div class="pattern-card-body"><p><span class="label">신호:</span>'
+                    '단일 워커 70%+ 점유 — 워크로드 분산 검토</p></div>'
+                    if high else ''
+                )
+                + '</div>'
+            )
+
+    # 낭비 hint
+    hints = d.get("waste_hints") or []
+    if hints:
+        parts.append('<h3>낭비 패턴 hint</h3>')
+        parts.append("<ul>" + "".join(f"<li>{esc(h)}</li>" for h in hints) + "</ul>")
+
+    variant = "warn" if hints else ("accent" if (tool_size or file_reads or worker_share) else "")
+    return section("토큰 효율 분석",
+                   "".join(parts) if parts else "<p>분석 결과 없음.</p>",
+                   empty=not parts, variant=variant)
+
+
 def render_html(data: dict) -> str:
     mp_id = data.get("mp_id") or "(unknown)"
     scope_dir = data.get("scope_dir") or ""
@@ -503,6 +613,7 @@ def render_html(data: dict) -> str:
         render_as_is_to_be(data.get("as_is_to_be")),
         render_test_results(data.get("test_results")),
         render_token_analysis(data.get("token_analysis")),
+        render_token_efficiency(data.get("token_efficiency")),
         render_handoff(data.get("handoff")),
         render_follow_ups(data.get("follow_ups")),
         render_errors_check(data.get("errors_check")),
