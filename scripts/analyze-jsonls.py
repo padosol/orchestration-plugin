@@ -51,10 +51,16 @@ def parse_iso(s):
 def aggregate(jsonl_paths, since=None, until=None):
     """since/until 은 ISO 문자열. 내부에서 datetime 으로 변환해 비교.
 
-    tool_use → tool_result 매칭은 tool_use_id 키로 단일 패스에 build:
+    tool_use → tool_result 매칭은 tool_use_id 키로 single-pass + post-fix:
     assistant turn 의 tool_use 시점에 (name, file_path) 를 dict 에 저장하고,
-    같은 패스에서 user turn 의 tool_result 만나면 그 시점에 매칭. 시간순
-    JSONL 이 보장되므로 tool_use 가 항상 tool_result 보다 앞선다.
+    user turn 의 tool_result 는 즉시 누적하지 않고 임시 list 에 (size, tu_id)
+    로 보관. 패스 끝난 뒤 매핑 lookup 으로 도구별/파일별 누적.
+
+    줄 순서를 후처리로 분리하는 이유: Claude Code transcript 가 Edit/Read 같이
+    server-side 가 빠르게 결과를 만드는 도구에서 tool_result 를 tool_use 보다
+    먼저 flush 하는 케이스가 관찰됨 (timestamp 는 USE 가 빠른데 line 은 RES 가
+    먼저). single-pass + 즉시 누적 방식이면 그 RES 가 unknown 으로 분류돼
+    도구별 누적이 underreport.
     """
     since_dt = parse_iso(since) if since else None
     until_dt = parse_iso(until) if until else None
@@ -67,11 +73,12 @@ def aggregate(jsonl_paths, since=None, until=None):
         "cache_write": 0,
     }
     tool_counts = Counter()
-    tool_results = []  # (size, tool_use_id, name)
+    tool_results = []  # (size, tool_use_id, name) — 매칭 후 채움
     tool_size_by_name = Counter()  # 도구별 누적 tool_result byte
     file_read_count = Counter()    # Read input.file_path → 호출 횟수
     file_read_bytes = Counter()    # Read input.file_path → 누적 byte
     tool_use_meta = {}  # tool_use_id → {"name": str, "file_path": str|None}
+    pending_results = []  # (size, tu_id) — 패스 후 매핑 lookup
     timestamps = []
     skipped_lines = 0
 
@@ -133,17 +140,21 @@ def aggregate(jsonl_paths, since=None, until=None):
                                     payload = block.get("content")
                                     size = len(json.dumps(payload, ensure_ascii=False))
                                     tu_id = block.get("tool_use_id") or "(no-id)"
-                                    meta = tool_use_meta.get(tu_id) or {}
-                                    name = meta.get("name") or "(unknown)"
-                                    tool_results.append((size, tu_id, name))
-                                    tool_size_by_name[name] += size
-                                    fp = meta.get("file_path")
-                                    if fp and name in ("Read", "NotebookRead"):
-                                        file_read_count[fp] += 1
-                                        file_read_bytes[fp] += size
+                                    pending_results.append((size, tu_id))
         except (OSError, IOError) as e:
             print(f"warn: 읽기 실패 {path}: {e}", file=sys.stderr)
             continue
+
+    # post-fix 매칭 — tool_use 가 같은 file 안 어디에 있건 (line 순서 무관) 매칭됨
+    for size, tu_id in pending_results:
+        meta = tool_use_meta.get(tu_id) or {}
+        name = meta.get("name") or "(unknown)"
+        tool_results.append((size, tu_id, name))
+        tool_size_by_name[name] += size
+        fp = meta.get("file_path")
+        if fp and name in ("Read", "NotebookRead"):
+            file_read_count[fp] += 1
+            file_read_bytes[fp] += size
 
     if skipped_lines:
         print(f"warn: invalid JSON 줄 {skipped_lines}개 skip", file=sys.stderr)
