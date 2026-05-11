@@ -38,4 +38,4 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-plugin.sh:*)
 **개선 가이드 (warnings 발견 시)**:
 - 절대경로 fallback → `${CLAUDE_PLUGIN_ROOT}` 환경변수 사용 (이미 export 됨)
 - README/docs 의 예시 path → `<workspace>/` / `<repo>/` 같은 placeholder 로 일반화
-- worker_id 형식 (`mp-NN`) 은 protocol identifier 이므로 보존 — 검사 대상 아님
+- worker_id 형식 (`<issue_id>` / `<issue_id>/<project>`) 은 protocol identifier 이므로 보존 — 검사 대상 아님

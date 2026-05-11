@@ -2,9 +2,14 @@
 # orch v2 — 2-tier hub-and-spoke 공통 함수 라이브러리.
 #
 # 식별자(worker_id) 형태:
-#   orch              → PM (사용자와 대화)
-#   mp-NN             → MP-NN 팀리더
-#   mp-NN/<project>   → MP-NN 산하 프로젝트 워커
+#   orch                  → PM (사용자와 대화). 예약 식별자.
+#   <issue_id>            → <issue_id> 팀리더. <issue_id> 는 사용자가 /orch:issue-up 에 넘긴 값 그대로
+#                            sanitize 만 거친 형태 ([A-Za-z0-9_-]+, 대소문자 보존). 트래커별 예:
+#                            Linear MP-13, Jira PROJ-456, GitHub 142, 자유 issue42.
+#   <issue_id>/<project>  → 산하 프로젝트 워커.
+#
+# 0.13.0 이전: leader_id 가 `mp-NN` 으로 강제 변환됐다 (Linear 시절 잔재). 이제 트래커 무관.
+# 'orch' 만 reserved — 다른 leader_id 는 사용자 이슈 키 그대로.
 #
 # 디스크 레이아웃:
 #   .orch/settings.json                            프로젝트 메타데이터
@@ -20,9 +25,9 @@
 #   .orch/runs/<scope>/leader-archive.md           leader inbox archive (issue-down 시 함께 archive)
 #   .orch/runs/<scope>/errors.jsonl                scope 별 에러 로그
 #
-# 신규 MP scope 는 `.orch/runs/<scope>/` 아래에 묶인다 — 동시 진행 MP 가 많아져도 .orch
-# 루트가 어수선하지 않도록 wrapper 한 단계 추가. 후방호환: 평탄 `.orch/<scope>/` 도 함께
-# 인식 — orch_scope_dir 가 양쪽을 본다.
+# 신규 issue scope 는 `.orch/runs/<scope>/` 아래에 묶인다 — 동시 진행이 많아져도 .orch 루트가
+# 어수선하지 않도록 wrapper 한 단계 추가. 후방호환: 평탄 `.orch/<scope>/` 와 legacy `mp-*`
+# 디렉토리도 함께 인식 — orch_scope_dir 가 모두를 본다.
 #
 # **inbox 빈 파일 = 처리할 메시지 없음 (정상 상태).** inbox-archive.sh 가 처리된 메시지
 # 를 archive/ 로 옮긴 뒤 inbox/<role>.md 를 truncate 한다. 처리 흔적은 archive 쪽 확인.
@@ -56,12 +61,14 @@ ORCH_WORKERS="${ORCH_ROOT}/workers"
 ORCH_SETTINGS="${ORCH_ROOT}/settings.json"
 # errors.jsonl 은 caller scope 에 따라 결정 (orch_errors_log_path 참고).
 # orch / unknown → ${ORCH_ROOT}/errors.jsonl
-# mp-NN, mp-NN/role → ${ORCH_ROOT}/runs/<mp-NN>/errors.jsonl  (issue-down 이 scope dir 째 archive)
+# <issue_id>, <issue_id>/role → ${ORCH_ROOT}/runs/<issue_id>/errors.jsonl  (issue-down 이 scope dir 째 archive)
 ORCH_ERRORS_LOG="${ORCH_ROOT}/errors.jsonl"  # legacy compat — 신규 코드는 orch_errors_log_path 사용
 ORCH_RUNS_DIR="${ORCH_ROOT}/runs"
 
-ORCH_LEADER_PATTERN='^mp-[0-9]+$'
-ORCH_WORKER_PATTERN='^mp-[0-9]+/[a-zA-Z0-9_-]+$'
+# issue_id 와 role 모두 [A-Za-z0-9_-]+ — 'orch' 만 reserved. worker pattern 매치가 우선
+# (slash 가 있으면 worker), 없으면 leader 후보.
+ORCH_LEADER_PATTERN='^[A-Za-z0-9_-]+$'
+ORCH_WORKER_PATTERN='^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$'
 
 # tmux 세션 — 호출자가 살아있는 세션을 따라간다.
 # fallback 우선순위: env ORCH_TMUX_SESSION > current tmux > base_dir basename > "orch"
@@ -90,7 +97,7 @@ orch_wid_kind() {
     fi
 }
 
-# scope: orch→empty, mp-NN→mp-NN, mp-NN/x→mp-NN
+# scope: orch→empty, <issue_id>→<issue_id>, <issue_id>/x→<issue_id>
 orch_wid_scope() {
     local w="$1" kind
     kind="$(orch_wid_kind "$w")"
@@ -100,7 +107,7 @@ orch_wid_scope() {
     esac
 }
 
-# role: worker만 의미있음 (mp-NN/server → server)
+# role: worker만 의미있음 (<issue_id>/server → server)
 orch_wid_role() {
     local w="$1" kind
     kind="$(orch_wid_kind "$w")"
@@ -137,16 +144,19 @@ orch_detect_self() {
     return 1
 }
 
-# 이슈 ID 정규화 (MP-13 / mp-13 / 13 → mp-13)
+# 이슈 ID 정규화 — 사용자 입력을 leader_id 로 sanitize.
+# 정책 (0.13.0~): 대소문자 보존, [A-Za-z0-9_-] 만 허용. 트래커별 예:
+#   Linear: MP-13       → MP-13
+#   Jira:   PROJ-456    → PROJ-456
+#   GitHub: 142         → 142
+#   기타:   issue_42-rc → issue_42-rc
+# 'orch' 는 reserved (leader 식별자로 사용 금지). 빈 입력 / 잘못된 문자 → exit 1.
 orch_normalize_issue_id() {
-    local lower="${1,,}"
-    if [[ "$lower" =~ ^mp-[0-9]+$ ]]; then
-        printf '%s' "$lower"
-    elif [[ "$lower" =~ ^[0-9]+$ ]]; then
-        printf 'mp-%s' "$lower"
-    else
-        return 1
-    fi
+    local v="$1"
+    [ -n "$v" ] || return 1
+    [ "$v" = "orch" ] && return 1
+    [[ "$v" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+    printf '%s' "$v"
 }
 
 # ─── 경로 헬퍼 (scope-aware) ──────────────────────────────────────────
@@ -195,7 +205,7 @@ orch_worker_path() {
     esac
 }
 
-# scope 디렉토리 (mp-13 sandbox 전체).
+# scope 디렉토리 (<issue_id> sandbox 전체).
 # `.orch/runs/<scope>/` 가 기본 위치. 평탄 `.orch/<scope>/` 도 fallback 으로 인식.
 # 결정 순서:
 #   1) runs/<scope> 디렉토리 존재 → runs path
@@ -203,6 +213,7 @@ orch_worker_path() {
 #   3) 둘 다 없음 → runs path (issue-up 이 mkdir 할 위치)
 orch_scope_dir() {
     local s="$1"
+    [ "$s" = "orch" ] && return 1
     [[ "$s" =~ $ORCH_LEADER_PATTERN ]] || return 1
     local new_path="$ORCH_RUNS_DIR/$s"
     if [ -d "$new_path" ]; then
@@ -412,17 +423,20 @@ orch_worker_exists() {
     [ -f "$path" ]
 }
 
-# 살아있는 leader 목록
+# 살아있는 leader 목록 — workers/ 의 모든 *.json 중 'orch.json' 만 제외 (예약 PM 식별자).
+# 0.13.0 이전엔 'mp-*.json' glob 이었지만 issue_id 가 자유 형식이 된 후 generic 화.
 orch_active_leaders() {
     [ -d "$ORCH_WORKERS" ] || return 0
-    local f
-    for f in "$ORCH_WORKERS"/mp-*.json; do
+    local f name
+    for f in "$ORCH_WORKERS"/*.json; do
         [ -f "$f" ] || continue
-        basename "$f" .json
+        name="$(basename "$f" .json)"
+        [ "$name" = "orch" ] && continue
+        printf '%s\n' "$name"
     done
 }
 
-# 특정 leader 산하 worker_id 목록 (mp-NN/role 형식)
+# 특정 leader 산하 worker_id 목록 (<issue_id>/role 형식)
 orch_active_sub_workers() {
     local scope="$1"
     local scope_dir
@@ -572,12 +586,12 @@ orch_route_check() {
             return 0 ;;
         "leader worker")
             [ "$fs" = "$ts" ] && return 0
-            echo "ERROR: cross-MP 통신 차단 ('$from' → '$to')" >&2; return 1 ;;
+            echo "ERROR: cross-issue 통신 차단 ('$from' → '$to')" >&2; return 1 ;;
         "worker leader")
             [ "$fs" = "$ts" ] && return 0
             echo "ERROR: 다른 MP의 leader에 직접 송신 차단 ('$from' → '$to')" >&2; return 1 ;;
         "leader leader")
-            echo "ERROR: cross-MP 통신 차단 — leader끼리 직접 송신 안 됨 ('$from' → '$to')" >&2
+            echo "ERROR: cross-issue 통신 차단 — leader끼리 직접 송신 안 됨 ('$from' → '$to')" >&2
             return 1 ;;
         "worker worker")
             echo "ERROR: 워커끼리 직접 송신 차단 — leader('$fs') 경유 필요" >&2
@@ -748,10 +762,10 @@ orch_worktree_cleanup() {
     return 0
 }
 
-# orch_cleanup_merged_worktrees <mp_id>
-# mp 산하 워커 worktree 들 중 base 에 머지된 것만 정리. stdout 에 한 줄씩 결과 출력.
+# orch_cleanup_merged_worktrees <issue_id>
+# issue 산하 워커 worktree 들 중 base 에 머지된 것만 정리. stdout 에 한 줄씩 결과 출력.
 orch_cleanup_merged_worktrees() {
-    local mp_id="$1"
+    local mp_id="$1"  # 변수명은 호환성 위해 유지 (의미: issue_id, 예 MP-13/PROJ-456/142)
 
     if ! orch_settings_exists; then
         echo "  cleanup skip: settings.json 없음"
@@ -845,26 +859,23 @@ orch_cleanup_merged_worktrees() {
     return 0
 }
 
-# orch_orphan_cleanup_suggest <mp_id>
+# orch_orphan_cleanup_suggest <issue_id>
 # leader registry 에서 leader 가 사라진 fallback 경로용. 자동 삭제 안 함 — settings 의 모든
-# project 에 대해 (1) git worktree prune (메타데이터만 정리, 안전) 실행하고 (2) mp_id 패턴
+# project 에 대해 (1) git worktree prune (메타데이터만 정리, 안전) 실행하고 (2) issue_id 토큰
 # 과 일치하는 로컬 브랜치 후보를 PR 머지 상태와 함께 출력만 한다. 사용자가 결과를 보고
 # 직접 git branch -D 실행하도록.
 # (cascade 흐름이 깨져 leader 가 archive 만 mv 하고 죽었을 때 잔재 보강.)
 orch_orphan_cleanup_suggest() {
-    local mp_id="$1"
-    [ -n "$mp_id" ] || return 0
+    local issue_id="$1"
+    [ -n "$issue_id" ] || return 0
 
     if ! orch_settings_exists; then
         echo "  orphan: settings.json 없음 — skip"
         return 0
     fi
 
-    # MP-37 같은 표시 이름. branch 패턴엔 대·소문자 양쪽 매칭.
-    local mp_upper="${mp_id^^}"
-    mp_upper="${mp_upper#MP-}"
-    mp_upper="MP-${mp_upper}"
-    local mp_lower="${mp_upper,,}"
+    # issue_id 토큰 (예: MP-13, PROJ-456, 142, issue42). 브랜치 매칭은 대소문자 무시.
+    local id_token="$issue_id"
 
     local project alias_path
     local suggestions=()
@@ -877,8 +888,8 @@ orch_orphan_cleanup_suggest() {
             echo "  orphan prune OK $project"
         fi
 
-        # for-each-ref 의 '*' 는 / 를 넘지 못해 fix/MP-77 같은 브랜치를 못 잡는다.
-        # 모든 ref 를 받아 grep 으로 패턴 매칭 (대소문자 무시, MP-NN 토큰).
+        # for-each-ref 의 '*' 는 / 를 넘지 못해 fix/PROJ-77 같은 브랜치를 못 잡는다.
+        # 모든 ref 를 받아 grep 으로 패턴 매칭 (대소문자 무시, issue_id 토큰).
         local b base_branch
         base_branch="$(orch_settings_project_base_branch "$alias_path" 2>/dev/null || echo develop)"
         while IFS= read -r b; do
@@ -889,14 +900,14 @@ orch_orphan_cleanup_suggest() {
                 suggestions+=("# git -C $project branch -D $b   # ${alias_path}: 머지 미확인 — 직접 검토")
             fi
         done < <(git -C "$project" for-each-ref --format='%(refname:short)' refs/heads/ 2>/dev/null \
-            | grep -i -E "(^|[/_-])${mp_upper}([/_-]|$)" || true)
+            | grep -i -E "(^|[/_-])${id_token}([/_-]|$)" || true)
     done
 
     if [ "${#suggestions[@]}" -gt 0 ]; then
-        echo "  orphan 브랜치 후보 ($mp_id) — 검토 후 직접 실행:"
+        echo "  orphan 브랜치 후보 ($issue_id) — 검토 후 직접 실행:"
         printf '    %s\n' "${suggestions[@]}"
     else
-        echo "  orphan: '$mp_id' 패턴 일치 브랜치 없음"
+        echo "  orphan: '$issue_id' 패턴 일치 브랜치 없음"
     fi
     return 0
 }
@@ -904,7 +915,7 @@ orch_orphan_cleanup_suggest() {
 # ─── 에러 로깅 ─────────────────────────────────────────────────────────
 # 어느 스크립트든 실패하면 한 줄 JSON 으로 추적용 로그 남긴다.
 # scope-aware: orch / unknown 은 top-level errors.jsonl,
-# mp-NN, mp-NN/role 은 .orch/<mp-NN>/errors.jsonl (issue-down 이 scope 째 archive 함).
+# <issue_id>, <issue_id>/role 은 .orch/runs/<issue_id>/errors.jsonl (issue-down 이 scope 째 archive 함).
 
 # orch_errors_log_path [<wid>] — 호출자 worker_id 기반 errors.jsonl 경로 결정.
 # 인자 없으면 ORCH_WORKER_ID(또는 LOL_WORKER_ID 후방호환) → orch_detect_self 순으로 추론.
@@ -967,19 +978,26 @@ orch_log_error() {
     fi
 }
 
-# 모든 errors.jsonl 모으기 — top-level + 모든 mp-*/errors.jsonl (live + archive).
+# 모든 errors.jsonl 모으기 — top-level + 모든 scope dir 의 errors.jsonl (live + archive).
 # stdout 으로 한 줄 JSON 들 출력. /orch:errors 가 사용.
-# 기본 위치 runs/mp-*/ 와 후방호환 평탄 mp-*/ 둘 다 스캔.
+# scope dir 후보: runs/<id>/ (기본), .orch/<id>/ (legacy 평탄), archive/<id>-YYYY-MM-DD/ (archived).
+# .orch root 직속의 reserved 디렉토리 (inbox/archive/workers/runs) 는 제외.
 orch_collect_all_errors() {
     [ -f "$ORCH_ERRORS_LOG" ] && cat "$ORCH_ERRORS_LOG" 2>/dev/null
-    local f
-    for f in "$ORCH_RUNS_DIR"/mp-*/errors.jsonl; do
+    local f d name
+    for f in "$ORCH_RUNS_DIR"/*/errors.jsonl; do
         [ -f "$f" ] && cat "$f" 2>/dev/null
     done
-    for f in "$ORCH_ROOT"/mp-*/errors.jsonl; do
+    for d in "$ORCH_ROOT"/*/; do
+        [ -d "$d" ] || continue
+        name="$(basename "${d%/}")"
+        case "$name" in
+            inbox|archive|workers|runs) continue ;;
+        esac
+        f="${d}errors.jsonl"
         [ -f "$f" ] && cat "$f" 2>/dev/null
     done
-    for f in "$ORCH_ARCHIVE"/mp-*/errors.jsonl; do
+    for f in "$ORCH_ARCHIVE"/*/errors.jsonl; do
         [ -f "$f" ] && cat "$f" 2>/dev/null
     done
     return 0

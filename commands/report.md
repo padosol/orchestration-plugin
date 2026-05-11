@@ -99,7 +99,7 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
    3. **개선 액션 도출** — 각 후보 패턴마다 한 줄 fix 제안 (어디를 어떻게 — 스크립트 함수명 / first_msg 절 / 슬래시 옵션 등 구체적으로).
    4. **후속 이슈 자동 생성** — settings.json 의 `issue_tracker` 분기 (AI-Ready 검사와 동일 패턴):
       - `linear` → `mcp__linear-server__save_issue`:
-        - title: `[orch-fix] MP-N 사이클 errors.jsonl 패턴 개선`
+        - title: `[orch-fix] <issue_id> 사이클 errors.jsonl 패턴 개선`
         - description: 패턴별 (script · rc · 횟수 · stderr 첫 줄) + 도출된 fix 액션 + 본 MP 링크
         - team: 본 MP 와 동일한 team
         - parent: 본 MP issue
@@ -149,7 +149,7 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
    3. **stale 여부 확인** — 위 "위임 규칙" 에 따라 분기. 작은 케이스는 메인이 직접 `grep -l <pattern> <abs-path>` + `Read` 한 번씩, 큰 케이스만 Agent 단발 위임. 둘 다 결과는 (file:line + 한 줄 사유) JSON 형태로 정리해 다음 단계에서 issue body 에 포함.
    4. **stale 발견 시 후속 이슈 자동 생성** — settings.json 의 `issue_tracker` 값에 따라 분기:
       - `linear` → `mcp__linear-server__save_issue`:
-        - title: `[docs] MP-N 변경에 따른 CLAUDE.md / docs 갱신`
+        - title: `[docs] <issue_id> 변경에 따른 CLAUDE.md / docs 갱신`
         - description: 구체 stale 위치 + 갱신 방법 (commit / PR 링크 인용)
         - team: 본 MP 와 동일한 team
         - parent: 본 MP issue

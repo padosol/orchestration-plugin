@@ -17,7 +17,7 @@ fi
 target="$1"
 target_kind="$(orch_wid_kind "$target")"
 if [ "$target_kind" = "invalid" ]; then
-    echo "ERROR: worker_id '$target' 형식 오류 (orch | mp-NN | mp-NN/<project>)" >&2
+    echo "ERROR: worker_id '$target' 형식 오류 (orch | <issue_id> | <issue_id>/<project>)" >&2
     exit 2
 fi
 

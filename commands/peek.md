@@ -15,8 +15,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/peek.sh:*)
 
 **권한**:
 - `orch`: 모든 워커 peek 가능
-- `mp-NN` (leader): 자기 자신 또는 산하 워커(`mp-NN/*`) 만
-- `mp-NN/<project>` (worker): peek 호출 불가
+- `<issue_id>` (leader): 자기 자신 또는 산하 워커(`<issue_id>/*`) 만
+- `<issue_id>/<project>` (worker): peek 호출 불가
 
 **heartbeat 핑퐁 안 하는 이유**: 인박스 메시지로 ack 을 매번 요구하면 LLM 토큰 낭비. tmux 화면 캡처와 마지막 활동 시각만으로 진단 충분.
 

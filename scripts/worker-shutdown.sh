@@ -31,7 +31,7 @@ case "$kind" in
     worker)
         ;;
     *)
-        echo "ERROR: worker-shutdown 은 worker(mp-NN/<project>) 만 호출 가능. 현재 self=$self (kind=$kind)" >&2
+        echo "ERROR: worker-shutdown 은 worker(<issue_id>/<project>) 만 호출 가능. 현재 self=$self (kind=$kind)" >&2
         echo "  - leader 종료는 /orch:issue-down 으로." >&2
         echo "  - orch 종료는 /orch:down 으로." >&2
         exit 2

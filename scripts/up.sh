@@ -50,8 +50,8 @@ if ! orch_settings_exists; then
     cat <<EOF
 다음 단계:
   1. /orch:setup 으로 .orch/settings.json 생성 후 description 보강
-  2. /orch:issue-up MP-XX 로 첫 leader 시작
+  2. /orch:issue-up <issue-id> 로 첫 leader 시작 (예: MP-13 / PROJ-456 / 142)
 EOF
 else
-    echo "다음 단계: /orch:issue-up MP-XX 로 leader 시작"
+    echo "다음 단계: /orch:issue-up <issue-id> 로 leader 시작 (예: MP-13 / PROJ-456 / 142)"
 fi

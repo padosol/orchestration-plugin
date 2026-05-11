@@ -51,8 +51,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLU
 
 **worker_id 별 책임 범위**:
 - `orch` (PM): 사용자와 대화 + leader 에 위임. 워커에 직접 송신 불가 → leader 경유.
-- `mp-NN` (leader): 자기 MP 의 워커 spawn / 라우팅 / shutdown. 산하 워커가 다른 프로젝트 질문하면 leader 가 받아 그 프로젝트 워커에 전달.
-- `mp-NN/<project>` (worker): worktree 안에서 작업. 외부 통신은 leader($scope) 경유만.
+- `<issue_id>` (leader): 자기 이슈의 워커 spawn / 라우팅 / shutdown. 산하 워커가 다른 프로젝트 질문하면 leader 가 받아 그 프로젝트 워커에 전달.
+- `<issue_id>/<project>` (worker): worktree 안에서 작업. 외부 통신은 leader($scope) 경유만.
 
 **중요**:
 - 작업이 길어질 것 같으면 보낸이에게 짧은 "접수 확인" 답신 먼저 보내고 본 작업 시작

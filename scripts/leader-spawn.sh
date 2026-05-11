@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # /orch:leader-spawn <project-alias> [type] [--role pm|dev]
-# leader (mp-NN) 가 호출. 자기 MP 산하 워커를 띄운다.
-# --role dev (기본): 구현 담당 워커. worker_id=mp-NN/<project>.
-# --role pm:        분석·아키텍처·스펙·API·데이터 모델 담당. worker_id=mp-NN/pm (단일).
+# leader (<issue_id>) 가 호출. 자기 이슈 산하 워커를 띄운다.
+# --role dev (기본): 구현 담당 워커. worker_id=<issue_id>/<project>.
+# --role pm:        분석·아키텍처·스펙·API·데이터 모델 담당. worker_id=<issue_id>/pm (단일).
 
 set -euo pipefail
 
@@ -18,9 +18,9 @@ usage() {
   type: feat | fix | refactor | chore | docs | test
         (기본: dev 는 feat / pm 은 docs)
   --role: pm | dev (기본 dev)
-    dev — 구현 담당. worker_id=mp-NN/<project>.
+    dev — 구현 담당. worker_id=<issue_id>/<project>.
     pm  — 분석·시스템 아키텍처·프로젝트 계획·기술 문서·API 스펙·데이터 모델.
-          worker_id=mp-NN/pm (한 MP 당 단일). 분석 직후 mandatory direction-check.
+          worker_id=<issue_id>/pm (한 이슈 당 단일). 분석 직후 mandatory direction-check.
 EOF
 }
 
@@ -66,10 +66,12 @@ orch_settings_require || exit 2
 self="$(orch_detect_self 2>/dev/null || true)"
 self_kind="$(orch_wid_kind "${self:-}")"
 if [ "$self_kind" != "leader" ]; then
-    echo "ERROR: /orch:leader-spawn 은 leader (mp-NN) pane 에서만 호출 가능 (현재: ${self:-unknown})" >&2
+    echo "ERROR: /orch:leader-spawn 은 leader (<issue_id>) pane 에서만 호출 가능 (현재: ${self:-unknown})" >&2
     exit 2
 fi
 
+# leader 의 자기 식별자 = 사용자가 issue-up 에 넘겼던 값 그대로 (예: MP-13, PROJ-456, 142).
+# 코드 호환 위해 변수명 mp_id 유지.
 mp_id="$self"
 
 if ! orch_settings_project_exists "$project"; then
@@ -94,18 +96,18 @@ project_path="$(orch_settings_project_field "$project" path)"
 
 base_branch="$(orch_settings_project_base_branch "$project")"
 
-issue_num="${mp_id#mp-}"
+# 브랜치·worktree 이름: issue_id 그대로 사용 (0.13.0~). 이전엔 'MP-<num>' 으로 강제 변환됐다.
 if [ "$role" = "pm" ]; then
-    branch_name="${type}/MP-${issue_num}-pm"
+    branch_name="${type}/${mp_id}-pm"
 else
-    branch_name="${type}/MP-${issue_num}"
+    branch_name="${type}/${mp_id}"
 fi
 
 worktrees_dir="$(orch_scope_worktrees_dir "$mp_id")"
 if [ "$role" = "pm" ]; then
-    worktree_path="${worktrees_dir}/MP-${issue_num}/${project}/pm"
+    worktree_path="${worktrees_dir}/${mp_id}/${project}/pm"
 else
-    worktree_path="${worktrees_dir}/MP-${issue_num}/${project}/${type}"
+    worktree_path="${worktrees_dir}/${mp_id}/${project}/${type}"
 fi
 mkdir -p "$(dirname "$worktree_path")"
 
@@ -175,7 +177,7 @@ if [ "$role" = "pm" ]; then
 - 작업 분해·우선순위 후보 (실제 분배는 leader 권한 — PM 은 권고)
 - API 스펙 (OpenAPI / GraphQL SDL / RPC 인터페이스 등 표준 형식)
 - 데이터 모델 (ERD / SQL / Prisma schema 등)
-- 기술 문서 (docs/spec/MP-${issue_num}/ 권장 경로)
+- 기술 문서 (docs/spec/${mp_id}/ 권장 경로)
 
 [Direction Check — Mandatory + Blocking]
 분석·설계 직후 / 산출물 finalize 전 / 다음 단계 진행 전, wait-reply 로 차단 대기 패턴 사용:
