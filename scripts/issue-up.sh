@@ -129,7 +129,9 @@ case "$effective_tracker" in
         fi
         ;;
     jira)
-        issue_fetch_step="1. settings.json 의 issue_tracker='jira' 는 자동 fetch 미지원 — orch 또는 사용자에게 ${issue_display} spec 직접 요청 (\`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — Jira 이슈 본문/AC 붙여줘.\\nORCH_MSG\`)."
+        # Jira 자동 fetch — jira-cli (ankitpokhrel/jira-cli) 경유. 사이트 URL/토큰은
+        # ~/.config/.jira/.config.yml 에 사전 등록되어 있어야 함.
+        issue_fetch_step="1. \`jira issue view ${issue_display} --plain\` (description / acceptance criteria). jira-cli 미설치/미인증 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — Jira 이슈 본문/AC 붙여줘.\\nORCH_MSG\` 로 fallback."
         ;;
     none|*)
         if [ "$no_issue" -eq 1 ] && [ "$tracker" != "none" ]; then

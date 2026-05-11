@@ -375,7 +375,7 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 | `linear` | `mcp__linear-server__get_issue <issue_id>` 로 컨텍스트 fetch. issue-down 시 Done 처리, REPORT 의 stale docs → Linear sub-issue 자동 생성. | Linear MCP 서버 등록 (`~/.claude.json` 의 mcpServers). |
 | `github` | `gh issue view N --repo <github_issue_repo>` 로 fetch. stale docs → `gh issue create` 로 GitHub issue 생성. | `github_issue_repo` 필수 (이슈가 사는 저장소). 이미 `gh auth login` 되어있어야. |
 | `gitlab` | `glab issue view <id> --repo <github_issue_repo>` 로 fetch (gitlab 환경에선 `github_issue_repo` 가 group/project alias 로 재해석). glab 미설치/미인증 시 leader 가 orch/사용자에게 spec 요청으로 fallback. | `glab auth login` 권장. `github_issue_repo` 는 선택 (현재 cwd repo 로 fallback). |
-| `jira` | 자동 fetch 미지원. leader 가 orch / 사용자에게 spec 직접 요청 (metadata 만 저장). | 없음. 후속 자동 fetch 는 향후 작업. |
+| `jira` | `jira issue view <key> --plain` 로 fetch ([ankitpokhrel/jira-cli](https://github.com/ankitpokhrel/jira-cli)). 미설치/미인증 시 spec 요청 fallback. | `jira-cli` 설치 + `~/.config/.jira/.config.yml` 에 사이트 URL / 토큰 등록. |
 | `none` | 트래커 호출 없음. leader 가 orch 에 spec 직접 요청 → orch 가 사용자에게 묻고 spec 을 leader inbox 로 전달. stale docs 는 REPORT.html 에만 기록 (자동 이슈 생성 안 함). | 없음. 가장 가벼움. |
 
 내부적으로 worker_id 는 사용자가 `/orch:issue-up <id>` 에 넘긴 `<id>` 를 그대로 사용 — `[A-Za-z0-9_-]+`, 대소문자 보존, `orch` 만 reserved. 0.12.0 이전엔 `mp-NN` 으로 강제 변환됐지만 0.13.0 부터 트래커 무관 (Linear `MP-13`, Jira `PROJ-456`, GitHub `142`, 자유 `issue42` 모두 입력값 그대로 식별자).
