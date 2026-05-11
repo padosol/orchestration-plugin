@@ -1,9 +1,14 @@
 {
-  "description": "orch plugin hooks. SessionStart 워커 역할 안내.",
+  "description": "orch plugin hooks. SessionStart 워커 역할 안내 + 하네스 설정 검증.",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/validate-harness.sh",
+            "timeout": 5
+          },
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh",
