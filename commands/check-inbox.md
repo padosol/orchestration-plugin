@@ -57,3 +57,45 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLU
 **중요**:
 - 작업이 길어질 것 같으면 보낸이에게 짧은 "접수 확인" 답신 먼저 보내고 본 작업 시작
 - 자기 권한 밖 일이면 leader/orch 에 escalate (직접 처리 X)
+
+---
+
+## 특수 라벨 처리 — `[phase-plan <issue_id>]` (orch 전용)
+
+leader 가 `/orch:send orch '[phase-plan <id>] ...'` 로 보낸 phase plan 메시지는 **사용자 컨펌 의무** 인 차단성 메시지다. leader 는 답이 올 때까지 phase 1 워커 spawn 을 막아둔 상태 — 빠른 처리가 곧 작업 진행.
+
+**처리 절차 (이 순서 그대로)**:
+
+1. 단건 모드로 본문 끝까지 읽기 (`/orch:check-inbox <id>`). phase plan 골격 파악: 작업 타입 / 몇 phase / 각 phase 산출물 / 의존 / 위험 포인트. 본문 전체를 그대로 사용자 화면에 표시 — 요약·생략 금지.
+2. **반드시 `AskUserQuestion` TUI** 로 사용자 컨펌 받기. plain text 로 "이대로 진행할까요?" 식 자유서술 질문 금지 — 답이 모호 (`응 ㅇㅋ`) 하면 leader 라우팅이 깨진다.
+
+   질문 1개, 3택:
+   - **GO** — 그대로 진행 (leader 가 phase 1 시작)
+   - **수정** — 변경 요구사항 있음 (사용자가 notes 로 적음)
+   - **취소** — 작업 중단 (leader cascade kill)
+
+3. 사용자 답을 받은 즉시 leader 에 forward — 본문 첫 줄에 명시 라벨:
+
+   | 사용자 답 | leader 에 송신할 본문 첫 줄 | 의미 |
+   |---|---|---|
+   | GO | `[plan-confirm] GO` | phase 1 진입하라 |
+   | 수정 | `[plan-revise] <사용자 notes>` | phases.md 갱신 후 재송신 (라운드 N+1) |
+   | 취소 | `[plan-cancel] <사유>` | `/orch:issue-down <id>` 로 정리하라 |
+
+   송신은 따옴표·줄바꿈 안전 위해 heredoc:
+   ```
+   bash -c "$ORCH_BIN_DIR/send.sh <leader_id> <<'ORCH_MSG'
+   [plan-confirm] GO
+   ORCH_MSG"
+   ```
+
+4. forward 송신 후 그 phase-plan 메시지 archive (`inbox-archive.sh <id>`).
+
+**왜 AskUserQuestion 강제?**
+- 자유서술 답 (`그래`, `좋아요`, `한 군데 빼고는 ok` 등) 은 GO 인지 수정인지 모호. 라우팅 잘못되면 leader 가 사용자 의도와 다른 방향으로 spawn → PR 비용 회수 불가.
+- TUI 의 미리정의 3택이 결정을 강제. 수정 사항은 notes 로 별도 받아 leader 에 그대로 forward.
+
+**금지**:
+- ❌ 사용자에게 묻지 않고 GO 자동 forward — leader 가 임의 방향 진행 위험.
+- ❌ phase plan 본문 요약·생략 — 사용자가 풀 본문 보고 결정해야 함. AskUserQuestion 호출 직전 본문 전체를 사용자 화면에 보여줄 것.
+- ❌ phase-plan 메시지를 일반 `●` 답신처럼 자유서술 회신 — 라벨 규약 깨짐.

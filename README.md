@@ -169,6 +169,32 @@ PROJ-456/repo-a       ← PROJ-456 산하 repo-a 프로젝트 워커
 
 ---
 
+## 작업 타입 — 워크플로우 분기
+
+이슈가 feature 인지 bug 인지 refactor 인지에 따라 좋은 phase 구조와 review 잣대가 다르다. leader 는 phase plan 을 짜기 직전 **작업 타입을 1회 결정** 하고, 그 타입에 맞는 가이드 (`references/workflows/<type>.md`) 를 phase 골격 + reviewer 체크리스트 잣대로 사용한다.
+
+| 타입 | 핵심 질문 | 강조 |
+|---|---|---|
+| **feature** | "무엇이 가능해져야 하는가?" | 요구사항 정의 / 인터페이스 설계 / 테스트 케이스 / 엣지 케이스 |
+| **bug** | "왜 기대와 다르게 동작하는가?" | **재현 → 회귀 테스트 → 최소 변경**. 증상 가리기 (try/except 삼키기 / 기본값 무마) 금지 |
+| **refactor** | "동작은 그대로 두고 구조를 더 낫게?" | **characterization test 로 외부 동작 고정 → 작은 단위 변경**. 기능 변경 섞기 금지 |
+
+**판별 절차** (leader 가 phase plan 직전 1회 수행):
+
+1. spec 의 label / title prefix / (Jira) issuetype 으로 자동 추론:
+   - `feature` — label `feature|feat|enhancement|new` / title `feat:|feature:` / Jira Story·New Feature
+   - `bug` — label `bug|defect|regression` / title `fix:|bug:` / Jira Bug
+   - `refactor` — label `refactor|refac|cleanup|tech-debt` / title `refactor:|refac:`
+2. 모호하면 **AskUserQuestion** TUI 로 한 번 묻기 (3택). 추측 진행 금지.
+3. 결정 직후 `.orch/runs/<id>/type` 에 한 줄 기록 (reviewer 가 같은 가이드 적용하도록).
+4. 해당 가이드의 'Phase 템플릿' 절을 phase plan 의 골격으로 사용.
+
+**reviewer 도 같은 가이드 따름** — `review-spawn` 이 `.orch/runs/<id>/type` 을 읽어 reviewer first_msg 에 가이드 경로 주입. bug PR 은 재현/회귀 테스트 우선, refactor PR 은 외부 동작 보존 + 기능 변경 혼입 차단 우선.
+
+가이드 본문은 `references/workflows/{feature,bug,refactor}.md` 에서 직접 수정 가능 (플러그인 자체 개선 루프 대상).
+
+---
+
 ## Phase Plan — 순차 실행 강제
 
 비-blocking 으로 여러 워커가 동시에 진행되면 산출물 의존이 있는데도 병렬 실행되어 순서가 꼬이는 사고가 발생한다. 이를 막기 위해 **leader 가 phase plan 을 사용자 컨펌 받고 phase 단위 순차 실행** 한다.
@@ -194,9 +220,19 @@ PROJ-456/repo-a       ← PROJ-456 산하 repo-a 프로젝트 워커
   - 사용 워커: MP-13/ui feat
   - 의존: Phase 1
   ```
-- **흐름**: leader 가 spec 받자마자 phases.md 작성 → orch 로 `[phase-plan <issue_id>]` 송신 → 사용자 GO → Phase 1 만 spawn → 완료 보고 후 Phase 2 ...
+- **흐름**: leader 가 spec 받자마자 phases.md 작성 → orch 로 `[phase-plan <issue_id>]` 송신 → **orch 가 AskUserQuestion TUI 로 컨펌 받음** (GO / 수정 / 취소 3택) → 결과를 라벨 형식으로 leader 에 forward → leader 가 라벨에 따라 분기.
 - **단순 이슈** 도 phase 1개로 표현 (Phase 1: 수정 + PR + 머지) — 일관성 확보 + 사용자가 흐름 따라가기 쉬움.
 - **금지**: phase plan 사용자 GO 받기 전 워커 spawn / 다중 phase 동시 진행.
+
+### 컨펌 응답 라벨 (orch → leader)
+
+| 사용자 TUI 답 | orch 가 leader 에 보내는 본문 첫 줄 | leader 동작 |
+|---|---|---|
+| GO | `[plan-confirm] GO` | Phase 1 워커 spawn 시작 |
+| 수정 | `[plan-revise] <사용자 notes>` | phases.md 갱신 → 다시 `[phase-plan ...]` 송신 (라운드 N+1) |
+| 취소 | `[plan-cancel] <사유>` | `/orch:issue-down <id>` 호출해 cascade kill |
+
+자유서술 답 (`응 ㅇㅋ`, `한 군데만 빼고`) 은 라벨이 모호해져 leader 라우팅이 깨지므로 orch 는 **반드시 AskUserQuestion 으로** 받는다. plain text 답신 보내는 건 금지.
 
 ## Worker → Leader 차단 질문 (`wait-reply.sh`)
 
