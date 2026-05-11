@@ -273,7 +273,7 @@ orch_settings_global() {
     jq -r --arg f "$field" '.[$f] // ""' "$ORCH_SETTINGS"
 }
 
-# 이슈 트래커 — linear | github | none.
+# 이슈 트래커 — linear | jira | github | gitlab | none.
 # 필드 누락 시 'linear' (legacy 0.3.x 이하 워크스페이스 backwards-compat — 그때는 항상 Linear).
 # 잘못된 값도 'linear' 로 폴백 (안전한 기본).
 orch_settings_issue_tracker() {
@@ -281,8 +281,20 @@ orch_settings_issue_tracker() {
     local v
     v="$(jq -r '.issue_tracker // "linear"' "$ORCH_SETTINGS")"
     case "$v" in
-        linear|github|none) printf '%s' "$v" ;;
+        linear|jira|github|gitlab|none) printf '%s' "$v" ;;
         *) printf 'linear' ;;
+    esac
+}
+
+# git 호스트 — github | gitlab | none. 누락 시 'none'.
+# 후속 라이프사이클 (PR 자동화 / cleanup) 분기에서 사용.
+orch_settings_git_host() {
+    orch_settings_require || { printf 'none'; return 1; }
+    local v
+    v="$(jq -r '.git_host // "none"' "$ORCH_SETTINGS")"
+    case "$v" in
+        github|gitlab|none) printf '%s' "$v" ;;
+        *) printf 'none' ;;
     esac
 }
 
@@ -298,22 +310,19 @@ orch_settings_project_exists() {
     [ "$(jq -r --arg p "$project" '.projects[$p] // empty' "$ORCH_SETTINGS")" != "" ]
 }
 
-# 프로젝트의 기본 브랜치 결정 — projects.<alias>.default_base_branch > global default_base_branch > "develop".
-# 모든 워크스페이스가 develop 플로우는 아니다 (예: lol-db-schema 는 main). 프로젝트별 override 가
-# 핵심 안전장치 — 없으면 leader-spawn 이 origin/develop fetch 에서 silently fail 한 뒤 worktree
-# add 가 'fatal: invalid reference: origin/develop' 로 죽는 것을 막는다.
+# 프로젝트의 기본 브랜치 결정 — projects.<alias>.default_base_branch 만 사용. 누락이면 "develop".
+# 모든 워크스페이스가 develop 플로우는 아니다 (예: lol-db-schema 는 main). 프로젝트별 값이
+# 핵심 안전장치 — 0.12.0 이전엔 root .default_base_branch 가 폴백이었지만 프로젝트별 키만
+# 의미있다는 결정에 따라 제거. 누락 시 leader-spawn 이 origin/develop fetch 에서 silently
+# fail 한 뒤 worktree add 가 'fatal: invalid reference: origin/develop' 로 죽는 것을 알리기 위해
+# 마지막 폴백은 'develop' 그대로.
 orch_settings_project_base_branch() {
     local project="$1"
     orch_settings_require || return 1
-    local override global
+    local override
     override="$(orch_settings_project_field "$project" default_base_branch 2>/dev/null || true)"
     if [ -n "$override" ]; then
         printf '%s' "$override"
-        return 0
-    fi
-    global="$(orch_settings_global default_base_branch 2>/dev/null || true)"
-    if [ -n "$global" ]; then
-        printf '%s' "$global"
         return 0
     fi
     printf 'develop'
@@ -749,10 +758,6 @@ orch_cleanup_merged_worktrees() {
         return 0
     fi
 
-    local default_base
-    default_base="$(orch_settings_global default_base_branch 2>/dev/null || true)"
-    [ -n "$default_base" ] || default_base="develop"
-
     local sub_wid role worktree_path project_path branch project_base current_branch any=0
     local cleaned=0 kept=0 skipped=0 partial=0
     declare -A pulled_paths=()
@@ -775,9 +780,9 @@ orch_cleanup_merged_worktrees() {
             continue
         fi
 
-        # 각 프로젝트의 default_base_branch override 우선, 없으면 글로벌.
+        # 프로젝트별 default_base_branch (없으면 'develop' 으로 폴백 — orch_settings_project_base_branch 책임).
         project_base="$(orch_settings_project_base_branch "$role" 2>/dev/null || true)"
-        [ -n "$project_base" ] || project_base="$default_base"
+        [ -n "$project_base" ] || project_base="develop"
 
         # project_path 의 local <base> ref 갱신 (project당 1회). 현재 체크아웃이 base 면
         # pull --ff-only, 다른 브랜치에 있으면 fetch <base>:<base> 로 working tree 안

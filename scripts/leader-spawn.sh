@@ -118,12 +118,11 @@ else
     # origin/<base_branch> 가 실제로 없으면 fail-loud (silent || true 로 묵살하지 않음).
     # 없으면 잘못된 base 에서 worktree 가 만들어지거나 (HEAD 기준), 'invalid reference' 로 죽는다.
     if ! git -C "$project_path" rev-parse --verify --quiet "refs/remotes/origin/$base_branch" >/dev/null; then
-        global_default="$(orch_settings_global default_base_branch 2>/dev/null || true)"
         cat >&2 <<EOF
 ERROR: origin/$base_branch 가 $project_path 에 없음 — worktree 생성 불가.
-  - 이 프로젝트의 기본 브랜치가 다르면 settings.json projects.$project.default_base_branch 로 override:
+  - settings.json projects.$project.default_base_branch 가 잘못됐을 가능성. 갱신 예시:
       jq '.projects.$project.default_base_branch = "main"' .orch/settings.json
-  - 워크스페이스 default: ${global_default:-develop} (글로벌 .default_base_branch)
+  - 또는 /orch:setup --update 로 git remote 자동 감지값 다시 받기.
   - 사용 가능한 원격 브랜치: $(git -C "$project_path" branch -r 2>/dev/null | sed 's/^ *//' | tr '\n' ' ')
 EOF
         exit 2
