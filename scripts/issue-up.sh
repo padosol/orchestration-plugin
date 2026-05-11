@@ -110,6 +110,9 @@ case "$effective_tracker" in
             issue_fetch_step="1. \`gh issue view ${issue_num} --json title,body,labels,milestone\` (현재 cwd 의 repo 기준 — settings.json 의 github_issue_repo 미설정이라 해당 repo 인지 확인 필요)"
         fi
         ;;
+    jira|gitlab)
+        issue_fetch_step="1. settings.json 의 issue_tracker='${effective_tracker}' 는 자동 fetch 미지원 — orch 또는 사용자에게 ${mp_upper} spec 직접 요청 (\`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${mp_upper} spec 부탁 — ${effective_tracker} 이슈 본문/AC 붙여줘.\\nORCH_MSG\`)."
+        ;;
     none|*)
         if [ "$no_issue" -eq 1 ] && [ "$tracker" != "none" ]; then
             tracker_note="(이번 호출만 --no-issue — 워크스페이스 트래커 설정 ${tracker} 는 다음 호출부터 그대로 적용)"

@@ -91,7 +91,8 @@ worker_section() {
     if [ -d "$cwd" ]; then
         local branch base diff_stat git_log
         branch="$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
-        base="$(orch_settings_global default_base_branch 2>/dev/null || echo develop)"
+        # role 이 project alias 와 일치하면 그 프로젝트의 base, 아니면 (pm 등) develop 폴백.
+        base="$(orch_settings_project_base_branch "$role" 2>/dev/null || echo develop)"
         printf -- '- worktree: 살아있음\n'
         printf -- '- branch: %s (base: origin/%s)\n' "$branch" "$base"
         printf -- '- diff stat (origin/%s..HEAD):\n' "$base"

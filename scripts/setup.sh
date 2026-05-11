@@ -16,6 +16,13 @@ orch_install_error_trap "$0"
 UPDATE_MODE=0
 ISSUE_TRACKER=""
 GITHUB_ISSUE_REPO=""
+GIT_HOST=""
+NOTIFY=""
+USAGE='사용법: /orch:setup [--update]
+                  [--issue-tracker linear|jira|github|gitlab|none]
+                  [--github-repo owner/repo]
+                  [--git-host github|gitlab|none]
+                  [--notify on|off]'
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --update) UPDATE_MODE=1 ;;
@@ -23,15 +30,15 @@ while [ "$#" -gt 0 ]; do
             shift
             ISSUE_TRACKER="${1:-}"
             case "$ISSUE_TRACKER" in
-                linear|github|none) ;;
-                *) echo "ERROR: --issue-tracker 는 linear|github|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
+                linear|jira|github|gitlab|none) ;;
+                *) echo "ERROR: --issue-tracker 는 linear|jira|github|gitlab|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
             esac
             ;;
         --issue-tracker=*)
             ISSUE_TRACKER="${1#--issue-tracker=}"
             case "$ISSUE_TRACKER" in
-                linear|github|none) ;;
-                *) echo "ERROR: --issue-tracker 는 linear|github|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
+                linear|jira|github|gitlab|none) ;;
+                *) echo "ERROR: --issue-tracker 는 linear|jira|github|gitlab|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
             esac
             ;;
         --github-repo)
@@ -41,7 +48,37 @@ while [ "$#" -gt 0 ]; do
         --github-repo=*)
             GITHUB_ISSUE_REPO="${1#--github-repo=}"
             ;;
-        *) echo "사용법: /orch:setup [--update] [--issue-tracker linear|github|none] [--github-repo owner/repo]" >&2; exit 2 ;;
+        --git-host)
+            shift
+            GIT_HOST="${1:-}"
+            case "$GIT_HOST" in
+                github|gitlab|none) ;;
+                *) echo "ERROR: --git-host 는 github|gitlab|none ('$GIT_HOST')" >&2; exit 2 ;;
+            esac
+            ;;
+        --git-host=*)
+            GIT_HOST="${1#--git-host=}"
+            case "$GIT_HOST" in
+                github|gitlab|none) ;;
+                *) echo "ERROR: --git-host 는 github|gitlab|none ('$GIT_HOST')" >&2; exit 2 ;;
+            esac
+            ;;
+        --notify)
+            shift
+            NOTIFY="${1:-}"
+            case "$NOTIFY" in
+                on|off) ;;
+                *) echo "ERROR: --notify 는 on|off ('$NOTIFY')" >&2; exit 2 ;;
+            esac
+            ;;
+        --notify=*)
+            NOTIFY="${1#--notify=}"
+            case "$NOTIFY" in
+                on|off) ;;
+                *) echo "ERROR: --notify 는 on|off ('$NOTIFY')" >&2; exit 2 ;;
+            esac
+            ;;
+        *) echo "$USAGE" >&2; exit 2 ;;
     esac
     shift
 done
@@ -207,12 +244,26 @@ for d in "${candidates[@]}"; do
 done
 
 tracker_for_init="${ISSUE_TRACKER:-none}"
+git_host_for_init="${GIT_HOST:-none}"
+# --notify 미지정 시 false (소음 없는 기본). on 만 명시적으로 true.
+notify_for_init=false
+[ "$NOTIFY" = "on" ] && notify_for_init=true
+
 new_settings="$(jq -n \
     --arg base "$BASE_DIR" \
     --arg tracker "$tracker_for_init" \
     --arg gh_repo "$GITHUB_ISSUE_REPO" \
+    --arg git_host "$git_host_for_init" \
+    --argjson notify_enabled "$notify_for_init" \
     --argjson projects "$projects_json" \
-    '{version: 1, base_dir: $base, default_base_branch: "develop", issue_tracker: $tracker, projects: $projects}
+    '{
+        version: 1,
+        base_dir: $base,
+        issue_tracker: $tracker,
+        git_host: $git_host,
+        notify: { slack_enabled: $notify_enabled },
+        projects: $projects
+     }
      | if $gh_repo != "" then .github_issue_repo = $gh_repo else . end'
 )"
 
@@ -225,11 +276,19 @@ new_settings="$(jq -n \
 #   $old 의 description/tech_stack/override 가 통째로 사라지는 사고가 있었음.
 #   path 는 절대경로로 stable 식별자라 prefix/glob 변동에 강함.
 if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
-    # 인자로 받은 ISSUE_TRACKER 가 있으면 override, 없으면 기존 값 유지
+    # --notify 인자: on/off 명시면 override, 미지정이면 기존 값 유지. 빈 문자열을 빈 채로 jq 에 넘기고
+    # 안에서 분기. (true/false 둘 다 받아야 하므로 --argjson 으로 boolean 직렬화.)
+    notify_override="null"
+    [ "$NOTIFY" = "on" ] && notify_override="true"
+    [ "$NOTIFY" = "off" ] && notify_override="false"
+
+    # 인자로 받은 ISSUE_TRACKER / GIT_HOST 가 있으면 override, 없으면 기존 값 유지
     new_settings="$(jq \
         --slurpfile cur "$ORCH_SETTINGS" \
         --arg tracker "$ISSUE_TRACKER" \
         --arg gh_repo "$GITHUB_ISSUE_REPO" \
+        --arg git_host "$GIT_HOST" \
+        --argjson notify_override "$notify_override" \
         '
         . as $new |
         ($cur[0] // {}) as $old |
@@ -241,6 +300,10 @@ if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
           then ( if $gh_repo != "" then $gh_repo
                  else ($old.github_issue_repo // "") end )
           else "" end ) as $final_gh_repo |
+        ( if $git_host != "" then $git_host
+          else ($old.git_host // "none") end ) as $final_git_host |
+        ( if $notify_override != null then $notify_override
+          else ($old.notify.slack_enabled // false) end ) as $final_notify_enabled |
 
         # ── projects 머지 (alias-by-path) ──
         # 1) old 를 path 로 인덱스. path 비어있는 entry 는 alias 그대로 가는 orphan 트랙.
@@ -279,12 +342,12 @@ if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
         {
           version: ($old.version // $new.version),
           base_dir: ($old.base_dir // $new.base_dir),
-          default_base_branch: ($old.default_base_branch // $new.default_base_branch),
           issue_tracker: $final_tracker,
+          git_host: $final_git_host,
+          notify: ( ($old.notify // {}) + { slack_enabled: $final_notify_enabled } ),
           projects: (($merged_new + $orphan_olds) | from_entries)
         }
         | if $final_gh_repo != "" then .github_issue_repo = $final_gh_repo else . end
-        | if ($old.notify // null) != null then .notify = $old.notify else . end
     ' <<<"$new_settings")"
 fi
 

@@ -68,7 +68,7 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 /orch:setup
 ```
 
-→ 산하 git repo 자동 발견해 `.orch/settings.json` 생성 (alias / path / kind / default_base_branch). 셋업 도중 **이슈 트래커 선택** (Linear / GitHub Issues / 없음) 을 묻는다 — 자세한 차이는 [이슈 트래커 선택](#이슈-트래커-선택) 절 참조.
+→ 산하 git repo 자동 발견해 `.orch/settings.json` 생성 (alias / path / kind / default_base_branch). 셋업 도중 **3 종 메타데이터** (이슈 트래커 / git 호스트 / Slack 알림) 를 `AskUserQuestion` TUI 로 묻는다 — 자세한 차이는 [이슈 트래커 / git 호스트 / 알림 선택](#이슈-트래커--git-호스트--알림-선택) 절 참조.
 
 이후 orch 와 평소처럼 대화하다가 큰 이슈가 떴을 때:
 
@@ -333,9 +333,11 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 
 ```json
 {
-  "default_base_branch": "develop",
+  "version": 1,
+  "base_dir": "/abs/workspace",
   "issue_tracker": "linear",
   "github_issue_repo": "owner/repo",
+  "git_host": "github",
   "notify": { "slack_enabled": false },
   "projects": {
     "repo-a": {
@@ -349,24 +351,40 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 }
 ```
 
-- `default_base_branch` 결정 우선순위: 프로젝트별 override → 글로벌 → `develop`.
+- `default_base_branch` 는 **프로젝트별 키만 의미있음** (0.12.0 부터 root 글로벌 필드 제거). 누락 시 `/orch:setup` 의 후속 절차가 AskUserQuestion 으로 채움. 그래도 비어 있으면 폴백은 `develop` 하드코딩.
 - `/orch:setup` 이 `git symbolic-ref refs/remotes/origin/HEAD` 로 자동 감지. 한 워크스페이스에 develop / main 플로우 섞여 있어도 안전.
 - `/orch:validate-settings` 로 description / tech_stack 이 실제 repo 와 어긋나는지 점검.
-- `issue_tracker` / `github_issue_repo` 는 다음 절 참조.
+- `issue_tracker` / `github_issue_repo` / `git_host` / `notify` 는 다음 절 참조.
 
-### 이슈 트래커 선택
+### 이슈 트래커 / git 호스트 / 알림 선택
 
-`/orch:setup` 시 한 번 선택. 변경하려면 `/orch:setup --update --issue-tracker <new>` (github 면 `--github-repo owner/repo` 도).
+`/orch:setup` 시 3 종을 한 번에 묻는다 (`AskUserQuestion` TUI). 변경하려면 `/orch:setup --update --issue-tracker <new>` / `--git-host <new>` / `--notify on|off`.
+
+**Issue tracker (`issue_tracker`)**:
 
 | 값 | leader 가 하는 일 | 추가 셋업 |
 |---|---|---|
 | `linear` | `mcp__linear-server__get_issue MP-N` 으로 컨텍스트 fetch. issue-down 시 Done 처리, REPORT 의 stale docs → Linear sub-issue 자동 생성. | Linear MCP 서버 등록 (`~/.claude.json` 의 mcpServers). |
 | `github` | `gh issue view N --repo <github_issue_repo>` 로 fetch. stale docs → `gh issue create` 로 GitHub issue 생성. | `github_issue_repo` 필수 (이슈가 사는 저장소). 이미 `gh auth login` 되어있어야. |
+| `jira` | 자동 fetch 미지원. leader 가 orch / 사용자에게 spec 직접 요청 (metadata 만 저장). | 없음. 후속 자동 fetch 는 향후 작업. |
+| `gitlab` | 자동 fetch 미지원. leader 가 orch / 사용자에게 spec 직접 요청 (metadata 만 저장). | 없음. 후속 자동 fetch 는 향후 작업. |
 | `none` | 트래커 호출 없음. leader 가 orch 에 spec 직접 요청 → orch 가 사용자에게 묻고 spec 을 leader inbox 로 전달. stale docs 는 REPORT.html 에만 기록 (자동 이슈 생성 안 함). | 없음. 가장 가벼움. |
 
 내부적으로 worker_id 는 항상 `mp-NN` 형식 — 트래커 종류와 무관 (`MP` 는 multi-project 의 약자, Linear-specific 아님). `/orch:issue-up <num>` 의 `<num>` 만 트래커별 의미가 다르다 (Linear MP-N / GitHub issue # / 자유 식별자).
 
 **한 번만 이슈 없이 띄우기**: `--no-issue` 플래그. 워크스페이스가 `linear` / `github` 모드여도 이번 호출만 fetch 스킵, leader 가 orch 에 spec 직접 요청. 이슈 만들기 번거로운 작은 작업이나 try-out 에 유용.
+
+**Git host (`git_host`)**:
+
+| 값 | 동작 |
+|---|---|
+| `github` | `gh` 기반 PR 라이프사이클 (await-merge / post-review / pr_open 알림) 가능. 현재 자동화 지원하는 유일한 호스트. |
+| `gitlab` | metadata 저장만. PR/MR 자동화는 향후 작업 (`glab` 통합 예정). |
+| `none` | git 호스트 미사용 (로컬 전용 또는 self-hosted). PR 자동화 비활성. |
+
+**Notify (`notify.slack_enabled`)**:
+
+`on` 으로 켜면 Slack 알림 6 카테고리가 활성화됨. 자세한 셋업은 [Slack 알림](#slack-알림-선택) 절.
 
 ---
 
@@ -379,7 +397,7 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 → 마지막 30줄 + 활동 시각 + inbox 카운트. claude 가 사용자 입력 대기 중인지 확인.
 
 **`fatal: invalid reference: origin/<base>`**:
-프로젝트 entry 의 `default_base_branch` 가 원격에 없는 경우. `/orch:setup` 재실행 또는 `settings.json` 직접 수정.
+프로젝트 entry 의 `default_base_branch` 가 원격에 없거나 비어 있는 경우 (0.12.0 부터 root 글로벌 fallback 제거 — 누락 시 `develop` 하드코딩 폴백뿐이라 develop 없는 repo 는 무조건 깨짐). `/orch:setup --update` 로 git remote 자동 감지값 다시 받거나 `settings.json` 직접 수정.
 
 **머지된 worktree / 로컬 브랜치 잔재**:
 `/orch:issue-down` 이 자동 정리. 그래도 남아 있으면 `git worktree prune` + `git branch -D <branch>` 수동.
