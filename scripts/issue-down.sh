@@ -161,9 +161,11 @@ fi
 orch_worker_unregister "$mp_id"
 orch_inbox_cleanup "$mp_id"
 
+# REPORT.html 생성 안내 — leader 가 cascade shutdown 직전 직접 생성하는 게 정상 흐름이라
+# 보통 archive_dir 안에 이미 REPORT.html 존재. 없으면 사용자가 archive 보고 수동 복구.
 report_hint=""
-if [ "$do_report" -eq 1 ] && [ -f "$archive_dir/REPORT-data.md" ]; then
-    report_hint=" **REPORT.html 자동 작성 요청** — 인박스 처리 시점에 \`/orch:report $mp_id\` 실행해 archive 의 REPORT-data.md 를 받아 REPORT.html 을 작성하세요."
+if [ "$do_report" -eq 1 ] && [ -f "$archive_dir/REPORT-data.md" ] && [ ! -f "$archive_dir/REPORT.html" ]; then
+    report_hint=" ⚠ REPORT.html 누락 — leader 가 종료 직전 생성 단계를 건너뜀. 사용자가 \`/orch:report $mp_id\` 로 archive 의 REPORT-data.md 를 받아 수동 복구 가능."
 fi
 
 # cleanup 요약 — leader pane stdout 이 곧 사라져 운영자가 결과를 볼 수 없으므로 inbox 알림에 포함.

@@ -127,11 +127,17 @@ ${issue_fetch_step}
 2. cat .orch/settings.json — 사용 가능 프로젝트: ${projects_blob}
 3. 어느 프로젝트(들)에서 작업할지 결정. 모호하면 후보 \`<path>/CLAUDE.md\` 확인. 그래도 불확실하면 orch 에 질문 — 잘못된 프로젝트에 spawn 금지.
 
-[워커 spawn]
-  /orch:leader-spawn <project> [type]   # type: feat | fix | refactor | chore | docs | test (기본 feat)
+[워커 spawn — 3 역할]
+  /orch:leader-spawn <project> [type]                    # developer (구현). worker_id=mp-NN/<project>.
+  /orch:leader-spawn <project> [type] --role pm          # PM (분석·아키텍처·스펙·API·DB 모델). worker_id=mp-NN/pm.
+  /orch:review-spawn <project> <pr>                      # reviewer (코드 리뷰).
+
+type: feat | fix | refactor | chore | docs | test (dev 기본 feat / pm 기본 docs).
+
+**복잡 분석/스펙/API/데이터모델 필요한 MP 는 PM 먼저 spawn → 사용자 컨펌 → developer.** 단순 fix·refactor 는 PM 생략 가능.
 
 [메시지 — Hub-and-Spoke]
-- 산하 지시: /orch:send ${mp_id}/<project> '<지시>'
+- 산하 지시: /orch:send ${mp_id}/<role> '<지시>' (<role> = project alias 또는 pm)
 - orch 보고: /orch:send orch '<요약>'
 - 워커끼리 / 다른 MP / 다른 프로젝트 직접 통신 차단됨 — 의존 생기면 leader 라우팅 또는 orch escalate.
 - **따옴표·줄바꿈·백틱 메시지는** Bash heredoc 필수:
@@ -140,6 +146,15 @@ ${issue_fetch_step}
     ORCH_MSG\"
   슬래시 /orch:send 는 \$ARGUMENTS 가 셸 파서 깨뜨려 특수문자 실패. \$ORCH_BIN_DIR 자동 export 됨.
 
+[Direction Check 라우팅 — PM 산출물 필수 컨펌]
+PM 으로부터 \`[direction-check]\` 라벨 메시지 받으면:
+1. 즉시 본문 그대로 orch 로 forward: \`/orch:send orch '[direction-check from ${mp_id}/pm] <본문>'\` (heredoc 권장).
+2. orch → leader inbox 로 사용자 답신 도착 → PM 으로 forward.
+3. **그 사이 PM 산출물에 의존하는 developer/reviewer spawn 보류** — 사용자 GO 전 후속 워커 차단.
+4. PM 이 큰 결정마다 재발송할 수 있음 — 매번 같은 절차로 forward.
+
+본문 임의 요약·삭제 금지. leader 의 의견은 별도 메시지로 첨부 가능하나 PM 원문은 그대로.
+
 [PR 4단계]
 1. **CI**: 워커가 \`gh pr checks <pr> --watch --required\` 로 자기 책임. 통과하면 'PR #N ready for review + URL' 답신.
 2. **리뷰**: ready 받으면 즉시 /orch:review-spawn <project> <pr>. reviewer 답신은 \`[review PR #N] LGTM\` 또는 \`needs-changes\` + 코멘트.
@@ -147,7 +162,16 @@ ${issue_fetch_step}
    - **LGTM** → 답신 그대로 작업 워커에 라우팅. 워커가 자동으로 wait-merge.sh 진입 (별도 '머지 대기' 지시 불필요).
    ⚠ LGTM 라우팅 후 워커가 wait-merge 안 들어가고 멈춰 있으면 \"\\\$ORCH_BIN_DIR/wait-merge.sh <pr> 실행\" 명시 트리거.
 3. **머지 대기**: 워커 wait-merge.sh 30s 폴링. 사용자 머지 시 'PR #N merged' 답신 후 자동 종료. exit 1 / 2 면 워커 보고 → escalate.
-4. **종료**: 모든 워커 종료 후 /orch:issue-down ${mp_id} → cascade kill + worktree 정리 + REPORT 자동 작성 + leader 자기 pane 종료.
+4. **종료** (REPORT 본인 생성 후 cascade shutdown):
+   a. 모든 워커 종료 확인.
+   b. scope dump → REPORT-data.md:
+        \`bash -c '\$ORCH_BIN_DIR/report.sh ${mp_id} > '\"\$(\$ORCH_BIN_DIR/lib.sh; orch_scope_dir ${mp_id} 2>/dev/null)\"'/REPORT-data.md'\`
+        (또는 scope_dir 알면 직접 경로. \`/orch:report\` 슬래시도 가능)
+   c. REPORT-data.md 해석 → \`render_report.py\` 스키마 JSON (/tmp/orch-report-${mp_id}.json) — 7 섹션 narrative 포함.
+   d. HTML 렌더: \`python3 \$ORCH_BIN_DIR/render_report.py /tmp/orch-report-${mp_id}.json <scope_dir>/REPORT.html\`
+   e. \`/orch:issue-down ${mp_id}\` → cascade kill + worktree 정리 + scope archive (REPORT-data.md + REPORT.html 자동 포함) + leader 자기 pane 종료.
+
+   leader 가 c-d 단계를 깜빡해도 b 는 issue-down 이 안전망으로 다시 생성. REPORT.html 만 누락 가능 — 사용자가 archive 보고 \`/orch:report <mp_id>\` 수동 호출로 복구.
 
 [테스트·컨텍스트]
 - 크로스-프로젝트 E2E SKIP — 후속 이슈 메모. 워커 작업 독립 가정.
