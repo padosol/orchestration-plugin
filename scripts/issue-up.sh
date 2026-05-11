@@ -118,8 +118,18 @@ case "$effective_tracker" in
             issue_fetch_step="1. \`gh issue view ${issue_num} --json title,body,labels,milestone\` (현재 cwd 의 repo 기준 — settings.json 의 github_issue_repo 미설정이라 해당 repo 인지 확인 필요)"
         fi
         ;;
-    jira|gitlab)
-        issue_fetch_step="1. settings.json 의 issue_tracker='${effective_tracker}' 는 자동 fetch 미지원 — orch 또는 사용자에게 ${issue_display} spec 직접 요청 (\`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — ${effective_tracker} 이슈 본문/AC 붙여줘.\\nORCH_MSG\`)."
+    gitlab)
+        # GitLab Issues 자동 fetch — glab CLI 경유. issue_num 이 있으면 그 번호로,
+        # 없으면 issue_display 그대로 (glab 가 reference 형식도 받음).
+        if [ -n "$gh_repo" ]; then
+            # github_issue_repo 가 gitlab 환경에서는 group/project 로 재해석됨
+            issue_fetch_step="1. \`glab issue view ${issue_num:-$issue_display} --repo ${gh_repo} --output json\` (description / labels / milestone). glab 미설치/미인증 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — GitLab 이슈 본문/AC 붙여줘.\\nORCH_MSG\` 로 fallback."
+        else
+            issue_fetch_step="1. \`glab issue view ${issue_num:-$issue_display} --output json\` (현재 cwd 의 project 기준 — settings.json 의 github_issue_repo 미설정이라 해당 project 인지 확인 필요). glab 미설치/미인증 시 send.sh orch 로 spec 요청 fallback."
+        fi
+        ;;
+    jira)
+        issue_fetch_step="1. settings.json 의 issue_tracker='jira' 는 자동 fetch 미지원 — orch 또는 사용자에게 ${issue_display} spec 직접 요청 (\`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — Jira 이슈 본문/AC 붙여줘.\\nORCH_MSG\`)."
         ;;
     none|*)
         if [ "$no_issue" -eq 1 ] && [ "$tracker" != "none" ]; then

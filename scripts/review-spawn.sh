@@ -92,7 +92,14 @@ case "$tracker" in
             issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_review} (현재 repo 기준)"
         fi
         ;;
-    jira|gitlab) issue_lookup_line="- 이슈 컨텍스트: ${tracker} 자동 fetch 미지원 — PR description / leader 가 보낸 spec 으로 판단 (이슈 키 ${issue_display})" ;;
+    gitlab)
+        if [ -n "$gh_repo" ]; then
+            issue_lookup_line="- 이슈 컨텍스트: glab issue view ${issue_num_review:-$issue_display} --repo ${gh_repo} (glab 미설치/미인증 시 PR description 으로 판단)"
+        else
+            issue_lookup_line="- 이슈 컨텍스트: glab issue view ${issue_num_review:-$issue_display} (현재 project 기준; glab 미설치/미인증 시 PR description 으로 판단)"
+        fi
+        ;;
+    jira) issue_lookup_line="- 이슈 컨텍스트: Jira 자동 fetch 미지원 — PR description / leader 가 보낸 spec 으로 판단 (이슈 키 ${issue_display})" ;;
     none|*) issue_lookup_line="- 이슈 컨텍스트: 트래커 없음 — PR description / leader 가 보낸 spec 으로만 판단" ;;
 esac
 
