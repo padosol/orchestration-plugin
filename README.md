@@ -166,6 +166,57 @@ mp-13/repo-a      ← MP-13 산하 repo-a 프로젝트 워커
 
 ---
 
+## Phase Plan — 순차 실행 강제
+
+비-blocking 으로 여러 워커가 동시에 진행되면 산출물 의존이 있는데도 병렬 실행되어 순서가 꼬이는 사고가 발생한다. 이를 막기 위해 **leader 가 phase plan 을 사용자 컨펌 받고 phase 단위 순차 실행** 한다.
+
+- **소유**: leader (mp-NN). PM 워커는 설계 영역 (분석·아키텍처·스펙·API·DB 모델) 만 책임 — 그 산출물을 leader 가 받아 phase 분해.
+- **저장**: `.orch/runs/<mp_id>/phases.md` (운영 메타, scope archive 에 함께 보존).
+- **포맷 예시**:
+  ```
+  # MP-13 Phase Plan
+
+  ## Phase 0: 설계 (PM)
+  - 사용 워커: mp-13/pm docs
+  - 산출물: docs/spec/MP-13/api.md PR
+  - 완료 기준: PR merged
+
+  ## Phase 1: server 구현
+  - 사용 워커: mp-13/server feat
+  - 산출물: API 엔드포인트 PR
+  - 완료 기준: PR merged + 로컬 동기화
+  - 의존: Phase 0
+
+  ## Phase 2: ui 통합
+  - 사용 워커: mp-13/ui feat
+  - 의존: Phase 1
+  ```
+- **흐름**: leader 가 spec 받자마자 phases.md 작성 → orch 로 `[phase-plan MP-NN]` 송신 → 사용자 GO → Phase 1 만 spawn → 완료 보고 후 Phase 2 ...
+- **단순 MP** 도 phase 1개로 표현 (Phase 1: 수정 + PR + 머지) — 일관성 확보 + 사용자가 흐름 따라가기 쉬움.
+- **금지**: phase plan 사용자 GO 받기 전 워커 spawn / 다중 phase 동시 진행.
+
+## Worker → Leader 차단 질문 (`wait-reply.sh`)
+
+워커가 결정 필요한 질문을 leader 에 보낸 뒤 답을 못 받았는데 다른 마디로 진행하면 추측 작업이 PR 까지 가서 회수 불가능 비용. 이를 막기 위해 워커는 질문 송신 직후 `wait-reply.sh` 로 **차단 대기**.
+
+```bash
+qid="q-$(date +%s)-$RANDOM"
+bash -c "$ORCH_BIN_DIR/send.sh mp-13 <<ORCH_MSG
+[question:$qid]
+A vs B 결정 필요. 추천: A (이유 ...).
+ORCH_MSG"
+bash $ORCH_BIN_DIR/wait-reply.sh $qid     # ← 차단. 답 도착할 때까지 다음 마디 X.
+# wait-reply 가 stdout 으로 답 본문 + msg_id 출력.
+# 처리 후: bash $ORCH_BIN_DIR/inbox-archive.sh <msg_id>
+```
+
+- **마커 규약**: 워커 질문 `[question:<q-id>]`, leader 답 `[reply:<q-id>]` — 둘 다 본문에 포함.
+- **leader 응답 의무**: 워커가 `[question:...]` 마커 달면 wait-reply 로 막힌 상태. leader 는 답 미루지 말고 우선 처리. 결정이 사용자 차원이면 orch 로 forward 후 사용자 답을 같은 q-id 로 워커에 송신.
+- **timeout**: 기본 1h (`ORCH_WAIT_REPLY_TIMEOUT`). 도달 시 exit 2 → 워커가 leader 에 한 번 더 prompt 후 재대기.
+- **언제 wait-reply 안 쓰나**: 단발성 FYI / ack / 진행 보고는 비-blocking 그대로 (`[답신 불필요]` 마커 활용).
+
+---
+
 ## 사이클 종료 후 자가진단 → 개선 루프
 
 회고는 일회성 보고가 아니라 **다음 사이클의 입력**. 페인포인트가 plugin 자체 개선 이슈로 다시 들어와 워커 가이드 / 라이프사이클 / 라우팅을 점진적으로 다듬는다.
@@ -397,6 +448,7 @@ ORCH_MSG
 - 라이프사이클 / 라우팅 코드: `scripts/lib.sh`
 - MP 시작·종료: `scripts/issue-up.sh`, `scripts/issue-down.sh`
 - PR 머지 대기: `scripts/wait-merge.sh`
+- worker→leader 차단 질문: `scripts/wait-reply.sh`
 - REPORT 렌더러: `scripts/render_report.py`
 - 설정 검증: `skills/validate-settings/SKILL.md`
 - 우선순위 추천: `skills/prioritize-issues/SKILL.md`
