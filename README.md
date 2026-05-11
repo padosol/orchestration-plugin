@@ -3,14 +3,14 @@
 **한 명의 PM (orch) + 여러 명의 팀리더 (leader) + 그 산하 프로젝트 워커들** 을 tmux pane / git worktree / 파일 메일박스 위에 얹어 한 사람이 동시에 굴리도록 만든 Claude Code 플러그인.
 
 ```
-사용자 ─ orch ─┬─ MP-13 (leader) ───┬─ MP-13/repo-a       → PR #142
-              │                    ├─ MP-13/repo-b       → PR #143
-              │                    └─ MP-13/repo-c       → PR #144
-              └─ PROJ-456 (leader) ┬─ PROJ-456/repo-a    → PR #97
-                                   └─ PROJ-456/repo-b    → PR #166
+사용자 ─ orch ─┬─ issue-13 (leader) ─┬─ issue-13/repo-a   → PR #142
+              │                     ├─ issue-13/repo-b   → PR #143
+              │                     └─ issue-13/repo-c   → PR #144
+              └─ issue-42 (leader) ─┬─ issue-42/repo-a   → PR #97
+                                    └─ issue-42/repo-b   → PR #166
 ```
 
-각 leader / worker 는 자기 worktree + 자기 Claude 세션을 가진다. leader 식별자(`<issue_id>`)는 사용자가 `/orch:issue-up` 에 넘긴 이슈 키 그대로 — Linear `MP-13`, Jira `PROJ-456`, GitHub `142`, 자유 `issue42` 등 트래커 무관 (`[A-Za-z0-9_-]+`, 대소문자 보존). 모든 메시지는 hub-and-spoke — 워커끼리 직접 통신 차단, 항상 leader 경유.
+각 leader / worker 는 자기 worktree + 자기 Claude 세션을 가진다. leader 식별자(`<issue_id>`)는 사용자가 `/orch:issue-up` 에 넘긴 이슈 키 그대로 — 트래커 무관 (`[A-Za-z0-9_-]+`, 대소문자 보존). 모든 메시지는 hub-and-spoke — 워커끼리 직접 통신 차단, 항상 leader 경유.
 
 ---
 
@@ -25,9 +25,9 @@
 
 ## 빠른 시작
 
-처음 한 번 (1, 2) 셋업, 매번은 (3, 4) 한 줄.
+처음 한 번 (1, 2) 셋업, 이후 매 워크스페이스마다 (3, 4) 진행.
 
-### 1. 설치 (1회)
+### 1. 플러그인 설치 (1회)
 
 ```
 /plugin marketplace add padosol/padosol-marketplace
@@ -36,47 +36,45 @@
 
 scope 는 **project** 권장 (워크스페이스 `.claude/settings.json` 에 등록 → 해당 워크스페이스에서만 활성화).
 
-### 2. 셸 함수 등록 (1회)
-
-`.bashrc` / `.zshrc` 에:
+### 2. tmux 설치
 
 ```bash
-orch() {
-    local script
-    script="$(ls -d ~/.claude/plugins/cache/padosol/orch/*/scripts/bootstrap.sh 2>/dev/null | sort -V | tail -n1)"
-    [ -z "$script" ] && { echo "orch plugin not installed (run /plugin install orch@padosol)" >&2; return 1; }
-    bash "$script" "${1:-$PWD}"
-}
+sudo apt install tmux        # Debian/Ubuntu
+brew install tmux            # macOS
 ```
 
-`sort -V | tail -n1` 로 최신 semver 자동 선택.
+orch / leader / worker 가 각각 별도 pane 에서 Claude 세션을 들고 동시에 동작하기 때문에 필요.
 
-### 3. 워크스페이스 진입
+### 3. tmux 세션 시작 + orch 초기화
+
+신규 세션 (워크스페이스 첫 진입):
 
 ```bash
-orch ~/path/to/workspace   # 인자 없으면 cwd
+cd ~/path/to/workspace
+tmux new -s "$(basename "$PWD")"   # 세션 이름 = 디렉토리 basename 권장
+claude                              # tmux pane 안에서 Claude 실행
 ```
 
-- 신규 — tmux 세션 (이름 = 디렉토리 basename) 생성 → `claude` 실행 → `/orch:up` 자동 입력.
-- 기존 — 동일 이름 세션이 살아있으면 attach.
+Claude pane 안에서 워크스페이스당 한 번씩:
+
+```
+/orch:up      # 현재 pane 을 orch 로 등록
+/orch:setup   # .orch/settings.json 자동 생성 — 트래커 / git host / Slack 3종 메타를 AskUserQuestion TUI 로 묻는다
+```
+
+기존 세션 재진입:
+
+```bash
+tmux attach -t <session-name>
+```
 
 ### 4. 첫 이슈 위임
 
-신규 워크스페이스라면 orch pane 에서 한 번만:
+큰 이슈가 떴을 때:
 
 ```
-/orch:setup
-```
-
-→ 산하 git repo 자동 발견해 `.orch/settings.json` 생성. 셋업 도중 **3 종 메타데이터** (이슈 트래커 / git 호스트 / Slack 알림) 를 `AskUserQuestion` TUI 로 묻는다.
-
-이후 큰 이슈가 떴을 때:
-
-```
-/orch:issue-up MP-13              # Linear 이슈 키
-/orch:issue-up PROJ-456           # Jira 이슈 키
-/orch:issue-up 142                # GitHub Issue 번호
-/orch:issue-up issue-99 --no-issue # 트래커 설정 무관, leader 가 orch 에 spec 직접 요청
+/orch:issue-up issue-13              # 트래커 이슈 키 (Linear / Jira / GitHub / GitLab / 자유 식별자)
+/orch:issue-up issue-99 --no-issue   # 트래커 설정 무관 ad-hoc 작업, leader 가 orch 에 spec 직접 요청
 ```
 
 → leader pane 이 떠서 트래커별로 이슈 컨텍스트를 가져와 phase plan 을 orch 인박스로 보고 → 사용자 confirm → leader 가 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:issue-down <id>` 으로 정리 + REPORT.html.
