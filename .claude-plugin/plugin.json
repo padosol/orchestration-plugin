@@ -1,7 +1,7 @@
 {
   "name": "orch",
-  "description": "tmux 멀티 세션 오케스트레이션. leader_id 는 사용자가 /orch:issue-up 에 넘긴 트래커 키 그대로 ([A-Za-z0-9_-]+, 대소문자 보존 — Linear MP-13 / Jira PROJ-456 / GitHub 142 / 자유 issue42). leader 가 phase plan (.orch/runs/<id>/phases.md) 을 사용자 컨펌 받아 순차 실행, 워커는 wait-reply.sh 로 leader 답을 차단 대기. /orch:setup 이 issue_tracker(linear|jira|github|gitlab|none) + git_host(github|gitlab|none) + notify(on|off) 를 AskUserQuestion TUI 로 일괄 수집.",
-  "version": "0.13.0",
+  "description": "tmux 멀티 세션 오케스트레이션. leader_id 는 사용자가 /orch:issue-up 에 넘긴 트래커 키 그대로 ([A-Za-z0-9_-]+, 대소문자 보존 — Linear MP-13 / Jira PROJ-456 / GitHub 142 / GitLab #45 / 자유 issue42). leader 가 phase plan (.orch/runs/<id>/phases.md) 을 사용자 컨펌 받아 순차 실행, 워커는 wait-reply.sh 로 leader 답을 차단 대기. /orch:setup 이 issue_tracker(linear|jira|github|gitlab|none) + git_host(github|gitlab|none) + notify(on|off) 를 AskUserQuestion TUI 로 일괄 수집. 네 트래커 모두 자동 fetch: linear(mcp), github(gh issue view), gitlab(glab issue view), jira(jira-cli — ankitpokhrel/jira-cli).",
+  "version": "0.14.0",
   "author": {
     "name": "padosol"
   }
