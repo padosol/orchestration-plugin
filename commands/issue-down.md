@@ -47,3 +47,5 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh:*)
 - gh / git 양쪽 모두 머지 확인 못 하면 보존
 
 출력에 안내 메시지가 있으면 그대로 사용자에게 보여주세요.
+
+**잔재 수동 정리**: 자동 정리 후에도 worktree / 로컬 브랜치가 남아 있으면 `git worktree prune` + `git branch -D <branch>` 로 수동 보수.
