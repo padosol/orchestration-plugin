@@ -23,6 +23,7 @@
 5. **사이드이펙트 확인** — 성능 회귀 / 메모리 / 호출 빈도 / 로그 양 변화 없는지. 변경 전후 메트릭 비교.
 6. **불필요한 추상화 정리** — 새로 만들기보다 **있는 추상화도 의심**. 사용처 1곳뿐이면 인라인이 답. "혹시 나중에 …" 로 만들어진 인터페이스 / 팩토리는 제거 후보.
 7. **코드 리뷰** — 리뷰어는 "변경 후 코드만 봐도 의도가 명확한가" 기준으로 본다. 변경 이력을 모른다고 가정하고 신규 코드만 평가.
+8. **마무리 (모든 타입 공통)** — `/orch:report <issue_id>` 호출 (REPORT-data.md / REPORT.html + errors_check / ai_ready_check 후보 도출 + orch 인박스로 `[follow-up-candidates]` 송신) → `/orch:issue-down <issue_id>` 로 cascade shutdown. orch 가 `/orch:report` 자동 호출하지 않으므로 leader 가 이 단계를 빠뜨리면 REPORT.html 누락.
 
 ---
 

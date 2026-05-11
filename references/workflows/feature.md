@@ -17,6 +17,7 @@
 5. **구현** — 분할 단위 순차. 각 단위마다 테스트 통과 + 자체 PR.
 6. **검증** — 정상/예외 케이스 수동 확인, 기존 회귀 테스트 그린, UI 변경이면 브라우저로 사용해 보고 보고.
 7. **문서화 / 배포** — README / CHANGELOG / docs 업데이트. 배포 후 모니터링 포인트 (어떤 메트릭·로그를 봐야 회귀 감지?) 정의.
+8. **마무리 (모든 타입 공통)** — `/orch:report <issue_id>` 호출 (REPORT-data.md / REPORT.html + errors_check / ai_ready_check 후보 도출 + orch 인박스로 `[follow-up-candidates]` 송신) → `/orch:issue-down <issue_id>` 로 cascade shutdown. orch 가 `/orch:report` 자동 호출하지 않으므로 leader 가 이 단계를 빠뜨리면 REPORT.html 누락.
 
 ---
 

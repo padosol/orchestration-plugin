@@ -263,14 +263,23 @@ bash $ORCH_BIN_DIR/wait-reply.sh $qid     # ← 차단. 답 도착할 때까지 
 회고는 일회성 보고가 아니라 **다음 사이클의 입력**. 페인포인트가 plugin 자체 개선 이슈로 다시 들어와 워커 가이드 / 라이프사이클 / 라우팅을 점진적으로 다듬는다.
 
 ```
-issue-down ──→ REPORT-data.md ──→ /orch:report ──→ REPORT.html ──→ 페인포인트 발견
-                                                                        │
-plugin 개선 ←── version bump ←── PR 머지 ←── orch-plugin fix ←── 이슈 트래커 등록
+leader phase 마지막 ──→ /orch:report ──→ REPORT-data.md + REPORT.html
+                              │                    │
+                              │                    └─→ orch 인박스 [follow-up-candidates]
+                              ↓                              │
+                       /orch:issue-down                      ↓
+                              │                  사용자 검토 → 트래커 등록
+                              ↓
+                         archive 정리 (안전망 report.sh)
 ```
 
-#### 1. 자동 데이터 덤프
+#### 1. leader 가 호출 / 안전망 데이터 덤프
 
-`issue-down` 이 archive 직전에 `report.sh` 호출 → `archive/<mp>-YYYY-MM-DD/REPORT-data.md` 작성. 포함:
+leader 가 cascade shutdown 직전 자기 phase 마지막 단계로 `/orch:report <issue_id>` 실행 → `scope_dir/REPORT-data.md` + `scope_dir/REPORT.html` 생성. 이어서 `/orch:issue-down` 이 scope_dir 을 archive 로 이동.
+
+`issue-down` 자체도 archive 직전에 `report.sh` 를 한 번 더 실행 — leader 가 REPORT-data.md 단계를 빠뜨려도 안전망으로 만든다 (idempotent overwrite). REPORT.html 은 leader 가 만들지 않으면 누락 — orch 자동 호출 X, 사용자가 archive 의 REPORT-data.md 보고 `/orch:report` 수동 복구.
+
+데이터 덤프 (REPORT-data.md) 포함 내용:
 
 - **워커별 토큰 사용량** — sidecar jsonl (`~/.claude/projects/<encoded-cwd>/`) 파싱
 - **도구 호출 분포** — Read / Edit / Bash / 슬래시 명령 빈도
@@ -279,16 +288,20 @@ plugin 개선 ←── version bump ←── PR 머지 ←── orch-plugin f
 
 #### 2. HTML 렌더
 
-orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으로 요약 → `render_report.py` 가 결정적 HTML (`REPORT.html`) 렌더. 골격:
+leader 가 `/orch:report <issue_id>` 실행 → REPORT-data.md 를 구조화된 JSON 으로 요약 → `render_report.py` 가 결정적 HTML (`REPORT.html`) 렌더. 골격:
 
 - 회고 메타 (시간 / 워커 수 / PR 수)
 - 워커별 토큰·도구 통계
 - **핸드오프 페인포인트** — 메시지 누락·지연, 권한 차단, 컨텍스트 사고, escalation 횟수
-- **Follow-up 개선 액션** — 다음 사이클 입력
+- **Follow-up 개선 액션** — 다음 사이클 입력 (errors_check + ai_ready_check 후보 목록 포함)
 
-#### 3. 페인포인트 → 이슈 트래커
+#### 3. 후속 이슈 후보 → orch 검토 → 트래커 등록
 
-사용자가 REPORT.html 의 페인포인트 / Follow-up 섹션을 보고 이슈 트래커에 `[orch] …` 류로 등록 (Linear / GitHub Issues / 사내 트래커 무관). 워커가 이미 자신의 마찰을 회고에 기록해 두었으면 그대로 ticketize.
+leader 가 REPORT 호출 안에서 errors_check (errors.jsonl 패턴) / ai_ready_check (docs stale) 후보를 도출 → `[follow-up-candidates <issue_id>]` 라벨로 orch 인박스에 송신. **leader 가 직접 트래커 등록 X — 자동 등록 사고 방지**.
+
+orch 가 인박스 처리 시 후보 목록을 사용자에게 보여주고 등록 여부 검토 (사용자 정책: "팀리더가 제공한 이슈를 사용자와 검토해서 추가"). 등록 결정된 항목만 트래커에 등록 (linear → save_issue / github → gh issue create / gitlab → glab issue create / none → SKIP).
+
+검토 절차 상세는 `commands/check-inbox.md` 의 `[follow-up-candidates]` 라벨 처리 절 참조.
 
 #### 4. plugin 개선 → 다음 사이클 적용
 
@@ -408,11 +421,11 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 
 | 값 | leader 가 하는 일 | 추가 셋업 |
 |---|---|---|
-| `linear` | `mcp__linear-server__get_issue <issue_id>` 로 컨텍스트 fetch. issue-down 시 Done 처리, REPORT 의 stale docs → Linear sub-issue 자동 생성. | Linear MCP 서버 등록 (`~/.claude.json` 의 mcpServers). |
-| `github` | `gh issue view N --repo <github_issue_repo>` 로 fetch. stale docs → `gh issue create` 로 GitHub issue 생성. | `github_issue_repo` 필수 (이슈가 사는 저장소). 이미 `gh auth login` 되어있어야. |
+| `linear` | `mcp__linear-server__get_issue <issue_id>` 로 컨텍스트 fetch. issue-down 알림 처리 시 orch 가 Done 업데이트. errors_check / stale docs 후보는 leader 가 송신 → orch 가 사용자 검토 후 `save_issue` 로 sub-issue 등록. | Linear MCP 서버 등록 (`~/.claude.json` 의 mcpServers). |
+| `github` | `gh issue view N --repo <github_issue_repo>` 로 fetch. orch 가 issue-down 알림 처리 시 `gh issue close`. errors_check / stale docs 후보는 leader 송신 → orch 검토 후 `gh issue create`. | `github_issue_repo` 필수 (이슈가 사는 저장소). 이미 `gh auth login` 되어있어야. |
 | `gitlab` | `glab issue view <id> --repo <github_issue_repo>` 로 fetch (gitlab 환경에선 `github_issue_repo` 가 group/project alias 로 재해석). glab 미설치/미인증 시 leader 가 orch/사용자에게 spec 요청으로 fallback. | `glab auth login` 권장. `github_issue_repo` 는 선택 (현재 cwd repo 로 fallback). |
 | `jira` | `jira issue view <key> --plain` 로 fetch ([ankitpokhrel/jira-cli](https://github.com/ankitpokhrel/jira-cli)). 미설치/미인증 시 spec 요청 fallback. | `jira-cli` 설치 + `~/.config/.jira/.config.yml` 에 사이트 URL / 토큰 등록. |
-| `none` | 트래커 호출 없음. leader 가 orch 에 spec 직접 요청 → orch 가 사용자에게 묻고 spec 을 leader inbox 로 전달. stale docs 는 REPORT.html 에만 기록 (자동 이슈 생성 안 함). | 없음. 가장 가벼움. |
+| `none` | 트래커 호출 없음. leader 가 orch 에 spec 직접 요청 → orch 가 사용자에게 묻고 spec 을 leader inbox 로 전달. follow-up 후보는 REPORT.html 에만 기록 (트래커 등록 SKIP). | 없음. 가장 가벼움. |
 
 내부적으로 worker_id 는 사용자가 `/orch:issue-up <id>` 에 넘긴 `<id>` 를 그대로 사용 — `[A-Za-z0-9_-]+`, 대소문자 보존, `orch` 만 reserved. 0.12.0 이전엔 `mp-NN` 으로 강제 변환됐지만 0.13.0 부터 트래커 무관 (Linear `MP-13`, Jira `PROJ-456`, GitHub `142`, 자유 `issue42` 모두 입력값 그대로 식별자).
 

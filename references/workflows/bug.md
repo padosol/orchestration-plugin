@@ -21,6 +21,7 @@
 6. **회귀 테스트** — 1단계의 재현 케이스를 영구 테스트로 추가. **이 테스트는 fix 없으면 실패해야 함** — 빨강을 한 번 확인 후 fix 적용.
 7. **유사 버그 점검** — 같은 패턴이 다른 곳에도 있는지. 예: 같은 null 체크 누락 / 같은 race condition 패턴 / 같은 입력 검증 누락.
 8. **배포 후 모니터링** — 재발 감지 신호 (로그·메트릭·알람) 가 살아있는지 확인. 없으면 추가 검토.
+9. **마무리 (모든 타입 공통)** — `/orch:report <issue_id>` 호출 (REPORT-data.md / REPORT.html + errors_check / ai_ready_check 후보 도출 + orch 인박스로 `[follow-up-candidates]` 송신) → `/orch:issue-down <issue_id>` 로 cascade shutdown. orch 가 `/orch:report` 자동 호출하지 않으므로 leader 가 이 단계를 빠뜨리면 REPORT.html 누락.
 
 ---
 

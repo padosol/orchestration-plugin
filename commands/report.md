@@ -12,10 +12,11 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*),
 
 **🚫 cwd 보호 (절대 규칙)**:
 
-orch 메인 pane 의 cwd 는 워크스페이스 루트 (`/orch:up` 으로 등록한 위치) 에 고정.
+호출자 pane (orch 메인 또는 leader) 의 cwd 는 절대 변경하지 않는다 — orch 는 워크스페이스 루트 (`/orch:up` 등록 위치) 에, leader 는 자기 등록 cwd 에 고정.
 
 - ❌ `cd <repo>` / `cd <subproject>` — 한 번이라도 실행하면 이후 `.orch/...` 상대 경로 / 메일박스 모두 깨짐
 - ✅ 다른 repo 정보 필요 → `git -C <abs-path> ...` (cd 없이) 또는 단일 파일 Read (절대경로)
+- ✅ scope_dir / archive_dir / REPORT.html 등은 raw 데이터의 절대경로 그대로 사용 — 호출자가 orch 든 leader 든 동일
 
 **📦 컨텍스트·비용 보호 (효율 규칙) — 위치 인지로 분기**:
 
@@ -87,39 +88,46 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
 
 7. **자가진단 — errors.jsonl 영향 검사 + 개선 액션** (REPORT.html 직후 자동 수행, AI-Ready 검사보다 먼저):
 
-   이번 사이클 동안 누적된 에러를 **개선 루프에 실제로 반영**하는 단계. 단순히 `handoff.narrative` 에 "에러 N건" 한 줄로 끝내지 말고, 패턴을 식별하고 액션을 도출해 후속 이슈로 박아라 — 그래야 다음 사이클에서 같은 함정을 안 밟는다.
+   이번 사이클 동안 누적된 에러를 **개선 루프에 반영**하는 단계. 패턴을 식별하고 액션을 도출해 후속 이슈 **후보** 로 정리 — 실제 트래커 등록은 orch 가 사용자와 검토 후 결정 (사용자 정책: "팀리더가 제공한 이슈를 사용자와 검토해서 추가").
 
-   **위임 규칙 (위치 인지로 분기)**: scope errors.jsonl 의 stderr 는 위 raw data 에 이미 다 들어있다 — 별도 grep 불필요. entry 가 많아 stderr 본문 누적이 부담스러울 때만 **Agent (general-purpose)** 한 번에 묶어 위임 (메인은 patterns + suggested_fix JSON만 받음). entry 적거나 stderr 짧으면 메인에서 직접 그룹화·해석 OK.
+   **이슈 등록 주체**:
+   - leader 는 **후보 도출 + REPORT.html 기록 + orch 인박스 송신** 까지만. 직접 `save_issue` / `gh issue create` / `glab issue create` 호출 금지.
+   - orch 가 `[follow-up-candidates <issue_id>]` 메시지 받아 사용자와 검토 → 등록 결정 항목만 트래커에 등록.
+
+   **위임 규칙 (위치 인지로 분기)**: scope errors.jsonl 의 stderr 는 raw data 에 이미 다 들어있다 — 별도 grep 불필요. entry 가 많아 stderr 본문 누적이 부담스러울 때만 **Agent (general-purpose)** 한 번에 묶어 위임. entry 적거나 stderr 짧으면 메인에서 직접 그룹화·해석 OK.
 
    절차:
-   1. **scope errors.jsonl 스캔** — 위 raw 데이터의 "에러 로그 (이 MP scope)" 섹션 entry 모두. 비어 있으면 narrative "이번 사이클 에러 0건 — 개선할 패턴 없음" 으로 마무리하고 후속 이슈 SKIP.
+   1. **scope errors.jsonl 스캔** — raw 데이터의 "에러 로그 (이 MP scope)" 섹션 entry 모두. 비어 있으면 narrative "이번 사이클 에러 0건 — 개선할 패턴 없음" 으로 마무리하고 후보 송신 SKIP.
    2. **패턴 식별** — `(script, exit_code, stderr 첫 줄)` 로 그룹화. 다음 중 하나라도 해당하면 후보:
       - 같은 그룹 2회 이상 (반복 마찰)
       - 단발이라도 root cause 가 스크립트 / 슬래시 / first_msg / 라우팅 가이드 결함으로 추정 가능 (예: 워커가 `/orch:send` 를 특수문자 그대로 호출해 깨진 케이스 → first_msg 의 heredoc 안내 누락)
    3. **개선 액션 도출** — 각 후보 패턴마다 한 줄 fix 제안 (어디를 어떻게 — 스크립트 함수명 / first_msg 절 / 슬래시 옵션 등 구체적으로).
-   4. **후속 이슈 자동 생성** — settings.json 의 `issue_tracker` 분기 (AI-Ready 검사와 동일 패턴):
-      - `linear` → `mcp__linear-server__save_issue`:
-        - title: `[orch-fix] <issue_id> 사이클 errors.jsonl 패턴 개선`
-        - description: 패턴별 (script · rc · 횟수 · stderr 첫 줄) + 도출된 fix 액션 + 본 MP 링크
-        - team: 본 MP 와 동일한 team
-        - parent: 본 MP issue
-        - priority: 3 (Medium)
-        - labels: `bug`, `orch-fix` (팀에 라벨이 존재할 때만)
-      - `github` → `gh issue create --repo <github_issue_repo> --title '...' --body '...' --label bug`
-        - title / body 형식 동일. parent 링크는 body 에 텍스트로 (`Related: #N`).
-      - `none` → 이슈 자동 생성 SKIP. 패턴만 REPORT.html 의 `errors_check.patterns` 에 기록.
-   5. **JSON 의 `errors_check` 필드에 결과 반영** 후 4번 단계(렌더러 호출) 다시 실행해 REPORT.html 갱신:
-      - `narrative`: "이번 사이클 에러 N건 / 반복 패턴 K개 / 자동 이슈 X건 생성" 또는 "에러 0건 — 개선할 패턴 없음"
+   4. **JSON 의 `errors_check` 필드에 결과 기록** (자동 트래커 등록 안 함):
+      - `narrative`: "이번 사이클 에러 N건 / 반복 패턴 K개 / 등록 후보 K개 — orch 검토 대기" 또는 "에러 0건 — 개선할 패턴 없음"
       - `patterns`: `[{script, exit_code, count, first_line, suggested_fix}]`
-      - `auto_issue`: `{id, url}` (생성됐을 때만, 트래커 linear/github)
+      - `auto_issue` 필드는 비워둔다 — orch 가 사용자와 등록 결정 후 채울 수도, 안 채울 수도 있음 (선택). leader 가 채우지 않음.
+   5. **orch 인박스로 후보 송신** (패턴 ≥ 1건일 때만) — `[follow-up-candidates <issue_id>]` 라벨 + `errors_check` 카테고리:
+      ```
+      bash -c "$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'
+      [follow-up-candidates <issue_id>] errors_check
+      - send.sh / rc=2 / 3회 / 'ERROR: ...' → first_msg 의 heredoc 절 보강
+      - notify-slack.sh / rc=1 / 1회 / 'curl: …' → 토큰 검증 옵션 추가
+      (등록 여부는 사용자 검토 — orch 가 후보 보여주고 결정)
+      ORCH_MSG"
+      ```
+      orch 가 사용자에게 후보 목록을 보여주고 등록 여부를 받음. 등록 트래커는 settings.json 의 `issue_tracker` 분기 (linear → save_issue / github → gh issue create / gitlab → glab issue create / none → SKIP).
+   6. **렌더러 재호출** — `errors_check` 채워진 JSON 으로 REPORT.html 갱신.
 
    **금지**:
+   - ❌ leader 가 직접 `save_issue` / `gh issue create` / `glab issue create` 호출 — 사용자 검토 단계 우회
    - ❌ errors.jsonl 0건이 아닌데 patterns 비워둔 채 narrative "에러 N건" 한 줄로 종결 — 매번 사용자가 직접 패턴 분석해야 함
-   - ❌ 후속 이슈 본문에 stderr 전체 dump — 첫 줄 + 그룹 횟수 + fix 액션 까지만 (raw 는 errors.jsonl 에 이미 있음)
+   - ❌ 후속 이슈 후보 본문에 stderr 전체 dump — 첫 줄 + 그룹 횟수 + fix 액션 까지만 (raw 는 errors.jsonl 에 있음)
 
-8. **AI-Ready 영향 검사 — 후속 이슈 자동 생성** (REPORT.html 직후 자동 수행):
+8. **AI-Ready 영향 검사 — 후속 이슈 후보 도출** (REPORT.html 직후 자동 수행):
 
-   변경 파일 목록을 보고 CLAUDE.md / 핵심 docs 가 stale 해질 후보를 식별 → 발견 시 후속 이슈 자동 생성. 매번 ai-ready-audit 100점 루브릭을 돌리는 게 아니라, **이번 변경분에 한정한 가벼운 영향 검사**.
+   변경 파일 목록을 보고 CLAUDE.md / 핵심 docs 가 stale 해질 후보를 식별 → 발견 시 **후속 이슈 후보** 정리 (자동 트래커 등록 X — orch 검토 후 등록). 매번 ai-ready-audit 100점 루브릭을 돌리는 게 아니라, **이번 변경분에 한정한 가벼운 영향 검사**.
+
+   **이슈 등록 주체** (errors_check 와 동일 원칙): leader 가 후보 도출 + REPORT.html 기록 + orch 인박스 송신까지만. orch 가 사용자와 검토 후 등록.
 
    **위임 규칙 (위치 인지로 분기)**:
    - 변경 파일 경로는 raw data 에 이미 절대경로 명시 — 직접 사용. 추가 탐색 불필요.
@@ -147,23 +155,24 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
       - Build/CI 설정 변경 (gradle, package.json scripts, github workflow)
       - 기존 CLAUDE.md / AGENTS.md / docs/ 에서 변경 파일이 mention 됨
    3. **stale 여부 확인** — 위 "위임 규칙" 에 따라 분기. 작은 케이스는 메인이 직접 `grep -l <pattern> <abs-path>` + `Read` 한 번씩, 큰 케이스만 Agent 단발 위임. 둘 다 결과는 (file:line + 한 줄 사유) JSON 형태로 정리해 다음 단계에서 issue body 에 포함.
-   4. **stale 발견 시 후속 이슈 자동 생성** — settings.json 의 `issue_tracker` 값에 따라 분기:
-      - `linear` → `mcp__linear-server__save_issue`:
-        - title: `[docs] <issue_id> 변경에 따른 CLAUDE.md / docs 갱신`
-        - description: 구체 stale 위치 + 갱신 방법 (commit / PR 링크 인용)
-        - team: 본 MP 와 동일한 team
-        - parent: 본 MP issue
-        - priority: 3 (Medium) 또는 4 (Low)
-        - labels: `docs`, `ai-ready` (팀에 라벨이 존재할 때만)
-      - `github` → `gh issue create --repo <github_issue_repo> --title '...' --body '...' --label docs`
-        - title / body 형식 동일. parent 링크는 body 에 텍스트로 (`Related: #N`).
-      - `none` → 이슈 자동 생성 SKIP. stale 위치만 REPORT.html 의 `ai_ready_check.stale_items` 에 기록 — 사용자가 직접 후속 처리.
+   4. **stale 발견 시 후속 이슈 후보 정리** (자동 트래커 등록 X):
+      - REPORT.html 의 `ai_ready_check.stale_items` 에 stale 위치 + 사유 기록.
+      - **orch 인박스로 후보 송신** (stale ≥ 1건일 때만) — `[follow-up-candidates <issue_id>]` 라벨 + `ai_ready_check` 카테고리:
+        ```
+        bash -c "$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'
+        [follow-up-candidates <issue_id>] ai_ready_check
+        - CLAUDE.md:12-20 / "API endpoint 목록" 절 / src/api/v2/foo.go 신규로 누락
+        - docs/architecture.md:34 / "auth flow" 절 / 토큰 저장 위치 변경됨
+        (등록 여부는 사용자 검토 — orch 가 후보 보여주고 결정)
+        ORCH_MSG"
+        ```
+        orch 가 사용자와 검토 → 등록 결정 항목만 트래커에 등록 (linear → save_issue / github → gh issue create / gitlab → glab issue create / none → SKIP).
 
-      stale 미발견 시 이슈 생성 안 함.
-   5. **JSON 의 `ai_ready_check` 필드에 결과 반영** 후 4번 단계 다시 실행해 REPORT.html 갱신:
-      - 자동 생성된 이슈가 있으면 `auto_issue: {id, url}` 채움 (트래커 linear/github 일 때만)
+      stale 미발견 시 송신 SKIP.
+   5. **JSON 의 `ai_ready_check` 필드에 결과 반영** 후 렌더러 재호출:
+      - `auto_issue` 필드는 leader 가 채우지 않음 (orch 가 등록한 경우 사후 채울 수도, 안 채울 수도).
       - stale 위치는 `stale_items` 배열로
-      - narrative 한 줄 ("stale 항목 자동 검사 결과 X — 영향 없음" 또는 "X건 발견, 자동 이슈 생성" 또는 "X건 발견, 트래커 미사용으로 직접 처리 필요")
+      - narrative 한 줄 ("stale 항목 0건 — 영향 없음" 또는 "X건 발견 — orch 검토 대기" 또는 "X건 발견, 트래커 미사용으로 직접 처리 필요")
 
 ## JSON 스키마
 
@@ -244,9 +253,13 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
 
 필수 필드: `mp_id`. 나머지는 모두 optional — 누락된 섹션은 "X 없음" 으로 자동 표시.
 
-**자동 호출**:
-- `issue-down` 이 종료 보고 메시지에 "REPORT.html 자동 작성 요청" 을 명시함. orch 가 인박스 처리할 때 그 메시지를 보면 별도 사용자 지시 없이 `/orch:report <mp-id>` 실행해 작성.
-- 6번 (token_efficiency) / 7번 (errors.jsonl 자가진단) / 8번 (AI-Ready 영향 검사) 모두 사용자 컨펌 없이 자동 수행. 7/8번은 후속 이슈 생성까지, 6번은 패턴 기록만. 셋 다 같은 REPORT.html 1회 갱신으로 마무리 (사용자가 폐기 결정한 경우만 SKIP — 인박스 메시지에 그 신호가 보이면 SKIP).
+**호출 주체**:
+- **정상 흐름 — leader 가 호출**: cascade shutdown 직전 자기 phase 마지막 단계로 `/orch:report <issue_id>` 실행. 이 시점에 본 절차 (1~8단계 + 후속 이슈 후보 송신) 전부 수행.
+- **orch 가 호출하는 두 케이스만**:
+  1. 사용자가 `/orch:report <issue_id>` 명시 호출 — archive 의 REPORT-data.md 다시 보거나 후속 후보 재검토.
+  2. issue-down 알림에 "REPORT.html 누락" hint — orch 가 자동 호출하는 게 아니라 사용자에게 수동 복구 권유.
+- orch 가 issue-down 알림 받았다고 자동으로 `/orch:report` 호출하지 않는다 — REPORT 는 leader 책임, 중복 호출은 사고의 원인.
+- 6번 (token_efficiency) / 7번 (errors.jsonl 자가진단) / 8번 (AI-Ready 영향 검사) 은 본 호출 안에서 사용자 컨펌 없이 자동 수행. **7/8번은 후속 이슈 후보 도출 + orch 인박스 송신까지** (leader 가 직접 트래커 등록하지 않음), 6번은 REPORT.html 에 패턴 기록만. 셋 다 같은 REPORT.html 1회 갱신으로 마무리.
 
 **주의**:
 - ❌ HTML / CSS 직접 작성 — 매번 양식 달라짐 (결정적 템플릿 렌더러가 따로 있음)

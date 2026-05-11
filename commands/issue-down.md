@@ -29,10 +29,12 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh:*)
 - settings 의 모든 project 에 `git worktree prune` 1회 (안전, 메타데이터만)
 - mp_id 패턴 일치 로컬 브랜치 후보를 머지 상태와 함께 출력 — **자동 삭제 안 함, 명령 제안만**
 
-**REPORT 자동 작성 (default ON)**:
-- issue-down 시 archive 직전에 `report.sh` 가 실행 → `<archive_dir>/REPORT-data.md` 생성
-- issue-down 이 orch 인박스에 종료 보고 + **REPORT.html 자동 작성 요청** 메시지 발송
-- orch 가 인박스 처리할 때 `/orch:report <mp-id>` 실행 → `<archive_dir>/REPORT.html` 작성
+**REPORT — leader 가 phase 마지막 단계로 직접 작성**:
+- leader 가 cascade shutdown 직전 자기 phase 마지막 단계로 `/orch:report <issue_id>` 호출 → `<scope_dir>/REPORT-data.md` + `<scope_dir>/REPORT.html` 생성 (issue-down 이 scope_dir 을 archive 로 옮기면서 함께 이동).
+- issue-down.sh 는 안전망으로 archive 직전에 `report.sh` 를 한 번 더 실행 — REPORT-data.md 만 누락 방지용 (이미 있으면 idempotent overwrite).
+- REPORT.html 은 leader 가 만들지 않으면 누락. inbox 메시지에 누락 hint 가 보이면 사용자가 `/orch:report <issue_id>` 로 archive 의 REPORT-data.md 를 재료로 수동 복구.
+
+**orch 자동 호출 금지** — issue-down 알림 처리 시 orch 가 `/orch:report` 자동 호출하지 말 것. REPORT 는 leader 책임이고 orch 자동 호출은 중복 작업의 원인. 사용자 명시 요청 또는 누락 hint 가 있을 때만 호출.
 
 **옵션**:
 - `--no-cleanup` — worktree 정리를 건너뜀. 다 손으로 검토하고 싶을 때.

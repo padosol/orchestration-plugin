@@ -243,16 +243,22 @@ PM 으로부터 \`[direction-check]\` 라벨 메시지 받으면:
    - **LGTM** → 답신 그대로 작업 워커에 라우팅. 워커가 자동으로 wait-merge.sh 진입 (별도 '머지 대기' 지시 불필요).
    ⚠ LGTM 라우팅 후 워커가 wait-merge 안 들어가고 멈춰 있으면 \"\\\$ORCH_BIN_DIR/wait-merge.sh <pr> 실행\" 명시 트리거.
 3. **머지 대기**: 워커 wait-merge.sh 30s 폴링. 사용자 머지 시 'PR #N merged' 답신 후 자동 종료. exit 1 / 2 면 워커 보고 → escalate.
-4. **종료** (REPORT 본인 생성 후 cascade shutdown):
+4. **종료** (REPORT 본인 생성 + 후속 이슈 후보 송신 후 cascade shutdown):
    a. 모든 워커 종료 확인.
    b. scope dump → REPORT-data.md:
         \`bash -c '\$ORCH_BIN_DIR/report.sh ${mp_id} > '\"\$(\$ORCH_BIN_DIR/lib.sh; orch_scope_dir ${mp_id} 2>/dev/null)\"'/REPORT-data.md'\`
         (또는 scope_dir 알면 직접 경로. \`/orch:report\` 슬래시도 가능)
-   c. REPORT-data.md 해석 → \`render_report.py\` 스키마 JSON (/tmp/orch-report-${mp_id}.json) — 7 섹션 narrative 포함.
+   c. REPORT-data.md 해석 → \`render_report.py\` 스키마 JSON (/tmp/orch-report-${mp_id}.json) — 7 섹션 narrative + errors_check + ai_ready_check 후보 포함.
    d. HTML 렌더: \`python3 \$ORCH_BIN_DIR/render_report.py /tmp/orch-report-${mp_id}.json <scope_dir>/REPORT.html\`
-   e. \`/orch:issue-down ${mp_id}\` → cascade kill + worktree 정리 + scope archive (REPORT-data.md + REPORT.html 자동 포함) + leader 자기 pane 종료.
+   e. **후속 이슈 후보 송신** (errors_check / ai_ready_check 패턴 ≥ 1건일 때만) — 라벨 \`[follow-up-candidates ${mp_id}]\` + 카테고리. orch 가 사용자와 검토 후 등록 (leader 가 직접 트래커 등록 X):
+        \`bash -c \"\\\$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'
+        [follow-up-candidates ${mp_id}] errors_check
+        - script:rc/N회 / 'stderr 첫 줄' → suggested_fix
+        ...
+        ORCH_MSG\"\`
+   f. \`/orch:issue-down ${mp_id}\` → cascade kill + worktree 정리 + scope archive (REPORT-data.md + REPORT.html 자동 포함) + leader 자기 pane 종료.
 
-   leader 가 c-d 단계를 깜빡해도 b 는 issue-down 이 안전망으로 다시 생성. REPORT.html 만 누락 가능 — 사용자가 archive 보고 \`/orch:report <mp_id>\` 수동 호출로 복구.
+   leader 가 c-d 단계를 깜빡해도 b 는 issue-down 이 안전망으로 다시 생성. REPORT.html 만 누락 가능 — 사용자가 archive 보고 \`/orch:report <mp_id>\` 수동 호출로 복구 (orch 가 자동 호출 X).
 
 [테스트·컨텍스트]
 - 크로스-프로젝트 E2E SKIP — 후속 이슈 메모. 워커 작업 독립 가정.
