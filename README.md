@@ -220,9 +220,19 @@ PROJ-456/repo-a       ← PROJ-456 산하 repo-a 프로젝트 워커
   - 사용 워커: MP-13/ui feat
   - 의존: Phase 1
   ```
-- **흐름**: leader 가 spec 받자마자 phases.md 작성 → orch 로 `[phase-plan <issue_id>]` 송신 → 사용자 GO → Phase 1 만 spawn → 완료 보고 후 Phase 2 ...
+- **흐름**: leader 가 spec 받자마자 phases.md 작성 → orch 로 `[phase-plan <issue_id>]` 송신 → **orch 가 AskUserQuestion TUI 로 컨펌 받음** (GO / 수정 / 취소 3택) → 결과를 라벨 형식으로 leader 에 forward → leader 가 라벨에 따라 분기.
 - **단순 이슈** 도 phase 1개로 표현 (Phase 1: 수정 + PR + 머지) — 일관성 확보 + 사용자가 흐름 따라가기 쉬움.
 - **금지**: phase plan 사용자 GO 받기 전 워커 spawn / 다중 phase 동시 진행.
+
+### 컨펌 응답 라벨 (orch → leader)
+
+| 사용자 TUI 답 | orch 가 leader 에 보내는 본문 첫 줄 | leader 동작 |
+|---|---|---|
+| GO | `[plan-confirm] GO` | Phase 1 워커 spawn 시작 |
+| 수정 | `[plan-revise] <사용자 notes>` | phases.md 갱신 → 다시 `[phase-plan ...]` 송신 (라운드 N+1) |
+| 취소 | `[plan-cancel] <사유>` | `/orch:issue-down <id>` 호출해 cascade kill |
+
+자유서술 답 (`응 ㅇㅋ`, `한 군데만 빼고`) 은 라벨이 모호해져 leader 라우팅이 깨지므로 orch 는 **반드시 AskUserQuestion 으로** 받는다. plain text 답신 보내는 건 금지.
 
 ## Worker → Leader 차단 질문 (`wait-reply.sh`)
 

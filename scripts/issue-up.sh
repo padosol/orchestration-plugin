@@ -192,14 +192,19 @@ spec 의 title / labels / issuetype 에서 작업 타입 1회 추론. 타입에 
    - 완료 기준: ...
    - 의존: Phase 1 완료
    \`\`\`
-3. phase plan 본문을 orch 로 송신 (heredoc, 라벨 \`[phase-plan]\` 권장):
+3. phase plan 본문을 orch 로 송신 — **라벨 \`[phase-plan <issue_id>]\` 필수** (orch 가 이 라벨로 컨펌 절차 트리거):
    \`\`\`
    bash -c \"\\\$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'
    [phase-plan ${issue_display}]
-   <phases.md 본문>
+   <phases.md 본문 — 작업 타입 헤더 포함>
    ORCH_MSG\"
    \`\`\`
-4. orch 가 사용자 컨펌 후 답을 leader inbox 로 forward. 답이 \`수정\` 이면 phases.md 갱신 후 재송신 (라운드 N). \`GO\` 이면 phase 1 진입.
+4. orch 는 **반드시 AskUserQuestion TUI** 로 사용자 컨펌 받음 (GO / 수정 / 취소 3택) — plain text 답신 아님. orch 가 leader 에 forward 하는 응답은 라벨 형식 고정:
+   - \`[plan-confirm] GO\` → phase 1 진입.
+   - \`[plan-revise] <notes>\` → phases.md 를 notes 반영해 갱신, **다시 [phase-plan] 송신 (라운드 N+1)**. notes 무시한 채 진행 금지.
+   - \`[plan-cancel] <사유>\` → \`/orch:issue-down ${issue_display}\` 호출해 cascade kill.
+
+   **\`[plan-confirm] GO\` 받기 전까지 워커 spawn / 개발 진행 금지** — 사용자 컨펌이 곧 개발 시작 권한.
 5. **항상 현재 phase 의 워커만 spawn. 다음 phase 워커는 현재 phase 완료 보고 (PR merged + 로컬 동기화) 후 spawn.** 동시 다중 phase 진행 금지 — phase 간 의존이 없다고 보일 때도 사용자가 흐름을 따라가도록 순차 유지.
 6. phase 완료 시마다 orch 에 \`[phase-done <n>]\` 짧은 보고 → 다음 phase 진입.
 
