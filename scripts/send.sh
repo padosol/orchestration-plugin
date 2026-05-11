@@ -61,6 +61,14 @@ if ! orch_is_valid_worker_id "$target"; then
     exit 2
 fi
 
+# 'MP-75' / 'mp-75' 처럼 case 혼용으로 등록 inbox 와 어긋나는 사고 방지 (PAD-60).
+# registry 에 case-insensitive 매칭되는 worker_id 가 있으면 등록 case 로 정규화.
+resolved_target="$(orch_resolve_worker_id_case "$target")"
+if [ "$resolved_target" != "$target" ]; then
+    echo "INFO: target case 정규화 '${target}' → '${resolved_target}' (registry 등록 case)" >&2
+    target="$resolved_target"
+fi
+
 from="$(orch_detect_self 2>/dev/null || true)"
 if [ -z "$from" ]; then
     echo "ERROR: 보낸이 worker_id 추론 실패." >&2

@@ -159,6 +159,33 @@ orch_normalize_issue_id() {
     printf '%s' "$v"
 }
 
+# 입력 worker_id 가 registry 의 어떤 worker_id 와 case-insensitive 매칭되면 그 case 로 정규화.
+# 매칭 없으면 입력 그대로. 'orch' 는 그대로.
+#
+# 0.13.0 부터 case 보존 정책이라 'MP-75' 와 'mp-75' 가 정규식 양쪽 다 통과하지만,
+# inbox path / scope dir 가 exact case 라서 송신 시 두 표기를 혼용하면 다른 leader 로
+# 인식돼 'WARN: 워커 등록 안 됨' 노이즈 + 메시지 미수신. 이 함수가 호출자 측에서 한 번
+# 흡수해 등록 case 로 맞춰준다 (PAD-60 대응).
+orch_resolve_worker_id_case() {
+    local input="$1"
+    [ -n "$input" ] || return 1
+    [ "$input" = "orch" ] && { printf 'orch'; return 0; }
+    local lower_input
+    lower_input="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]')"
+    local f wid lower_wid
+    while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        wid="$(jq -r '.worker_id // ""' "$f" 2>/dev/null)"
+        [ -n "$wid" ] || continue
+        lower_wid="$(printf '%s' "$wid" | tr '[:upper:]' '[:lower:]')"
+        if [ "$lower_wid" = "$lower_input" ]; then
+            printf '%s' "$wid"
+            return 0
+        fi
+    done < <(find "$ORCH_ROOT" -path "*/workers/*.json" 2>/dev/null)
+    printf '%s' "$input"
+}
+
 # ─── 경로 헬퍼 (scope-aware) ──────────────────────────────────────────
 
 orch_inbox_path() {
