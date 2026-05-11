@@ -28,12 +28,25 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-up.sh:*)
 - 사용자 ↔ orch 토론 → 결정 → orch → leader 전송 구조를 유지. 사용자가 워커에 직접 명령을 내리는 흐름이 되지 않도록 한다.
 - 예외: 사용자가 명시적으로 "직접 입력하겠다" 라고 했거나, 인터랙티브 외부 인증 (예: `gcloud auth login`) 같은 경우만 사용자에게 떠넘김.
 
-**PM task 분리 금지 — 마무리는 단일 task**:
+**MP 마무리 — 책무 분리 (leader vs orch)**:
 
-MP 마무리 단계 (PR 머지 / 이슈 트래커 Done 표시 / REPORT 트리거) 는 **orch 측에서 분리 task 로 만들지 말 것**. 셋은 한 묶음:
-- PR 머지 자체는 워커 PR 라이프사이클이 처리 (워커 first_msg 4단계)
-- 머지 완료 → leader 가 issue-down → issue-down 알림이 orch 인박스에 들어옴 → orch 는 그 알림 1건 처리 흐름에서 트래커 Done 업데이트 (linear → save_issue, github → gh issue close, none → SKIP) + REPORT 까지 한 turn 에 처리
-- "PR 생성 task / 이슈 업데이트 task" 식으로 쪼개면 한 작업이 여러 task 를 거치며 컨텍스트가 분산됨. **단일 task = 단일 작업** 원칙.
+마무리 단계는 leader / orch 책무가 다음과 같이 갈린다. orch 가 leader 책무를 가로채지 말 것 — REPORT 중복 호출 / 후속 이슈 자동 등록 등이 사고의 원인.
+
+**leader 책무** (phase 의 마지막 단계로 자체 수행):
+- PR 머지 확인 후 `/orch:report <issue_id>` 호출 → REPORT-data.md + REPORT.html 생성
+- errors.jsonl / AI-Ready 영향 검사 → **후속 이슈 후보** 도출 (REPORT.html `errors_check.patterns` / `ai_ready_check.stale_items` 기록)
+- 후속 이슈 후보를 orch 인박스로 송신 (`[follow-up-candidates <issue_id>]` 라벨)
+- `/orch:issue-down <issue_id>` 호출 → cascade shutdown
+
+**orch 책무** (issue-down 알림 / follow-up-candidates 메시지 수신 시):
+- 트래커 Done 업데이트 (linear → save_issue / github → gh issue close / gitlab → glab issue close / none → SKIP)
+- REPORT.html 경로를 사용자에게 한 줄로 안내
+- follow-up-candidates 본문을 사용자와 검토 → 등록 결정 난 항목만 트래커에 등록 (사용자 정책: "팀리더가 제공한 이슈를 사용자와 검토해서 추가")
+
+**금지**:
+- ❌ orch 가 `/orch:report` 자동 호출 — REPORT 는 leader phase 마지막 단계. 사용자 명시 요청 또는 REPORT.html 누락 hint 가 보일 때 수동 복구만 OK.
+- ❌ orch 가 후속 이슈 자동 등록 — 항상 사용자 검토 후. leader 보낸 후보 메시지를 무비판 등록 금지.
+- ❌ "PR 생성 task / 이슈 업데이트 task / REPORT task" 식 분할 — 한 작업이 여러 task 를 거치며 컨텍스트 분산.
 
 **leader 안에서 다음 작업**:
 - `/orch:leader-spawn <project>` 로 산하 워커 생성
