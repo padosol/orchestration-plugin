@@ -43,6 +43,34 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLU
 
 **주의**: 자동 추론은 초안일 뿐입니다. **반드시 settings.json을 직접 편집해 description을 정확하게 보강**하세요. 이게 leader 워커가 "어느 프로젝트에 위임할지" 판단하는 근거가 됩니다.
 
+**default_base_branch 누락 보강 (setup.sh 다음, 항상 선행)**:
+
+setup.sh 의 자동 감지가 실패한 alias (네트워크 끊김, 원격 없음, 또는 이전 버전의 설정 잔재) 가 있을 수 있다. settings.json 을 다시 읽어 누락 alias 들을 추출:
+
+```bash
+jq -r '.projects // {} | to_entries[] | select((.value.default_base_branch // "") == "") | .key' .orch/settings.json
+```
+
+빈 결과면 skip. **빈 alias 가 있으면 반드시 처리** — 비어 있으면 worker spawn 시 `origin/<base>` 가 unknown reference 가 되어 작업이 차단된다.
+
+처리 절차:
+1. **AskUserQuestion 스키마 로드** — fresh 세션이면 deferred. `ToolSearch` 호출:
+   - `query`: `select:AskUserQuestion`
+   - `max_results`: `1`
+2. **일괄 질문** — AskUserQuestion 한 번에 최대 4 alias. 4 개 넘으면 여러 번에 나눠 호출. 각 질문:
+   - `header`: alias 이름 (≤ 12자, 길면 잘라서)
+   - `question`: "프로젝트 `<alias>` 의 default base branch?"
+   - `options` (2-3개):
+     - `main (Recommended)` — 흔한 GitHub 기본
+     - `develop` — gitflow 워크플로
+     - (Recommended 는 alias 의 path 디렉토리에서 `git -C <path> symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` 로 감지된 값을 첫 옵션으로 두면 정확도 ↑. 감지 실패하면 main 을 Recommended.)
+   - free-form "Other" 은 AskUserQuestion 이 자동 제공.
+3. **Edit 으로 settings.json 갱신** — 각 응답에 대해:
+   - `Edit` 도구로 `.orch/settings.json` 의 해당 alias 객체 안에 `"default_base_branch": "<값>"` 필드 추가 (이미 다른 필드들 사이에 끼워넣을 수 있게 path/kind 다음 위치 권장).
+4. **확인 보고** — "default_base_branch 보강 완료: alias-A=main, alias-B=develop, ..." 한 줄로 사용자에게 알림.
+
+이 절차를 건너뛰고 다음 단계 (validate-settings / validate-plugin / 사용자 작업) 로 가지 말 것 — 설정이 미완 상태로 진행되면 issue-up 시점에서 cascade fail.
+
 출력 후 사용자에게:
 1. settings.json 내용 보여주고 편집 권유
 2. **이어서 `validate-settings` 스킬을 자동 실행** — description/tech_stack 이 실제 프로젝트와 어긋나는지 검증(Next.js/Spring Boot/JDK 버전 등). drift 가 있으면 표로 보고 + 한 건씩 동의받아 settings.json 을 `Edit` 으로 patch.
