@@ -100,6 +100,8 @@ issue_display="$mp_id"
 issue_num="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1)"
 tracker="$(orch_settings_issue_tracker)"
 gh_repo="$(orch_settings_github_issue_repo 2>/dev/null || true)"
+plugin_root="$(dirname "$LIB_DIR")"
+workflows_dir="${plugin_root}/references/workflows"
 
 # --no-issue 가 켜지면 워크스페이스 트래커 설정과 무관하게 spec 요청 모드.
 effective_tracker="$tracker"
@@ -150,12 +152,31 @@ ${issue_fetch_step}
 2. cat .orch/settings.json — 사용 가능 프로젝트: ${projects_blob}
 3. 어느 프로젝트(들)에서 작업할지 결정. 모호하면 후보 \`<path>/CLAUDE.md\` 확인. 그래도 불확실하면 orch 에 질문 — 잘못된 프로젝트에 spawn 금지.
 
+[작업 타입 판별 — Phase Plan 직전 필수]
+spec 의 title / labels / issuetype 에서 작업 타입 1회 추론. 타입에 따라 phase 구조와 reviewer 체크리스트가 달라지므로 phase plan 작성 전에 결정한다.
+
+- **feature** — label 'feature' / 'feat' / 'enhancement' / 'new' 또는 title 'feat:' / 'feature:' 또는 (Jira) issuetype Story / New Feature
+- **bug** — label 'bug' / 'defect' / 'regression' 또는 title 'fix:' / 'bug:' 또는 (Jira) issuetype Bug
+- **refactor** — label 'refactor' / 'refac' / 'cleanup' / 'tech-debt' 또는 title 'refactor:' / 'refac:'
+
+추론 실패 (라벨·prefix 모호) 시 **AskUserQuestion** 으로 한 번만 묻기 (3택: feature / bug / refactor). 추측 진행 금지.
+
+결정 직후:
+1. 타입에 해당하는 가이드 1회 Read — phase 템플릿 + Review 체크리스트를 phase plan 의 골격으로 사용:
+   - feature: ${workflows_dir}/feature.md
+   - bug:     ${workflows_dir}/bug.md
+   - refactor: ${workflows_dir}/refactor.md
+2. \`.orch/runs/${mp_id}/type\` 에 결정한 타입 한 줄 기록 (review-spawn 이 읽어 reviewer 도 같은 가이드 적용):
+   \`\`\`
+   bash -c 'echo <type> > .orch/runs/${mp_id}/type'
+   \`\`\`
+
 [Phase Plan — 필수, 사용자 GO 전 워커 spawn 금지]
 모든 MP 는 phase 단위 순차 실행. 비-blocking 동시 spawn 으로 순서가 꼬이는 사고를 막기 위함. 단순 MP 라도 단일 phase 로 표현해 일관성 확보.
 
 순서:
 1. spec (issue 본문 또는 orch 첨부 spec) 분석. 복잡한 분석/아키텍처/스펙/API/DB 모델 필요 → PM 워커 먼저 spawn 해 설계 산출물 받은 뒤 phase plan 에 반영. 단순 fix·refactor 는 PM 생략 가능 — leader 가 직접 phase plan.
-2. \`.orch/runs/${mp_id}/phases.md\` 작성. 권장 형식:
+2. 타입별 가이드 (${workflows_dir}/<type>.md) 의 'Phase 템플릿' 절을 골격으로 \`.orch/runs/${mp_id}/phases.md\` 작성. 헤더에 \`## 타입: <feature|bug|refactor>\` 한 줄 명시. 권장 형식:
    \`\`\`
    # ${issue_display} Phase Plan
 
@@ -241,7 +262,7 @@ PM 으로부터 \`[direction-check]\` 라벨 메시지 받으면:
 - phase plan 사용자 GO 받기 전에 워커 spawn 금지.
 - 한 번에 다중 phase 워커 spawn 금지 — 항상 현재 phase 하나.
 
-지금 [셋업] 1~3 + [Phase Plan] 1~3 을 끝낸 뒤 phase plan 을 /orch:send orch 로 보고하세요. 사용자 GO 받기 전 워커 spawn 금지."
+지금 [셋업] 1~3 + [작업 타입 판별] + [Phase Plan] 1~3 을 끝낸 뒤 phase plan 을 /orch:send orch 로 보고하세요. 사용자 GO 받기 전 워커 spawn 금지."
 
 orch_send_keys_line "$leader_pane" "$first_msg" \
     || echo "WARN: leader first_msg 송신 실패 (pane=$leader_pane)" >&2
