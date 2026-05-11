@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# validate-harness SessionStart hook — 누락된 default_base_branch alias 를 systemMessage JSON 으로 보고.
-# 기대: stdout 에 {"systemMessage":"..."} JSON, 본문에 누락 alias 목록 포함, exit 0.
+# validate-harness SessionStart hook — 누락된 default_base_branch alias 를 보고.
+# 기대 출력 (둘 다 있어야 함):
+#   - hookSpecificOutput.additionalContext : Claude 컨텍스트 주입용 instruction
+#   - systemMessage                        : UI 배너용 짧은 요약
+# exit 0.
 
 set -euo pipefail
 
@@ -35,10 +38,21 @@ python3 - "$out" <<'PY'
 import json, sys
 raw = sys.argv[1]
 data = json.loads(raw)
-msg = data["systemMessage"]
-assert "repo-b" in msg, f"repo-b not in systemMessage: {msg!r}"
-assert "repo-c" in msg, f"repo-c not in systemMessage: {msg!r}"
-assert "repo-a" not in msg, f"repo-a should NOT be flagged (has override): {msg!r}"
+
+# additionalContext — Claude 가 instruction 으로 받는 키
+hso = data.get("hookSpecificOutput") or {}
+ctx = hso.get("additionalContext", "")
+assert ctx, f"hookSpecificOutput.additionalContext 비어 있음: {data!r}"
+assert hso.get("hookEventName") == "SessionStart", f"hookEventName 누락/오타: {hso!r}"
+assert "repo-b" in ctx, f"repo-b not in additionalContext: {ctx!r}"
+assert "repo-c" in ctx, f"repo-c not in additionalContext: {ctx!r}"
+assert "repo-a" not in ctx, f"repo-a should NOT be flagged: {ctx!r}"
+assert "AskUserQuestion" in ctx, f"instruction 에 AskUserQuestion 가이드 누락: {ctx!r}"
+
+# systemMessage — UI 배너 (선택이지만 있어야 함)
+banner = data.get("systemMessage", "")
+assert banner, f"systemMessage 비어 있음: {data!r}"
+assert "repo-b" in banner and "repo-c" in banner, f"banner 에 alias 누락: {banner!r}"
 PY
 
 echo "OK validate-harness-missing"
