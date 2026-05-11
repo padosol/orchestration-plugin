@@ -127,14 +127,46 @@ ${issue_fetch_step}
 2. cat .orch/settings.json — 사용 가능 프로젝트: ${projects_blob}
 3. 어느 프로젝트(들)에서 작업할지 결정. 모호하면 후보 \`<path>/CLAUDE.md\` 확인. 그래도 불확실하면 orch 에 질문 — 잘못된 프로젝트에 spawn 금지.
 
+[Phase Plan — 필수, 사용자 GO 전 워커 spawn 금지]
+모든 MP 는 phase 단위 순차 실행. 비-blocking 동시 spawn 으로 순서가 꼬이는 사고를 막기 위함. 단순 MP 라도 단일 phase 로 표현해 일관성 확보.
+
+순서:
+1. spec (issue 본문 또는 orch 첨부 spec) 분석. 복잡한 분석/아키텍처/스펙/API/DB 모델 필요 → PM 워커 먼저 spawn 해 설계 산출물 받은 뒤 phase plan 에 반영. 단순 fix·refactor 는 PM 생략 가능 — leader 가 직접 phase plan.
+2. \`.orch/runs/${mp_id}/phases.md\` 작성. 권장 형식:
+   \`\`\`
+   # ${mp_upper} Phase Plan
+
+   ## Phase 1: <목표 한 줄>
+   - 사용 워커: <e.g. ${mp_id}/server feat>
+   - 산출물: <e.g. PR #N>
+   - 완료 기준: <e.g. PR merged + 로컬 동기화>
+   - 의존: 없음
+
+   ## Phase 2: <목표 한 줄>
+   - 사용 워커: ...
+   - 산출물: ...
+   - 완료 기준: ...
+   - 의존: Phase 1 완료
+   \`\`\`
+3. phase plan 본문을 orch 로 송신 (heredoc, 라벨 \`[phase-plan]\` 권장):
+   \`\`\`
+   bash -c \"\\\$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'
+   [phase-plan ${mp_upper}]
+   <phases.md 본문>
+   ORCH_MSG\"
+   \`\`\`
+4. orch 가 사용자 컨펌 후 답을 leader inbox 로 forward. 답이 \`수정\` 이면 phases.md 갱신 후 재송신 (라운드 N). \`GO\` 이면 phase 1 진입.
+5. **항상 현재 phase 의 워커만 spawn. 다음 phase 워커는 현재 phase 완료 보고 (PR merged + 로컬 동기화) 후 spawn.** 동시 다중 phase 진행 금지 — phase 간 의존이 없다고 보일 때도 사용자가 흐름을 따라가도록 순차 유지.
+6. phase 완료 시마다 orch 에 \`[phase-done <n>]\` 짧은 보고 → 다음 phase 진입.
+
 [워커 spawn — 3 역할]
   /orch:leader-spawn <project> [type]                    # developer (구현). worker_id=mp-NN/<project>.
-  /orch:leader-spawn <project> [type] --role pm          # PM (분석·아키텍처·스펙·API·DB 모델). worker_id=mp-NN/pm.
+  /orch:leader-spawn <project> [type] --role pm          # PM (설계: 분석·아키텍처·스펙·API·DB 모델). worker_id=mp-NN/pm.
   /orch:review-spawn <project> <pr>                      # reviewer (코드 리뷰).
 
 type: feat | fix | refactor | chore | docs | test (dev 기본 feat / pm 기본 docs).
 
-**복잡 분석/스펙/API/데이터모델 필요한 MP 는 PM 먼저 spawn → 사용자 컨펌 → developer.** 단순 fix·refactor 는 PM 생략 가능.
+**phase plan 사용자 컨펌 전 워커 spawn 금지** — PM 도 spawn 전에 phase plan 에 \"Phase 0: 분석/설계\" 로 명시하고 컨펌 받는다 (PM 생략하는 단순 MP 는 Phase 1 부터).
 
 [메시지 — Hub-and-Spoke]
 - 산하 지시: /orch:send ${mp_id}/<role> '<지시>' (<role> = project alias 또는 pm)
@@ -177,11 +209,16 @@ PM 으로부터 \`[direction-check]\` 라벨 메시지 받으면:
 - 크로스-프로젝트 E2E SKIP — 후속 이슈 메모. 워커 작업 독립 가정.
 - 컨텍스트 150k 넘으면 보고 직후 /compact (워커에도 같은 가이드 전달).
 
+[Worker→Leader 차단 질문 라우팅]
+워커가 메시지에 \`[question:<q-id>]\` 마커를 달면 wait-reply.sh 로 답 대기 중이라는 의미. 즉시 응답 (heredoc 본문 첫 줄에 \`[reply:<q-id>]\`) 을 보내야 워커가 막힘 풀고 진행. 결정이 사용자 차원이면 그대로 orch 로 forward 한 뒤 사용자 답을 받아 같은 \`[reply:<q-id>]\` 로 워커에 송신. 답 미루지 말 것 — 워커는 그 사이 어떤 마디도 진행 안 함.
+
 [금지]
 - 리뷰 없이 머지 대기로 점프 금지 — 깨끗한 컨텍스트 reviewer 가 안전망.
 - 워커 보고 없이 'PR 만들었으니 사용자가 머지' 식 종결 금지.
+- phase plan 사용자 GO 받기 전에 워커 spawn 금지.
+- 한 번에 다중 phase 워커 spawn 금지 — 항상 현재 phase 하나.
 
-지금 1~3 진행하고 작업 계획을 /orch:send orch 로 보고하세요."
+지금 [셋업] 1~3 + [Phase Plan] 1~3 을 끝낸 뒤 phase plan 을 /orch:send orch 로 보고하세요. 사용자 GO 받기 전 워커 spawn 금지."
 
 orch_send_keys_line "$leader_pane" "$first_msg" \
     || echo "WARN: leader first_msg 송신 실패 (pane=$leader_pane)" >&2
