@@ -1,7 +1,7 @@
 {
   "name": "orch",
   "description": "tmux 멀티 세션 오케스트레이션. leader 가 phase plan (.orch/runs/<mp>/phases.md) 을 사용자 컨펌 받아 순차 실행, 워커는 wait-reply.sh 로 leader 답을 차단 대기 — 비-blocking 동시 진행으로 순서 꼬이는 사고 방지.",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "author": {
     "name": "padosol"
   }
