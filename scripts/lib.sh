@@ -475,6 +475,36 @@ orch_pane_alive() {
     tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -qx "$pane_id"
 }
 
+# Claude Code TUI 프롬프트가 빈 상태인지 휴리스틱 판정.
+# 인자: capture-pane stdout (멀티라인 문자열).
+# 반환: 0=idle, 1=busy. 패턴 못 찾으면 0 (fail-open — 현재 동작 호환).
+# TUI 형태: '│ > <content> │' (box-drawing) 또는 '> <content>' (단순). '>' 이후 본문이
+# 공백·커서 글자뿐이면 idle, 본문이 있으면 busy.
+_orch_capture_is_idle() {
+    local cap="$1"
+    [ -n "$cap" ] || return 0
+    local prompt_line
+    prompt_line="$(printf '%s\n' "$cap" | tail -n5 \
+        | grep -E '(^|│|\|)[[:space:]]*>[[:space:]]' | tail -n1)"
+    [ -n "$prompt_line" ] || return 0
+    local after
+    after="${prompt_line#*>}"
+    after="${after%%│*}"
+    after="${after%%|*}"
+    after="$(printf '%s' "$after" | tr -d ' ▎▏▕_│|\t')"
+    [ -z "$after" ]
+}
+
+# pane 의 마지막 영역을 capture 해 사용자 입력 중인지 판정.
+# 반환: 0=idle, 1=busy. capture 실패 / pane_id 없음 / 휴리스틱 미매치는 idle (fail-open).
+orch_pane_idle() {
+    local pane_id="$1"
+    [ -n "$pane_id" ] || return 0
+    local cap
+    cap="$(tmux capture-pane -p -t "$pane_id" -S -10 2>/dev/null)" || return 0
+    _orch_capture_is_idle "$cap"
+}
+
 # ─── tmux pane 조작 ───────────────────────────────────────────────────
 
 # 현재 pane이 속한 윈도우에 split. 출력: "<window_id> <pane_id>"
@@ -597,6 +627,27 @@ orch_notify() {
     fi
     local cmd='/orch:check-inbox'
     [ -n "$msg_id" ] && cmd="${cmd} ${msg_id}"
+
+    # orch 타겟 입력 보호 가드: 사용자가 orch pane 에 타이핑 중이면 send-keys 가 버퍼를
+    # 깨뜨림. 휴리스틱으로 busy 면 bg 에서 idle 까지 대기 후 송신. ORCH_NO_NOTIFY_GUARD=1
+    # 로 비활성화 가능 (휴리스틱이 TUI 변경에 깨지면 escape hatch).
+    if [ "$to" = "orch" ] && [ "${ORCH_NO_NOTIFY_GUARD:-0}" != "1" ] \
+        && ! orch_pane_idle "$pane_id"; then
+        (
+            # 최대 20초 (1s × 20) 대기. idle 감지 즉시 송신. 타임아웃 도달하면 그래도
+            # 송신 (notify 누락 < 입력 깨짐 위험을 일시 허용).
+            attempts=0
+            while [ "$attempts" -lt 20 ]; do
+                sleep 1
+                orch_pane_idle "$pane_id" && break
+                attempts=$((attempts + 1))
+            done
+            orch_send_keys_line "$pane_id" "$cmd" >/dev/null 2>&1 || true
+        ) </dev/null >/dev/null 2>&1 &
+        disown 2>/dev/null || true
+        return 0
+    fi
+
     orch_send_keys_line "$pane_id" "$cmd" \
         || echo "WARN: '$to' (pane=$pane_id) 에 ${cmd} 전달 실패" >&2
 }
