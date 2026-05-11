@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# /orch:report <mp-id>
+# /orch:report <issue-id>
 # MP 운영 데이터를 모아 markdown 으로 stdout 에 출력. orch 가 이걸 읽어 REPORT.md 작성.
 # 활성 scope (.orch/runs/<mp_id>/ 또는 legacy .orch/<mp_id>/) 또는 가장 최근 archive
 # (.orch/archive/<mp_id>-YYYY-MM-DD/) 중 하나를 자동 선택.
@@ -12,7 +12,7 @@ source "${LIB_DIR}/lib.sh"
 orch_install_error_trap "$0"
 
 if [ "$#" -lt 1 ]; then
-    echo "사용법: /orch:report <mp-id>" >&2
+    echo "사용법: /orch:report <issue-id>" >&2
     exit 2
 fi
 
@@ -215,7 +215,7 @@ if [ -d "$archive_msg_dir" ]; then
     done
 fi
 
-# orch / leader top-level 인박스/아카이브 (mp-NN 키)
+# orch / leader top-level 인박스/아카이브 (issue_id 키)
 printf '\n### top-level 메시지 (orch ↔ leader)\n\n'
 for f in "$ORCH_INBOX/$mp_id.md" "$ORCH_ARCHIVE/$mp_id-"*.md; do
     [ -f "$f" ] || continue

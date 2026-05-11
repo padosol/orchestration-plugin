@@ -1,6 +1,6 @@
 ---
 description: 다른 워커에게 메시지 전송 (2-tier hub-and-spoke)
-argument-hint: <orch|mp-NN|mp-NN/project> <message>
+argument-hint: <orch|<issue_id>|<issue_id>/project> <message>
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/send.sh:*)
 ---
 
@@ -10,10 +10,10 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/send.sh:*)
 
 성공하면 메시지 ID + 보낸이→받는이 + **본문 byte 수**(`(N chars)`) 가 출력됩니다. 의도한 본문 길이와 차이가 크면 호출 측 따옴표·백틱·괄호로 인자가 잘렸을 가능성 — `--file` 또는 stdin 으로 재송신하세요. 차단/실패 시 에러 메시지를 사용자에게 그대로 알려주세요.
 
-**worker_id 형식**:
+**worker_id 형식** (issue_id = `[A-Za-z0-9_-]+`, 대소문자 보존, 사용자가 `/orch:issue-up` 에 넘긴 값 그대로):
 - `orch` — PM
-- `mp-NN` — MP-NN의 팀리더 (예: `mp-13`)
-- `mp-NN/<project>` — MP-NN 산하 워커 (예: `mp-13/server`)
+- `<issue_id>` — 이슈의 팀리더 (예: `MP-13`, `PROJ-456`, `142`)
+- `<issue_id>/<project>` — 이슈 산하 워커 (예: `MP-13/server`, `PROJ-456/ui`, `142/api`)
 
 **복잡한 메시지 (줄바꿈·따옴표·백틱·괄호 포함) — `--file` 모드 권장**:
 
@@ -49,12 +49,12 @@ bash -c "send.sh <target> <<'EOF' ... EOF"
 직접 셸에서 인터랙티브 입력하는 경우만 `send.sh <target> <<'EOF' ... EOF` heredoc 사용 가능 — Bash 도구 단일 명령 안에서는 위 `--file` 패턴 사용.
 
 **라우팅 정책 (강제)**:
-- ✅ `orch ↔ mp-NN` (PM ↔ leader)
-- ✅ `mp-NN ↔ mp-NN/x` (leader ↔ 자기 워커)
-- ❌ `mp-NN/x ↔ mp-NN/y` (워커끼리 직접 — leader 경유 필요)
-- ❌ `mp-NN/x ↔ orch` (워커는 orch에 직접 송신 불가 — leader 경유)
-- ❌ `orch ↔ mp-NN/x` (orch는 워커에 직접 송신 불가 — leader에 위임)
-- ❌ `mp-NN ↔ mp-MM` (cross-MP 차단)
+- ✅ `orch ↔ <issue_id>` (PM ↔ leader)
+- ✅ `<issue_id> ↔ <issue_id>/x` (leader ↔ 자기 워커)
+- ❌ `<issue_id>/x ↔ <issue_id>/y` (워커끼리 직접 — leader 경유 필요)
+- ❌ `<issue_id>/x ↔ orch` (워커는 orch에 직접 송신 불가 — leader 경유)
+- ❌ `orch ↔ <issue_id>/x` (orch는 워커에 직접 송신 불가 — leader에 위임)
+- ❌ `<issue_a> ↔ <issue_b>` (cross-issue 차단)
 - ❌ 자기 자신에게 송신
 
 **팁**:

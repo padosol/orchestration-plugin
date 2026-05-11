@@ -145,7 +145,7 @@ run_cleanup_if_enabled
 scope_dir_path="$(orch_scope_dir "$mp_id")"
 [ -d "$scope_dir_path" ] && run_report_if_enabled "$scope_dir_path"
 
-# mp-id 윈도우 식별 — leader 자기 자신이 그 윈도우에 있으므로 kill 은 마지막에.
+# issue_id 윈도우 식별 — leader 자기 자신이 그 윈도우에 있으므로 kill 은 마지막에.
 mp_window="$(tmux list-windows -t "$ORCH_TMUX_SESSION" -F '#{window_id} #W' 2>/dev/null \
     | awk -v n="$mp_id" '$2==n {print $1}' | head -n1)"
 
@@ -181,7 +181,7 @@ orch_notify "orch" || true
 # Slack 알림 — MP 완료. archive 경로 + REPORT 작성 안내.
 "${LIB_DIR}/notify-slack.sh" mp_done "$mp_id" "cascade shutdown 완료. /orch:report 로 REPORT.html 작성 권유" "$archive_dir" || true
 
-# 마지막: mp-id 윈도우(leader 자기 pane 포함) 통째로 kill — self-shutdown.
+# 마지막: issue_id 윈도우(leader 자기 pane 포함) 통째로 kill — self-shutdown.
 # 동기 kill 이 자기 pane 을 즉시 죽이면 이 스크립트 종료 후 잔여 명령이 없어 안전.
 if [ -n "$mp_window" ]; then
     tmux kill-window -t "$mp_window" 2>/dev/null || true

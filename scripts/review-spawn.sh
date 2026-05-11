@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # /orch:review-spawn <project-alias> <pr-num>
-# leader (mp-NN) 가 호출. PR 리뷰 전용 워커를 깨끗한 컨텍스트로 띄운다.
+# leader (<issue_id>) 가 호출. PR 리뷰 전용 워커를 깨끗한 컨텍스트로 띄운다.
 # reviewer 는 코드 수정 권한 없음 — gh pr diff/view 로 변경분 검토 후 GitHub PR 코멘트 + leader 답신, 자기 종료.
 
 set -euo pipefail
@@ -31,7 +31,7 @@ orch_settings_require || exit 2
 self="$(orch_detect_self 2>/dev/null || true)"
 self_kind="$(orch_wid_kind "${self:-}")"
 if [ "$self_kind" != "leader" ]; then
-    echo "ERROR: /orch:review-spawn 은 leader (mp-NN) pane 에서만 호출 가능 (현재: ${self:-unknown})" >&2
+    echo "ERROR: /orch:review-spawn 은 leader (<issue_id>) pane 에서만 호출 가능 (현재: ${self:-unknown})" >&2
     exit 2
 fi
 
@@ -52,7 +52,7 @@ fi
 project_path="$(orch_settings_project_field "$project" path)"
 [ -d "$project_path" ] || { echo "ERROR: project path '$project_path' 없음" >&2; exit 2; }
 
-# mp-NN 윈도우 찾기 (issue-up 이 만든 leader 윈도우 = 워커들이 합류한 윈도우)
+# leader 윈도우 찾기 (issue-up 이 만든 issue_id 이름 윈도우 = 워커들이 합류한 윈도우)
 mp_window="$(tmux list-windows -t "$ORCH_TMUX_SESSION" -F '#{window_id} #W' 2>/dev/null \
     | awk -v n="$mp_id" '$2==n {print $1}' | head -n1)"
 
@@ -74,14 +74,17 @@ sleep 4
 
 desc="$(orch_settings_project_field "$project" description)"
 stack="$(orch_settings_project_field "$project" tech_stack)"
-mp_upper="${mp_id^^}"
-issue_num_review="${mp_id#mp-}"
+# 표시·트래커 호출용 키 가공 (issue-up.sh 와 동일 규칙):
+#   issue_display = issue_id 그대로 (예: MP-13, PROJ-456, 142)
+#   issue_num     = 트래커 fetch (GitHub 처럼 숫자만 받는 호스트) 용 — 첫 [0-9]+ 시퀀스
+issue_display="$mp_id"
+issue_num_review="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1)"
 tracker="$(orch_settings_issue_tracker)"
 gh_repo="$(orch_settings_github_issue_repo 2>/dev/null || true)"
 guidelines_path="$(dirname "$LIB_DIR")/references/coding-guidelines.md"
 
 case "$tracker" in
-    linear) issue_lookup_line="- 이슈 컨텍스트: mcp__linear-server__get_issue ${mp_upper}" ;;
+    linear) issue_lookup_line="- 이슈 컨텍스트: mcp__linear-server__get_issue ${issue_display}" ;;
     github)
         if [ -n "$gh_repo" ]; then
             issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_review} --repo ${gh_repo}"
@@ -89,13 +92,14 @@ case "$tracker" in
             issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_review} (현재 repo 기준)"
         fi
         ;;
+    jira|gitlab) issue_lookup_line="- 이슈 컨텍스트: ${tracker} 자동 fetch 미지원 — PR description / leader 가 보낸 spec 으로 판단 (이슈 키 ${issue_display})" ;;
     none|*) issue_lookup_line="- 이슈 컨텍스트: 트래커 없음 — PR description / leader 가 보낸 spec 으로만 판단" ;;
 esac
 
 first_msg="너는 ${worker_id} reviewer 다 (PR #${pr} 단발성). 10년차 시니어 스태프 엔지니어로서 ${stack} 코드의 정확성 / 회귀 위험 / 사이드이펙트 / 단순성 / 가독성을 판단한다. **코드 수정·커밋·push 금지** (읽기 전용). 답신은 GitHub PR 코멘트 + leader($mp_id) inbox 두 채널 의무.
 
 [컨텍스트]
-- 이슈 ${mp_upper} / PR #${pr} / $project ($project_path)
+- 이슈 ${issue_display} / PR #${pr} / $project ($project_path)
 - tech: $stack / 설명: $desc
 
 [리뷰 체크리스트]

@@ -119,14 +119,25 @@ else
 fi
 
 # orphan 검출: <scope>/workers/ 에 leader가 없는 산하 워커
-# runs/<scope>/ 와 평탄 <scope>/ 양쪽 스캔.
+# runs/<scope>/ 와 평탄 <scope>/ 양쪽 스캔. .orch root 의 reserved 디렉토리 제외.
 echo
 orphans=()
 shopt -s nullglob
-for d in "$ORCH_RUNS_DIR"/mp-*/ "$ORCH_ROOT"/mp-*/; do
+declare -a candidates=()
+for d in "$ORCH_RUNS_DIR"/*/; do
+    [ -d "$d" ] && candidates+=("$d")
+done
+for d in "$ORCH_ROOT"/*/; do
     [ -d "$d" ] || continue
-    scope="$(basename "$d")"
-    [[ "$scope" =~ ^mp-[0-9]+$ ]] || continue
+    case "$(basename "${d%/}")" in
+        inbox|archive|workers|runs) continue ;;
+    esac
+    candidates+=("$d")
+done
+for d in "${candidates[@]}"; do
+    scope="$(basename "${d%/}")"
+    [[ "$scope" =~ $ORCH_LEADER_PATTERN ]] || continue
+    [ "$scope" = "orch" ] && continue
     if ! orch_worker_exists "$scope"; then
         # 이 scope에 leader 없음. 산하 워커가 있다면 orphan
         for sw in "${d}workers"/*.json; do

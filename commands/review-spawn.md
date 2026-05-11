@@ -16,7 +16,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/review-spawn.sh:*)
 
 **동작**:
 1. worker_id = `${mp_id}/review-${project}` 등록
-2. 같은 mp-NN 윈도우에 새 pane 추가 (cwd = project base path, **worktree 가 아님**)
+2. 같은 leader (`<issue_id>`) 윈도우에 새 pane 추가 (cwd = project base path, **worktree 가 아님**)
 3. claude 실행 + 첫 메시지 주입 — PR 번호 / 리뷰 체크리스트 / 답신 형식
 4. reviewer 가 `gh pr diff/view` 로 PR 검토 후 leader 에 코멘트 답신, 직후 자기 pane 종료(`exit`)
 

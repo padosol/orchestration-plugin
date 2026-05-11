@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # /orch:issue-up <issue-id> [--force]
-# orch가 호출. MP-XX 팀리더 pane을 띄운다.
+# orch가 호출. 사용자가 넘긴 <issue-id> 로 팀리더 pane을 띄운다 — 트래커별 키 형식 그대로
+# (Linear MP-13, Jira PROJ-456, GitHub 142, 자유 issue42 등).
 
 set -euo pipefail
 
@@ -12,7 +13,8 @@ orch_install_error_trap "$0"
 if [ "$#" -lt 1 ]; then
     cat >&2 <<EOF
 사용법: /orch:issue-up <issue-id> [--force] [--no-issue]
-  issue-id 예: MP-13 / mp-13 / 13 (모두 mp-13으로 정규화)
+  issue-id: 트래커의 키 그대로 ([A-Za-z0-9_-]+, 대소문자 보존).
+            예: MP-13 (Linear) / PROJ-456 (Jira) / 142 (GitHub) / issue42 (자유)
   --force: 이미 떠 있는 leader가 있어도 cascade kill 후 재생성
   --no-issue: 트래커 설정 무시 (이번 한 번만). leader 가 orch 에 spec 직접 요청.
               사용 케이스: 이슈 만들기 번거로운 작은 작업 / 이슈 없이 try-out
@@ -33,11 +35,13 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-mp_id="$(orch_normalize_issue_id "$raw_id" || true)"
-if [ -z "$mp_id" ]; then
-    echo "ERROR: issue-id '$raw_id' 정규화 실패. MP-NN 또는 NN 형식 사용." >&2
+issue_id="$(orch_normalize_issue_id "$raw_id" || true)"
+if [ -z "$issue_id" ]; then
+    echo "ERROR: issue-id '$raw_id' 정규화 실패. [A-Za-z0-9_-]+ 만 허용 ('orch' 는 reserved)." >&2
     exit 2
 fi
+# 코드 호환을 위해 옛 변수명 mp_id 유지 (값은 issue_id 와 동일).
+mp_id="$issue_id"
 
 orch_settings_require || exit 2
 
@@ -74,7 +78,7 @@ scope_dir="$(orch_scope_dir "$mp_id")"
 mkdir -p "$scope_dir/inbox" "$scope_dir/archive" "$scope_dir/workers" "$scope_dir/worktrees"
 mkdir -p "$ORCH_INBOX" "$ORCH_ARCHIVE" "$ORCH_WORKERS"
 
-# leader pane (mp-NN 이름의 새 윈도우 — 이후 워커들도 이 윈도우에 합류)
+# leader pane (issue_id 이름의 새 윈도우 — 이후 워커들도 이 윈도우에 합류)
 ids="$(orch_new_window "$mp_id" "$scope_dir")"
 read -r leader_window leader_pane <<<"$ids"
 if [ -z "$leader_pane" ]; then
@@ -88,8 +92,12 @@ tmux send-keys -t "$leader_pane" "export ORCH_WORKER_ID=$mp_id ORCH_BIN_DIR=$LIB
 sleep 4
 
 projects_blob="$(orch_settings_projects | tr '\n' ' ')"
-mp_upper="${mp_id^^}"
-issue_num="${mp_id#mp-}"
+# 표시·트래커 호출용 키 가공:
+#   issue_display = 사용자 입력 그대로 (예: MP-13, PROJ-456, 142, issue42)
+#   issue_num     = 트래커 fetch 에 넘기는 숫자 부분 — GitHub 처럼 숫자만 받는 호스트용.
+#                   첫 [0-9]+ 시퀀스 추출. 숫자 없으면 빈 문자열.
+issue_display="$mp_id"
+issue_num="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1)"
 tracker="$(orch_settings_issue_tracker)"
 gh_repo="$(orch_settings_github_issue_repo 2>/dev/null || true)"
 
@@ -101,7 +109,7 @@ fi
 
 case "$effective_tracker" in
     linear)
-        issue_fetch_step="1. mcp__linear-server__get_issue ${mp_upper} (description / acceptance criteria)"
+        issue_fetch_step="1. mcp__linear-server__get_issue ${issue_display} (description / acceptance criteria)"
         ;;
     github)
         if [ -n "$gh_repo" ]; then
@@ -111,7 +119,7 @@ case "$effective_tracker" in
         fi
         ;;
     jira|gitlab)
-        issue_fetch_step="1. settings.json 의 issue_tracker='${effective_tracker}' 는 자동 fetch 미지원 — orch 또는 사용자에게 ${mp_upper} spec 직접 요청 (\`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${mp_upper} spec 부탁 — ${effective_tracker} 이슈 본문/AC 붙여줘.\\nORCH_MSG\`)."
+        issue_fetch_step="1. settings.json 의 issue_tracker='${effective_tracker}' 는 자동 fetch 미지원 — orch 또는 사용자에게 ${issue_display} spec 직접 요청 (\`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — ${effective_tracker} 이슈 본문/AC 붙여줘.\\nORCH_MSG\`)."
         ;;
     none|*)
         if [ "$no_issue" -eq 1 ] && [ "$tracker" != "none" ]; then
@@ -119,11 +127,11 @@ case "$effective_tracker" in
         else
             tracker_note="(트래커 미사용 모드)"
         fi
-        issue_fetch_step="1. 이슈 컨텍스트 없음 ${tracker_note}. 본인 inbox 의 spec 메시지 또는 orch 의 첫 지시 확인. spec 부재 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${mp_upper} spec 부탁 — 작업 범위·acceptance·관련 repo 알려달라.\\nORCH_MSG\` 로 요청."
+        issue_fetch_step="1. 이슈 컨텍스트 없음 ${tracker_note}. 본인 inbox 의 spec 메시지 또는 orch 의 첫 지시 확인. spec 부재 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — 작업 범위·acceptance·관련 repo 알려달라.\\nORCH_MSG\` 로 요청."
         ;;
 esac
 
-first_msg="너는 ${mp_id} 팀리더(leader)다. 10년차 시니어 엔지니어링 매니저로서 사용자가 위임한 ${mp_upper} 을 책임지고 끝낸다 — spec 분해 / 산하 워커 spawn / 라우팅 / 통합 / shutdown. 의사결정은 코드·데이터 기반으로 하고, spec 이 모호하면 추측 진행 금지 — 사유 명시해 orch 에 escalate.
+first_msg="너는 ${mp_id} 팀리더(leader)다. 10년차 시니어 엔지니어링 매니저로서 사용자가 위임한 ${issue_display} 을 책임지고 끝낸다 — spec 분해 / 산하 워커 spawn / 라우팅 / 통합 / shutdown. 의사결정은 코드·데이터 기반으로 하고, spec 이 모호하면 추측 진행 금지 — 사유 명시해 orch 에 escalate.
 
 [셋업]
 ${issue_fetch_step}
@@ -137,7 +145,7 @@ ${issue_fetch_step}
 1. spec (issue 본문 또는 orch 첨부 spec) 분석. 복잡한 분석/아키텍처/스펙/API/DB 모델 필요 → PM 워커 먼저 spawn 해 설계 산출물 받은 뒤 phase plan 에 반영. 단순 fix·refactor 는 PM 생략 가능 — leader 가 직접 phase plan.
 2. \`.orch/runs/${mp_id}/phases.md\` 작성. 권장 형식:
    \`\`\`
-   # ${mp_upper} Phase Plan
+   # ${issue_display} Phase Plan
 
    ## Phase 1: <목표 한 줄>
    - 사용 워커: <e.g. ${mp_id}/server feat>
@@ -154,7 +162,7 @@ ${issue_fetch_step}
 3. phase plan 본문을 orch 로 송신 (heredoc, 라벨 \`[phase-plan]\` 권장):
    \`\`\`
    bash -c \"\\\$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'
-   [phase-plan ${mp_upper}]
+   [phase-plan ${issue_display}]
    <phases.md 본문>
    ORCH_MSG\"
    \`\`\`
@@ -163,8 +171,8 @@ ${issue_fetch_step}
 6. phase 완료 시마다 orch 에 \`[phase-done <n>]\` 짧은 보고 → 다음 phase 진입.
 
 [워커 spawn — 3 역할]
-  /orch:leader-spawn <project> [type]                    # developer (구현). worker_id=mp-NN/<project>.
-  /orch:leader-spawn <project> [type] --role pm          # PM (설계: 분석·아키텍처·스펙·API·DB 모델). worker_id=mp-NN/pm.
+  /orch:leader-spawn <project> [type]                    # developer (구현). worker_id=<issue_id>/<project>.
+  /orch:leader-spawn <project> [type] --role pm          # PM (설계: 분석·아키텍처·스펙·API·DB 모델). worker_id=<issue_id>/pm.
   /orch:review-spawn <project> <pr>                      # reviewer (코드 리뷰).
 
 type: feat | fix | refactor | chore | docs | test (dev 기본 feat / pm 기본 docs).

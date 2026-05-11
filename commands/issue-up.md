@@ -1,5 +1,5 @@
 ---
-description: MP-XXX 팀리더(leader) pane을 띄운다 — orch 전용
+description: 이슈 팀리더(leader) pane을 띄운다 — orch 전용
 argument-hint: <issue-id> [--force] [--no-issue]
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-up.sh:*)
 ---
@@ -12,7 +12,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-up.sh:*)
 
 **사용 규칙**:
 - **orch 전용 명령** — 다른 워커에서 호출하면 거부됨
-- `issue-id`: `MP-13` / `mp-13` / `13` 모두 허용 (내부적으로 `mp-13`). 이슈가 없으면 사용자가 임의로 골라도 OK (`mp-NN` 식별자 용도로만 쓰임).
+- `issue-id`: 트래커의 키 그대로 사용 (`[A-Za-z0-9_-]+`, 대소문자 보존). 예: Linear `MP-13` / Jira `PROJ-456` / GitHub `142` / 자유 `issue42`. 이슈가 없으면 사용자가 임의로 골라도 OK (식별자 용도로만 쓰임). `orch` 는 reserved.
 - 같은 leader가 이미 있으면 에러. cascade 재생성은 끝에 `--force`
 - leader pane은 호출자(orch) 윈도우를 split해 생성됨 (자동 타일링)
 - leader는 settings.json 의 `issue_tracker` 값에 따라 컨텍스트를 가져오고 작업 계획을 orch에 보고
@@ -37,9 +37,9 @@ MP 마무리 단계 (PR 머지 / 이슈 트래커 Done 표시 / REPORT 트리거
 
 **leader 안에서 다음 작업**:
 - `/orch:leader-spawn <project>` 로 산하 워커 생성
-- `/orch:send <mp-id>/<project> '...'` 로 워커에 지시
+- `/orch:send <issue_id>/<project> '...'` 로 워커에 지시
 - `/orch:send orch '...'` 로 orch(=사용자에 전달용)에 진행 보고
-- `/orch:issue-down <mp-id>` 로 cascade shutdown
+- `/orch:issue-down <issue_id>` 로 cascade shutdown
 
 **leader 작업 규약 — 워커 worktree 강제**:
 

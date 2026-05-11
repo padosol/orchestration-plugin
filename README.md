@@ -3,14 +3,14 @@
 **한 명의 PM (orch) + 여러 개의 팀리더 (leader) + 그 산하 프로젝트 워커들** 을 tmux pane / git worktree / 파일 메일박스 위에 얹어 한 사람이 동시에 굴리도록 만든 Claude Code 플러그인.
 
 ```
-사용자 ─ orch ─┬─ MP-13 (leader) ─┬─ mp-13/repo-a  → PR #142
-              │                   ├─ mp-13/repo-b  → PR #143
-              │                   └─ mp-13/repo-c  → PR #144
-              └─ MP-37 (leader) ─┬─ mp-37/repo-a  → PR #97
-                                 └─ mp-37/repo-b  → PR #166
+사용자 ─ orch ─┬─ MP-13 (leader) ───┬─ MP-13/repo-a       → PR #142
+              │                    ├─ MP-13/repo-b       → PR #143
+              │                    └─ MP-13/repo-c       → PR #144
+              └─ PROJ-456 (leader) ┬─ PROJ-456/repo-a    → PR #97
+                                   └─ PROJ-456/repo-b    → PR #166
 ```
 
-각 leader / worker 는 자기 worktree + 자기 Claude 세션을 가진다. orch 는 사용자에게서 받은 큰 이슈를 leader 에 위임하고, leader 는 산하 워커에 작업을 분배한다. 모든 메시지는 hub-and-spoke — 워커끼리 직접 통신은 차단되고 항상 leader 를 경유.
+각 leader / worker 는 자기 worktree + 자기 Claude 세션을 가진다. leader 식별자(`<issue_id>`)는 사용자가 `/orch:issue-up` 에 넘긴 이슈 키 그대로 — Linear `MP-13`, Jira `PROJ-456`, GitHub `142`, 자유 `issue42` 등 트래커 무관 (`[A-Za-z0-9_-]+`, 대소문자 보존). orch 는 사용자에게서 받은 큰 이슈를 leader 에 위임하고, leader 는 산하 워커에 작업을 분배한다. 모든 메시지는 hub-and-spoke — 워커끼리 직접 통신은 차단되고 항상 leader 를 경유.
 
 ---
 
@@ -73,12 +73,13 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 이후 orch 와 평소처럼 대화하다가 큰 이슈가 떴을 때:
 
 ```
-/orch:issue-up MP-13              # Linear / 없음 모드
-/orch:issue-up 142                # GitHub Issues 모드 (이슈 번호)
-/orch:issue-up 99 --no-issue      # 이슈 없는 ad-hoc 작업 — 트래커 설정 무관, leader 가 orch 에 spec 직접 요청
+/orch:issue-up MP-13              # Linear 이슈 키
+/orch:issue-up PROJ-456           # Jira 이슈 키
+/orch:issue-up 142                # GitHub Issue 번호
+/orch:issue-up issue-99 --no-issue # 자유 식별자 ad-hoc 작업 — 트래커 설정 무관, leader 가 orch 에 spec 직접 요청
 ```
 
-→ leader pane 이 떠서 트래커별로 이슈 컨텍스트를 가져와 plan 을 orch 인박스로 보고 → 사용자 confirm → leader 가 `/orch:leader-spawn repo-a fix` 등으로 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:issue-down MP-13` 으로 정리 + REPORT.html.
+→ leader pane 이 떠서 트래커별로 이슈 컨텍스트를 가져와 plan 을 orch 인박스로 보고 → 사용자 confirm → leader 가 `/orch:leader-spawn repo-a fix` 등으로 워커 spawn → 워커 PR → reviewer → 머지 → `/orch:issue-down <issue_id>` 으로 정리 + REPORT.html.
 
 ---
 
@@ -89,7 +90,7 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 | `/orch:setup` | 사용자 (orch) | `.orch/settings.json` 자동 생성 |
 | `/orch:up` | 사용자 (orch) | 현재 pane 을 orch 로 등록 (1회) |
 | `/orch:down` | 사용자 | tmux 세션 통째 종료 |
-| `/orch:issue-up <id>` | orch | MP-NN leader 띄움 |
+| `/orch:issue-up <id>` | orch | `<id>` leader 띄움 (트래커 키 그대로) |
 | `/orch:issue-down <id>` | orch / leader | MP cascade shutdown + 정리 + REPORT |
 | `/orch:leader-spawn <project> [type]` | leader | 산하 프로젝트 워커 spawn |
 | `/orch:review-spawn <project> <pr>` | leader | PR 리뷰 전용 워커 (단발성) |
@@ -111,17 +112,22 @@ orch ~/path/to/workspace   # 인자 없으면 cwd
 ### 2-tier hub-and-spoke
 
 - **orch** — 사용자와 대화하는 PM. 큰 이슈를 받아 leader 에 위임.
-- **leader (mp-NN)** — 한 MP 의 책임자. 산하 프로젝트 워커들을 spawn / 라우팅 / shutdown.
-- **worker (mp-NN/&lt;project&gt;)** — 한 repo 의 작업자. 자기 worktree + 자기 PR 라이프사이클 책임.
+- **leader (`<issue_id>`)** — 한 이슈의 책임자. 산하 프로젝트 워커들을 spawn / 라우팅 / shutdown.
+- **worker (`<issue_id>/<project>`)** — 한 repo 의 작업자. 자기 worktree + 자기 PR 라이프사이클 책임.
 
 워커끼리는 직접 통신 안 됨. `/orch:send` 가 라우팅 가드로 막는다. 다른 프로젝트와 의존 생기면 leader 가 라우팅하거나 orch 로 escalate.
 
 ### worker_id 표기
 
+issue_id 는 사용자가 `/orch:issue-up` 에 넘긴 키 그대로 (`[A-Za-z0-9_-]+`, 대소문자 보존, `orch` 는 reserved):
+
 ```
-orch              ← PM
-mp-13             ← leader
-mp-13/repo-a      ← MP-13 산하 repo-a 프로젝트 워커
+orch                  ← PM
+MP-13                 ← leader (Linear 키 그대로)
+PROJ-456              ← leader (Jira 키 그대로)
+142                   ← leader (GitHub Issue 번호)
+MP-13/repo-a          ← MP-13 산하 repo-a 프로젝트 워커
+PROJ-456/repo-a       ← PROJ-456 산하 repo-a 프로젝트 워커
 ```
 
 ### PR 라이프사이클 (4 단계)
@@ -167,29 +173,29 @@ mp-13/repo-a      ← MP-13 산하 repo-a 프로젝트 워커
 
 비-blocking 으로 여러 워커가 동시에 진행되면 산출물 의존이 있는데도 병렬 실행되어 순서가 꼬이는 사고가 발생한다. 이를 막기 위해 **leader 가 phase plan 을 사용자 컨펌 받고 phase 단위 순차 실행** 한다.
 
-- **소유**: leader (mp-NN). PM 워커는 설계 영역 (분석·아키텍처·스펙·API·DB 모델) 만 책임 — 그 산출물을 leader 가 받아 phase 분해.
-- **저장**: `.orch/runs/<mp_id>/phases.md` (운영 메타, scope archive 에 함께 보존).
-- **포맷 예시**:
+- **소유**: leader (`<issue_id>`). PM 워커는 설계 영역 (분석·아키텍처·스펙·API·DB 모델) 만 책임 — 그 산출물을 leader 가 받아 phase 분해.
+- **저장**: `.orch/runs/<issue_id>/phases.md` (운영 메타, scope archive 에 함께 보존).
+- **포맷 예시** (Linear `MP-13` 인 경우):
   ```
   # MP-13 Phase Plan
 
   ## Phase 0: 설계 (PM)
-  - 사용 워커: mp-13/pm docs
+  - 사용 워커: MP-13/pm docs
   - 산출물: docs/spec/MP-13/api.md PR
   - 완료 기준: PR merged
 
   ## Phase 1: server 구현
-  - 사용 워커: mp-13/server feat
+  - 사용 워커: MP-13/server feat
   - 산출물: API 엔드포인트 PR
   - 완료 기준: PR merged + 로컬 동기화
   - 의존: Phase 0
 
   ## Phase 2: ui 통합
-  - 사용 워커: mp-13/ui feat
+  - 사용 워커: MP-13/ui feat
   - 의존: Phase 1
   ```
-- **흐름**: leader 가 spec 받자마자 phases.md 작성 → orch 로 `[phase-plan MP-NN]` 송신 → 사용자 GO → Phase 1 만 spawn → 완료 보고 후 Phase 2 ...
-- **단순 MP** 도 phase 1개로 표현 (Phase 1: 수정 + PR + 머지) — 일관성 확보 + 사용자가 흐름 따라가기 쉬움.
+- **흐름**: leader 가 spec 받자마자 phases.md 작성 → orch 로 `[phase-plan <issue_id>]` 송신 → 사용자 GO → Phase 1 만 spawn → 완료 보고 후 Phase 2 ...
+- **단순 이슈** 도 phase 1개로 표현 (Phase 1: 수정 + PR + 머지) — 일관성 확보 + 사용자가 흐름 따라가기 쉬움.
 - **금지**: phase plan 사용자 GO 받기 전 워커 spawn / 다중 phase 동시 진행.
 
 ## Worker → Leader 차단 질문 (`wait-reply.sh`)
@@ -198,7 +204,7 @@ mp-13/repo-a      ← MP-13 산하 repo-a 프로젝트 워커
 
 ```bash
 qid="q-$(date +%s)-$RANDOM"
-bash -c "$ORCH_BIN_DIR/send.sh mp-13 <<ORCH_MSG
+bash -c "$ORCH_BIN_DIR/send.sh <leader_id> <<ORCH_MSG
 [question:$qid]
 A vs B 결정 필요. 추천: A (이유 ...).
 ORCH_MSG"
@@ -206,6 +212,8 @@ bash $ORCH_BIN_DIR/wait-reply.sh $qid     # ← 차단. 답 도착할 때까지 
 # wait-reply 가 stdout 으로 답 본문 + msg_id 출력.
 # 처리 후: bash $ORCH_BIN_DIR/inbox-archive.sh <msg_id>
 ```
+
+(`<leader_id>` = 자기 leader 식별자, 예: `MP-13`, `PROJ-456`, `142`)
 
 - **마커 규약**: 워커 질문 `[question:<q-id>]`, leader 답 `[reply:<q-id>]` — 둘 다 본문에 포함.
 - **leader 응답 의무**: 워커가 `[question:...]` 마커 달면 wait-reply 로 막힌 상태. leader 는 답 미루지 말고 우선 처리. 결정이 사용자 차원이면 orch 로 forward 후 사용자 답을 같은 q-id 로 워커에 송신.
@@ -314,7 +322,7 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 ├── workers/<id>.json              # orch / leader registry
 ├── errors.jsonl                   # top-level 에러 로그
 └── runs/<scope>/                  # 진행 중 MP 들 (wrapper)
-    └── mp-13/
+    └── MP-13/                          # 사용자가 issue-up 에 넘긴 식별자 그대로
         ├── inbox/<role>.md
         ├── archive/<role>-YYYY-MM-DD.md
         ├── workers/<role>.json         # 살아있는 워커 등록
@@ -324,7 +332,7 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
         └── errors.jsonl
 ```
 
-- **`runs/` wrapper**: 동시 진행 MP 가 많아져도 `.orch/` 루트가 정돈됨.
+- **`runs/` wrapper**: 동시 진행 이슈가 많아져도 `.orch/` 루트가 정돈됨.
 - **inbox 0 bytes = 정상**: `inbox-archive.sh` 가 처리된 메시지를 archive 로 옮기고 inbox 를 truncate. 처리 흔적은 archive 에서 확인.
 
 ---
@@ -364,13 +372,13 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 
 | 값 | leader 가 하는 일 | 추가 셋업 |
 |---|---|---|
-| `linear` | `mcp__linear-server__get_issue MP-N` 으로 컨텍스트 fetch. issue-down 시 Done 처리, REPORT 의 stale docs → Linear sub-issue 자동 생성. | Linear MCP 서버 등록 (`~/.claude.json` 의 mcpServers). |
+| `linear` | `mcp__linear-server__get_issue <issue_id>` 로 컨텍스트 fetch. issue-down 시 Done 처리, REPORT 의 stale docs → Linear sub-issue 자동 생성. | Linear MCP 서버 등록 (`~/.claude.json` 의 mcpServers). |
 | `github` | `gh issue view N --repo <github_issue_repo>` 로 fetch. stale docs → `gh issue create` 로 GitHub issue 생성. | `github_issue_repo` 필수 (이슈가 사는 저장소). 이미 `gh auth login` 되어있어야. |
 | `jira` | 자동 fetch 미지원. leader 가 orch / 사용자에게 spec 직접 요청 (metadata 만 저장). | 없음. 후속 자동 fetch 는 향후 작업. |
 | `gitlab` | 자동 fetch 미지원. leader 가 orch / 사용자에게 spec 직접 요청 (metadata 만 저장). | 없음. 후속 자동 fetch 는 향후 작업. |
 | `none` | 트래커 호출 없음. leader 가 orch 에 spec 직접 요청 → orch 가 사용자에게 묻고 spec 을 leader inbox 로 전달. stale docs 는 REPORT.html 에만 기록 (자동 이슈 생성 안 함). | 없음. 가장 가벼움. |
 
-내부적으로 worker_id 는 항상 `mp-NN` 형식 — 트래커 종류와 무관 (`MP` 는 multi-project 의 약자, Linear-specific 아님). `/orch:issue-up <num>` 의 `<num>` 만 트래커별 의미가 다르다 (Linear MP-N / GitHub issue # / 자유 식별자).
+내부적으로 worker_id 는 사용자가 `/orch:issue-up <id>` 에 넘긴 `<id>` 를 그대로 사용 — `[A-Za-z0-9_-]+`, 대소문자 보존, `orch` 만 reserved. 0.12.0 이전엔 `mp-NN` 으로 강제 변환됐지만 0.13.0 부터 트래커 무관 (Linear `MP-13`, Jira `PROJ-456`, GitHub `142`, 자유 `issue42` 모두 입력값 그대로 식별자).
 
 **한 번만 이슈 없이 띄우기**: `--no-issue` 플래그. 워크스페이스가 `linear` / `github` 모드여도 이번 호출만 fetch 스킵, leader 가 orch 에 spec 직접 요청. 이슈 만들기 번거로운 작은 작업이나 try-out 에 유용.
 
@@ -392,7 +400,7 @@ orch 가 `/orch:report <mp>` 실행 → REPORT-data.md 를 구조화된 JSON 으
 
 **워커가 응답 없음**:
 ```
-/orch:peek mp-13/repo-a
+/orch:peek MP-13/repo-a
 ```
 → 마지막 30줄 + 활동 시각 + inbox 카운트. claude 가 사용자 입력 대기 중인지 확인.
 

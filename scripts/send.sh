@@ -15,7 +15,7 @@ if [ "$#" -lt 1 ]; then
   send.sh <target> --file <path>          (파일 본문 — 따옴표/괄호/줄바꿈 모두 안전. 권장)
   send.sh <target> < body.txt             (stdin redirect — 단순한 단일 명령에서만)
   send.sh <target> <<'EOF' ... EOF        (heredoc — 직접 셸에서만. bash -c 안에서 쓰지 말 것)
-target 예시: orch | mp-13 | mp-13/server
+target 예시: orch | MP-13 | MP-13/server | PROJ-456/ui | 142/api
 
 ⚠ \`bash -c "send.sh ... <<EOF ..."\` 같이 따옴표 안에 heredoc 넣으면 외부 따옴표/괄호와
 충돌해 syntax error 가 난다. 본문이 한 줄이 아니거나 따옴표·괄호를 포함하면 반드시
@@ -57,7 +57,7 @@ fi
 
 if ! orch_is_valid_worker_id "$target"; then
     echo "ERROR: 잘못된 target worker_id: '$target'" >&2
-    echo "  허용 형식: orch | mp-NN | mp-NN/<project>" >&2
+    echo "  허용 형식: orch | <issue_id> | <issue_id>/<project>  (issue_id = [A-Za-z0-9_-]+)" >&2
     exit 2
 fi
 
