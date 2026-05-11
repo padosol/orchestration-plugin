@@ -166,9 +166,9 @@ spec 의 title / labels / issuetype 에서 작업 타입 1회 추론. 타입에 
    - feature: ${workflows_dir}/feature.md
    - bug:     ${workflows_dir}/bug.md
    - refactor: ${workflows_dir}/refactor.md
-2. \`.orch/runs/${mp_id}/type\` 에 결정한 타입 한 줄 기록 (review-spawn 이 읽어 reviewer 도 같은 가이드 적용):
+2. \`.orch/runs/${mp_id}/type\` 에 결정한 타입을 **소문자 한 단어** (feature|bug|refactor) 로 한 줄 기록 — review-spawn 이 읽어 reviewer 도 같은 가이드 적용:
    \`\`\`
-   bash -c 'echo <type> > .orch/runs/${mp_id}/type'
+   bash -c 'echo feature > .orch/runs/${mp_id}/type'
    \`\`\`
 
 [Phase Plan — 필수, 사용자 GO 전 워커 spawn 금지]

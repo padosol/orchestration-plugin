@@ -169,7 +169,7 @@ PROJ-456/repo-a       ← PROJ-456 산하 repo-a 프로젝트 워커
 
 ---
 
-## 작업 타입 — 워크플로우 분기 (0.15.0+)
+## 작업 타입 — 워크플로우 분기
 
 이슈가 feature 인지 bug 인지 refactor 인지에 따라 좋은 phase 구조와 review 잣대가 다르다. leader 는 phase plan 을 짜기 직전 **작업 타입을 1회 결정** 하고, 그 타입에 맞는 가이드 (`references/workflows/<type>.md`) 를 phase 골격 + reviewer 체크리스트 잣대로 사용한다.
 

@@ -90,14 +90,15 @@ workflows_dir_review="${plugin_root_review}/references/workflows"
 scope_dir_review="$(orch_scope_dir "$mp_id" 2>/dev/null || true)"
 issue_type=""
 if [ -n "$scope_dir_review" ] && [ -f "${scope_dir_review}/type" ]; then
-    issue_type="$(head -1 "${scope_dir_review}/type" 2>/dev/null | tr -d '[:space:]' || true)"
+    # 대소문자·공백 정규화 — leader 가 "Feature" / "BUG " 적어도 매칭되도록.
+    issue_type="$(head -1 "${scope_dir_review}/type" 2>/dev/null | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' || true)"
 fi
 case "$issue_type" in
     feature|bug|refactor)
         workflow_review_line="추가로 ${workflows_dir_review}/${issue_type}.md 1회 Read — 'Review 체크리스트' 절을 ${issue_type} 작업 평가의 우선 기준으로 사용 (위의 일반 항목보다 ${issue_type} 특화 항목 우선)."
         ;;
     *)
-        workflow_review_line="작업 타입 미기록 (.orch/runs/${mp_id}/type 없음) — 일반 5항목 체크리스트만 적용. leader 가 0.15.0 이전 issue-up 으로 띄운 케이스."
+        workflow_review_line="작업 타입 미기록 (.orch/runs/${mp_id}/type 없음 또는 알 수 없는 값) — 일반 5항목 체크리스트만 적용."
         ;;
 esac
 
