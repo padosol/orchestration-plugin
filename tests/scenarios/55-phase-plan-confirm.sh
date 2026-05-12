@@ -25,16 +25,27 @@ if ! grep -q '자유서술' "$src_inbox"; then
     echo "FAIL: check-inbox.md 에 '자유서술 답신 금지' 안내 없음" >&2; exit 1
 fi
 
-# issue-up.sh — leader 가 세 라벨 + AskUserQuestion 흐름 인지
-for token in '[plan-confirm]' '[plan-revise]' '[plan-cancel]' 'AskUserQuestion'; do
+# SKILL 통합 후: first_msg 는 [plan-confirm] + AskUserQuestion hard guard,
+# 절차 본문 (3 라벨 분기) 은 orch-leader SKILL 에서 검사.
+skill_leader="$PLUGIN_ROOT/skills/orch-leader/SKILL.md"
+[ -f "$skill_leader" ] || { echo "FAIL: $skill_leader 없음" >&2; exit 1; }
+
+for token in '[plan-confirm]' 'AskUserQuestion'; do
     if ! grep -qF "$token" "$src_up"; then
-        echo "FAIL: issue-up.sh 에 '${token}' 없음" >&2; exit 1
+        echo "FAIL: issue-up.sh first_msg 에 hard guard '${token}' 없음" >&2; exit 1
     fi
 done
 
-# GO 받기 전 spawn 금지 명시
+# orch-leader SKILL — 3 라벨 분기 완전성
+for token in '[plan-confirm]' '[plan-revise]' '[plan-cancel]'; do
+    if ! grep -qF "$token" "$skill_leader"; then
+        echo "FAIL: orch-leader SKILL 에 '${token}' 라벨 분기 없음" >&2; exit 1
+    fi
+done
+
+# GO 받기 전 spawn 금지 명시 — first_msg 의 hard guard
 if ! grep -q 'plan-confirm.*GO.*받기 전' "$src_up"; then
-    echo "FAIL: issue-up.sh 에 'plan-confirm GO 받기 전 spawn 금지' 안내 없음" >&2; exit 1
+    echo "FAIL: issue-up.sh 에 'plan-confirm GO 받기 전 spawn 금지' hard guard 없음" >&2; exit 1
 fi
 
 echo "OK phase-plan-confirm"

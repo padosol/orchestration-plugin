@@ -22,12 +22,17 @@ done
 
 src_up="$PLUGIN_ROOT/scripts/issue-up.sh"
 src_rev="$PLUGIN_ROOT/scripts/review-spawn.sh"
+skill_leader="$PLUGIN_ROOT/skills/orch-leader/SKILL.md"
+[ -f "$skill_leader" ] || { echo "FAIL: $skill_leader 없음" >&2; exit 1; }
 
-# issue-up.sh — 타입 판별 단계 / 워크플로우 가이드 path / type 파일 기록
-grep -q '작업 타입 판별' "$src_up" || { echo "FAIL: issue-up.sh 에 '작업 타입 판별' 섹션 없음" >&2; exit 1; }
-grep -q 'AskUserQuestion' "$src_up" || { echo "FAIL: issue-up.sh 에 AskUserQuestion fallback 안내 없음" >&2; exit 1; }
+# SKILL 통합 후: first_msg = workflows_dir 변수 주입 + AskUserQuestion hard guard.
+# 절차 본문 ('작업 타입 판별' / 'runs/<mp_id>/type' 기록) 은 orch-leader SKILL 에서 검사.
 grep -q 'references/workflows' "$src_up" || { echo "FAIL: issue-up.sh 가 references/workflows 경로를 가이드로 안 줌" >&2; exit 1; }
-grep -q "runs/\${mp_id}/type" "$src_up" || { echo "FAIL: issue-up.sh 가 .orch/runs/<id>/type 기록 안내 없음" >&2; exit 1; }
+grep -q 'AskUserQuestion' "$src_up" || { echo "FAIL: issue-up.sh 에 AskUserQuestion hard guard 안내 없음" >&2; exit 1; }
+
+grep -q '작업 타입 판별' "$skill_leader" || { echo "FAIL: orch-leader SKILL 에 '작업 타입 판별' 섹션 없음" >&2; exit 1; }
+grep -q "runs/<mp_id>/type" "$skill_leader" || { echo "FAIL: orch-leader SKILL 에 .orch/runs/<id>/type 기록 안내 없음" >&2; exit 1; }
+grep -q 'references/workflows' "$skill_leader" || { echo "FAIL: orch-leader SKILL 이 references/workflows 경로를 가이드로 안 줌" >&2; exit 1; }
 
 # review-spawn.sh — type 파일 read + 가이드 안내
 grep -q "scope_dir_review" "$src_rev" || { echo "FAIL: review-spawn.sh 에 scope_dir/type 읽기 로직 없음" >&2; exit 1; }

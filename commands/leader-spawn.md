@@ -19,10 +19,11 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/leader-spawn.sh:*)
 - 같은 worker_id 가 이미 떠 있으면 에러 (PM 은 한 이슈 당 단일이라 두 번째 호출 차단됨).
 
 **복잡 이슈 워크플로 (PM → developer)**:
-1. 분석/스펙/API/데이터모델 필요한 이슈는 PM 먼저: `/orch:leader-spawn <project> --role pm`
-2. PM 이 `[direction-check]` 송신 → leader 가 본문 그대로 `/orch:send orch` 로 forward
-3. 사용자 답신 (orch → leader inbox) 을 PM 으로 forward
-4. PM 산출물 finalize → PR 머지 후 developer spawn → 구현
+1. 분석/스펙/API/데이터모델 필요하면 phase plan 에 **Phase 0: 분석/설계** 로 명시. **`[plan-confirm] GO` 받기 전 PM 포함 어떤 워커도 spawn 금지.**
+2. GO 후 그 phase 시작 시점에 PM spawn: `/orch:leader-spawn <project> --role pm`
+3. PM 이 `[direction-check]` + `[question:<qid>]` 송신 → leader 가 본문 그대로 `/orch:send orch` 로 forward
+4. 사용자 답신 (orch → leader inbox) 을 같은 `[reply:<qid>]` 마커로 PM 에 forward
+5. PM 산출물 finalize → PR 머지 후 다음 phase 시작 시점에 developer spawn → 구현
 
 **worktree 격리 — 강제**:
 이 명령은 항상 격리 worktree 를 생성하고 그 안에서 워커를 띄운다. leader 가 자기 cwd 에서 직접 코드 작업하지 말 것 — 작업은 무조건 워커 spawn 으로 위임.
@@ -34,7 +35,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/leader-spawn.sh:*)
    - pm:  branch `<type>/<issue_id>-pm`, path `.../worktrees/<issue_id>/<project>/pm`
 3. tmux: `<issue_id>` 윈도우가 있으면 split, 없으면 새로 생성
 4. 워커 pane에서 `claude` 실행 (ORCH_WORKER_ID 환경변수 셋)
-5. 첫 메시지 자동 주입 (역할별 페르소나 + 라우팅 규칙)
+5. 첫 메시지 자동 주입 — 동적 컨텍스트 + Skill 도구 트리거 (`orch-pm` / `orch-developer-worker`) + hard guard. 페르소나·절차 본문은 해당 SKILL.md 와 `references/orch-protocols.md` 단일 source 에서 로드.
 6. 등록: `.orch/runs/<issue_id>/workers/<role>.json` (`<role>` = project alias 또는 `pm`)
 
 이후 leader는 `/orch:send <issue_id>/<role> '<지시>'` 로 워커에 작업 분배 (`<role>` 은 PM 이면 `pm`, developer 면 project alias).

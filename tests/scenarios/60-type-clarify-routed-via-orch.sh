@@ -1,25 +1,28 @@
 #!/usr/bin/env bash
 # Regression guard: 작업 타입 모호 시 leader 가 직접 AskUserQuestion 을 호출하지 않고
 # orch 경유 ([type-clarify:<qid>] 송신 → orch 가 AskUserQuestion → [type-decision:<qid>] 회신) 로
-# 라우팅되는지 검증. 허브 구조 (사용자 ↔ orch ↔ leader) 위반 재발 차단.
+# 라우팅되는지 검증. SKILL 통합 후 절차 본문은 orch-leader SKILL.md 로 이동했으므로
+# first_msg 에는 hard guard, SKILL 본문에는 자세한 절차로 분리해 검사.
 
 set -euo pipefail
 
 src_up="$PLUGIN_ROOT/scripts/issue-up.sh"
+skill_leader="$PLUGIN_ROOT/skills/orch-leader/SKILL.md"
 doc="$PLUGIN_ROOT/commands/check-inbox.md"
 
-[ -f "$src_up" ] || { echo "FAIL: $src_up 없음" >&2; exit 1; }
-[ -f "$doc" ]    || { echo "FAIL: $doc 없음" >&2; exit 1; }
+[ -f "$src_up" ]       || { echo "FAIL: $src_up 없음" >&2; exit 1; }
+[ -f "$skill_leader" ] || { echo "FAIL: $skill_leader 없음" >&2; exit 1; }
+[ -f "$doc" ]          || { echo "FAIL: $doc 없음" >&2; exit 1; }
 
-# 1. issue-up.sh first_msg 가 [type-clarify:<qid> ...] 라벨 송신을 안내해야 (qid 박힌 형식)
+# 1. first_msg hard guard — [type-clarify:<qid>] 라벨이 leader 의 명시 트리거
 if ! grep -qF '[type-clarify:' "$src_up"; then
-    echo "FAIL: issue-up.sh 에 '[type-clarify:<qid>' 송신 라벨 안내 없음 (correlation id 누락)" >&2
+    echo "FAIL: issue-up.sh first_msg 에 '[type-clarify:<qid>' 송신 라벨 안내 없음 (correlation id hard guard)" >&2
     exit 1
 fi
 
-# 2. leader 가 직접 AskUserQuestion 호출 금지 명시 문구
+# 2. first_msg hard guard — leader 가 직접 AskUserQuestion 호출 금지
 if ! grep -qF 'leader 가 직접 AskUserQuestion 호출 금지' "$src_up"; then
-    echo "FAIL: 'leader 가 직접 AskUserQuestion 호출 금지' 문구 누락 — 허브 구조 위반 재발 가능" >&2
+    echo "FAIL: issue-up.sh first_msg 에 'leader 가 직접 AskUserQuestion 호출 금지' hard guard 누락" >&2
     exit 1
 fi
 
@@ -29,8 +32,9 @@ if ! grep -qF '[type-clarify:' "$doc"; then
     exit 1
 fi
 
-# 4. orch 가 회신할 때 쓰는 [type-decision:<qid>] 라벨이 양쪽 문서에 일관되게 등장
-for f in "$src_up" "$doc"; do
+# 4. orch 가 회신할 때 쓰는 [type-decision:<qid>] 라벨이 양쪽에 일관되게 등장
+#    (first_msg 의 hard guard + check-inbox 절차 + orch-leader SKILL 본문)
+for f in "$src_up" "$doc" "$skill_leader"; do
     if ! grep -qF '[type-decision:' "$f"; then
         echo "FAIL: $f 에 '[type-decision:<qid>]' 회신 라벨 안내 없음" >&2
         exit 1
@@ -54,9 +58,14 @@ if ! grep -q '같은 qid' "$doc"; then
     exit 1
 fi
 
-# 7. leader 가 wait-reply 또는 [reply:<qid>] 매칭으로 차단 대기하는 패턴 안내
-if ! grep -q '\[reply:' "$src_up"; then
-    echo "FAIL: issue-up.sh 에 '[reply:<qid>]' 매칭 안내 없음 — wait-reply 차단 대기 패턴 미사용" >&2
+# 7. leader 의 wait-reply 차단 패턴 — first_msg 에는 hard guard 만, 절차는 SKILL 본문에.
+#    SKILL 본문에 [reply:<qid>] 매칭 + wait-reply.sh 사용 절차가 있어야 함.
+if ! grep -qF '[reply:' "$skill_leader"; then
+    echo "FAIL: orch-leader SKILL 에 '[reply:<qid>]' 매칭 안내 없음 — wait-reply 차단 대기 패턴 미사용" >&2
+    exit 1
+fi
+if ! grep -qF 'wait-reply.sh' "$skill_leader"; then
+    echo "FAIL: orch-leader SKILL 에 'wait-reply.sh' 차단 대기 패턴 안내 없음" >&2
     exit 1
 fi
 

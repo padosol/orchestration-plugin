@@ -67,10 +67,13 @@ for token in '[follow-up-candidates' '등록 결정' 'errors_check' 'ai_ready_ch
     fi
 done
 
-# 5. scripts/issue-up.sh first_msg — PR-4 종료 단계에 follow-up-candidates 송신
+# 5. SKILL 통합 후: 종료 절차 (REPORT + follow-up-candidates 송신) 는 orch-leader SKILL
+#    본문에 있고, first_msg 는 hard guard 만. SKILL.md 검사로 분리.
+skill_leader="$PLUGIN_ROOT/skills/orch-leader/SKILL.md"
+[ -f "$skill_leader" ] || { echo "FAIL: $skill_leader 없음" >&2; exit 1; }
 for token in 'follow-up-candidates' 'errors_check'; do
-    if ! grep -qF "$token" "$up_sh"; then
-        echo "FAIL: issue-up.sh first_msg 에 '${token}' 없음" >&2; exit 1
+    if ! grep -qF "$token" "$skill_leader"; then
+        echo "FAIL: orch-leader SKILL 에 '${token}' 안내 없음" >&2; exit 1
     fi
 done
 
