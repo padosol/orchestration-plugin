@@ -154,7 +154,7 @@ if [ -z "$worker_pane" ]; then
     exit 2
 fi
 
-orch_worker_register "$worker_id" "worker" "$mp_window" "$worker_pane" "$worktree_path"
+orch_worker_register "$worker_id" "worker" "$mp_window" "$worker_pane" "$worktree_path" "$project"
 
 tmux send-keys -t "$worker_pane" "export ORCH_WORKER_ID=${worker_id} ORCH_BIN_DIR=${LIB_DIR} && claude" Enter
 sleep 4

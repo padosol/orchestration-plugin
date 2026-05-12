@@ -52,6 +52,24 @@ if [ "$caller" != "orch" ]; then
     exit 2
 fi
 
+# 트래커 조기 검증 — side effects (--force kill / scope dir / leader pane spawn / claude 실행)
+# 이전에 차단해야 실패 시 잔재 (.orch/runs/<id>, registry, tmux pane) 가 남지 않는다.
+# GitHub Issues 는 issue id 전체가 숫자여야 함 — 'feature-2026' 같은 자유 id 의 첫 숫자
+# 시퀀스를 GitHub issue #2026 으로 오인하면 잘못된 이슈 컨텍스트로 leader 가 작업.
+tracker="$(orch_settings_issue_tracker)"
+effective_tracker="$tracker"
+if [ "$no_issue" -eq 1 ]; then
+    effective_tracker="none"
+fi
+if [ "$effective_tracker" = "github" ]; then
+    if [[ ! "$mp_id" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: issue-tracker=github 인데 '$mp_id' 가 전체 숫자 issue 번호가 아님." >&2
+        echo "  GitHub Issues 는 숫자 키만 받음 (예: 142). 자유 식별자 (feature-x, MP-onboarding, feature-2026 등) 는" >&2
+        echo "  --no-issue 로 이번 호출만 spec 요청 모드로 띄우거나, settings.json 의 issue_tracker 를 다른 값으로 바꿔서 호출." >&2
+        exit 2
+    fi
+fi
+
 if orch_worker_exists "$mp_id"; then
     if [ "$force" -eq 1 ]; then
         echo "INFO: 기존 $mp_id leader cascade kill"
@@ -92,28 +110,23 @@ tmux send-keys -t "$leader_pane" "export ORCH_WORKER_ID=$mp_id ORCH_BIN_DIR=$LIB
 sleep 4
 
 projects_blob="$(orch_settings_projects | tr '\n' ' ')"
-# 표시·트래커 호출용 키 가공:
+# 표시·트래커 호출용 키:
 #   issue_display = 사용자 입력 그대로 (예: MP-13, PROJ-456, 142, issue42)
-#   issue_num     = 트래커 fetch 에 넘기는 숫자 부분 — GitHub 처럼 숫자만 받는 호스트용.
-#                   첫 [0-9]+ 시퀀스 추출. 숫자 없으면 빈 문자열.
+#   issue_num     = 트래커 fetch 에 넘기는 숫자 — GitHub 은 위에서 전체 숫자 검증을 통과했으므로
+#                   $mp_id 가 그대로 곧 issue_num. GitLab fallback (reference 안 받는 환경) 용도로
+#                   gitlab 분기에서만 첫 [0-9]+ 시퀀스 추출이 의미 있음 — pipefail 안전 || true.
 issue_display="$mp_id"
-issue_num="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1)"
-tracker="$(orch_settings_issue_tracker)"
 gh_repo="$(orch_settings_github_issue_repo 2>/dev/null || true)"
 plugin_root="$(dirname "$LIB_DIR")"
 workflows_dir="${plugin_root}/references/workflows"
-
-# --no-issue 가 켜지면 워크스페이스 트래커 설정과 무관하게 spec 요청 모드.
-effective_tracker="$tracker"
-if [ "$no_issue" -eq 1 ]; then
-    effective_tracker="none"
-fi
 
 case "$effective_tracker" in
     linear)
         issue_fetch_step="1. mcp__linear-server__get_issue ${issue_display} (description / acceptance criteria)"
         ;;
     github)
+        # 조기 검증 (orch_settings_require 직후) 에서 전체 숫자만 통과 — 여기 도달했다면 안전.
+        issue_num="$mp_id"
         if [ -n "$gh_repo" ]; then
             issue_fetch_step="1. \`gh issue view ${issue_num} --repo ${gh_repo} --json title,body,labels,milestone\` (description / acceptance criteria)"
         else
@@ -121,13 +134,14 @@ case "$effective_tracker" in
         fi
         ;;
     gitlab)
-        # GitLab Issues 자동 fetch — glab CLI 경유. issue_num 이 있으면 그 번호로,
-        # 없으면 issue_display 그대로 (glab 가 reference 형식도 받음).
+        # GitLab Issues 자동 fetch — glab CLI 경유. id 가 'PROJ-12' 같은 reference 면
+        # glab 가 직접 받지만, 일부 환경/그룹에서는 숫자만 받음 — fallback 용 첫 숫자 시퀀스 추출.
+        gl_issue_num="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1 || true)"
         if [ -n "$gh_repo" ]; then
             # github_issue_repo 가 gitlab 환경에서는 group/project 로 재해석됨
-            issue_fetch_step="1. \`glab issue view ${issue_num:-$issue_display} --repo ${gh_repo} --output json\` (description / labels / milestone). glab 미설치/미인증 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — GitLab 이슈 본문/AC 붙여줘.\\nORCH_MSG\` 로 fallback."
+            issue_fetch_step="1. \`glab issue view ${gl_issue_num:-$issue_display} --repo ${gh_repo} --output json\` (description / labels / milestone). glab 미설치/미인증 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — GitLab 이슈 본문/AC 붙여줘.\\nORCH_MSG\` 로 fallback."
         else
-            issue_fetch_step="1. \`glab issue view ${issue_num:-$issue_display} --output json\` (현재 cwd 의 project 기준 — settings.json 의 github_issue_repo 미설정이라 해당 project 인지 확인 필요). glab 미설치/미인증 시 send.sh orch 로 spec 요청 fallback."
+            issue_fetch_step="1. \`glab issue view ${gl_issue_num:-$issue_display} --output json\` (현재 cwd 의 project 기준 — settings.json 의 github_issue_repo 미설정이라 해당 project 인지 확인 필요). glab 미설치/미인증 시 send.sh orch 로 spec 요청 fallback."
         fi
         ;;
     jira)
@@ -159,7 +173,22 @@ spec 의 title / labels / issuetype 에서 작업 타입 1회 추론. 타입에 
 - **bug** — label 'bug' / 'defect' / 'regression' 또는 title 'fix:' / 'bug:' 또는 (Jira) issuetype Bug
 - **refactor** — label 'refactor' / 'refac' / 'cleanup' / 'tech-debt' 또는 title 'refactor:' / 'refac:'
 
-추론 실패 (라벨·prefix 모호) 시 **AskUserQuestion** 으로 한 번만 묻기 (3택: feature / bug / refactor). 추측 진행 금지.
+추론 실패 (라벨·prefix 모호) 시 — **leader 가 직접 AskUserQuestion 호출 금지** (허브 구조 위반). 라벨 \`[type-clarify:<qid> ${issue_display}]\` 로 orch 에 송신 → orch 가 AskUserQuestion TUI 로 사용자에게 3택 (feature / bug / refactor) 확인 → \`[type-decision:<qid>] <feature|bug|refactor>\` + \`[reply:<qid>]\` 두 마커로 leader 에 회신. \`<qid>\` 는 매 송신마다 새로 생성 (\`q-\$(date +%s)-\$RANDOM\`) 해 동시·재질문 시 답 섞임을 차단한다.
+
+송신 + 차단 대기 패턴 (wait-reply 재사용):
+\`\`\`
+qid=\"q-\$(date +%s)-\$RANDOM\"
+bash -c \"\\\$ORCH_BIN_DIR/send.sh orch <<ORCH_MSG
+[type-clarify:\$qid ${issue_display}]
+[question:\$qid]
+title: <issue title>
+labels: <라벨 목록 or 없음>
+사유: <feature/bug/refactor 중 어느 쪽으로도 단정 어려운 이유 한 줄>
+ORCH_MSG\"
+bash \\\$ORCH_BIN_DIR/wait-reply.sh \$qid     # ← 답 본문 (= [type-decision:<qid>] feature 등) 도착 시 unblock.
+\`\`\`
+
+회신 받기 전까지 phase plan 작성·워커 spawn 보류. 본인의 qid 가 박힌 \`[reply:<qid>]\` 답만 자기 결정으로 받아들이고, 다른 qid 의 \`[type-decision:...]\` 가 보이면 그 라운드는 무시 (잘못된 라운드 응답 차단).
 
 결정 직후:
 1. 타입에 해당하는 가이드 1회 Read — phase 템플릿 + Review 체크리스트를 phase plan 의 골격으로 사용:
@@ -175,7 +204,7 @@ spec 의 title / labels / issuetype 에서 작업 타입 1회 추론. 타입에 
 모든 MP 는 phase 단위 순차 실행. 비-blocking 동시 spawn 으로 순서가 꼬이는 사고를 막기 위함. 단순 MP 라도 단일 phase 로 표현해 일관성 확보.
 
 순서:
-1. spec (issue 본문 또는 orch 첨부 spec) 분석. 복잡한 분석/아키텍처/스펙/API/DB 모델 필요 → PM 워커 먼저 spawn 해 설계 산출물 받은 뒤 phase plan 에 반영. 단순 fix·refactor 는 PM 생략 가능 — leader 가 직접 phase plan.
+1. spec (issue 본문 또는 orch 첨부 spec) 분석. **사용자 GO 전에는 PM 포함 어떤 워커도 spawn 금지.** 분석/아키텍처/스펙/API/DB 모델 설계가 필요하면 plan 에 별도 phase (\"Phase 0: 분석/설계\" 또는 그에 준하는 첫 phase) 로 명시 — \`[plan-confirm] GO\` 받은 뒤 그 phase 에서 PM 띄워 산출물 받고, 후속 phase 들이 그 산출물에 의존하게 구성. 단순 fix·refactor 는 PM phase 생략하고 phase 1 부터 구현 워커.
 2. 타입별 가이드 (${workflows_dir}/<type>.md) 의 'Phase 템플릿' 절을 골격으로 \`.orch/runs/${mp_id}/phases.md\` 작성. 헤더에 \`## 타입: <feature|bug|refactor>\` 한 줄 명시. 권장 형식:
    \`\`\`
    # ${issue_display} Phase Plan
@@ -215,7 +244,7 @@ spec 의 title / labels / issuetype 에서 작업 타입 1회 추론. 타입에 
 
 type: feat | fix | refactor | chore | docs | test (dev 기본 feat / pm 기본 docs).
 
-**phase plan 사용자 컨펌 전 워커 spawn 금지** — PM 도 spawn 전에 phase plan 에 \"Phase 0: 분석/설계\" 로 명시하고 컨펌 받는다 (PM 생략하는 단순 MP 는 Phase 1 부터).
+**phase plan 사용자 컨펌 전 워커 spawn 금지 — PM 포함.** PM 이 필요하면 phase plan 안에 \"Phase 0: 분석/설계\" (또는 첫 phase) 로 명시하고 \`[plan-confirm] GO\` 받은 뒤 그 phase 시작 시점에 spawn. PM 이 불필요한 단순 MP 는 phase 1 부터 바로 구현 워커.
 
 [메시지 — Hub-and-Spoke]
 - 산하 지시: /orch:send ${mp_id}/<role> '<지시>' (<role> = project alias 또는 pm)

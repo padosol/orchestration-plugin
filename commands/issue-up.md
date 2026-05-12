@@ -14,10 +14,12 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-up.sh:*)
 - **orch 전용 명령** — 다른 워커에서 호출하면 거부됨
 - `issue-id`: 트래커의 키 그대로 사용 (`[A-Za-z0-9_-]+`, 대소문자 보존). 예: Linear `MP-13` / Jira `PROJ-456` / GitHub `142` / 자유 `issue42`. 이슈가 없으면 사용자가 임의로 골라도 OK (식별자 용도로만 쓰임). `orch` 는 reserved.
 - 같은 leader가 이미 있으면 에러. cascade 재생성은 끝에 `--force`
-- leader pane은 호출자(orch) 윈도우를 split해 생성됨 (자동 타일링)
+- leader pane은 **`<issue_id>` 이름의 새 tmux 윈도우** 로 생성됨 (orch 윈도우 split 아님). 같은 윈도우 안에 leader 가 자기 산하 워커 pane 들을 split 으로 띄워 (`/orch:leader-spawn` / `/orch:review-spawn` 이 자동 tiled) leader+worker 가 한 화면에 모인다.
 - leader는 settings.json 의 `issue_tracker` 값에 따라 컨텍스트를 가져오고 작업 계획을 orch에 보고
   - `linear` → Linear MCP 로 이슈 fetch
-  - `github` → `gh issue view` 로 fetch (settings.github_issue_repo 기준)
+  - `github` → `gh issue view` 로 fetch (settings.github_issue_repo 기준). issue-id 가 **전체 숫자** 가 아니면 (예: `feature-x`, `feature-2026`) 조기 차단 — `--no-issue` 로 우회하거나 다른 트래커 사용.
+  - `gitlab` → `glab issue view` 로 fetch
+  - `jira` → `jira issue view` 로 fetch
   - `none` → orch 에 spec 직접 요청
 - **`--no-issue`**: 워크스페이스가 `linear`/`github` 트래커 모드여도 이번 호출만 fetch 스킵 (이슈 없음 → leader 가 orch 에 spec 직접 요청). 다음 호출부터는 워크스페이스 설정 그대로 적용. 사용 케이스: 이슈 만들기 번거로운 작은 작업, 이슈 미발행 상태에서 try-out, 사용자가 spec 만 구두 전달.
 

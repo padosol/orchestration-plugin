@@ -67,18 +67,25 @@ if [ -z "$reviewer_pane" ]; then
     exit 2
 fi
 
-orch_worker_register "$worker_id" "worker" "$mp_window" "$reviewer_pane" "$project_path"
+orch_worker_register "$worker_id" "worker" "$mp_window" "$reviewer_pane" "$project_path" "$project"
 
 tmux send-keys -t "$reviewer_pane" "export ORCH_WORKER_ID=${worker_id} ORCH_BIN_DIR=${LIB_DIR} && claude" Enter
 sleep 4
 
 desc="$(orch_settings_project_field "$project" description)"
 stack="$(orch_settings_project_field "$project" tech_stack)"
-# 표시·트래커 호출용 키 가공 (issue-up.sh 와 동일 규칙):
-#   issue_display = issue_id 그대로 (예: MP-13, PROJ-456, 142)
-#   issue_num     = 트래커 fetch (GitHub 처럼 숫자만 받는 호스트) 용 — 첫 [0-9]+ 시퀀스
+# 표시·트래커 호출용 키 (issue-up.sh 와 동일 규칙):
+#   issue_display = issue_id 그대로
+#   issue_num_gh  = GitHub 분기 전용 — id 전체가 숫자일 때만 채움. 'feature-2026' 같은 자유 id
+#                   의 첫 숫자 시퀀스를 GitHub #2026 으로 오인하지 않도록 부분 매칭 금지.
+#   gl_issue_num  = GitLab fallback — reference 안 받는 환경 대비 첫 숫자 시퀀스 (잘못 매칭돼도
+#                   reviewer 단계라 차단은 안 하고 lookup line 만 부정확해질 뿐).
 issue_display="$mp_id"
-issue_num_review="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1)"
+issue_num_gh=""
+if [[ "$mp_id" =~ ^[0-9]+$ ]]; then
+    issue_num_gh="$mp_id"
+fi
+gl_issue_num="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1 || true)"
 tracker="$(orch_settings_issue_tracker)"
 gh_repo="$(orch_settings_github_issue_repo 2>/dev/null || true)"
 plugin_root_review="$(dirname "$LIB_DIR")"
@@ -105,17 +112,19 @@ esac
 case "$tracker" in
     linear) issue_lookup_line="- 이슈 컨텍스트: mcp__linear-server__get_issue ${issue_display}" ;;
     github)
-        if [ -n "$gh_repo" ]; then
-            issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_review} --repo ${gh_repo}"
+        if [ -z "$issue_num_gh" ]; then
+            issue_lookup_line="- 이슈 컨텍스트: GitHub Issues 인데 '${issue_display}' 가 전체 숫자 id 가 아님 — PR description / leader 가 보낸 spec 으로만 판단 (자유 id 의 부분 숫자를 GitHub issue 번호로 오인하지 않도록 lookup 생략)"
+        elif [ -n "$gh_repo" ]; then
+            issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_gh} --repo ${gh_repo}"
         else
-            issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_review} (현재 repo 기준)"
+            issue_lookup_line="- 이슈 컨텍스트: gh issue view ${issue_num_gh} (현재 repo 기준)"
         fi
         ;;
     gitlab)
         if [ -n "$gh_repo" ]; then
-            issue_lookup_line="- 이슈 컨텍스트: glab issue view ${issue_num_review:-$issue_display} --repo ${gh_repo} (glab 미설치/미인증 시 PR description 으로 판단)"
+            issue_lookup_line="- 이슈 컨텍스트: glab issue view ${gl_issue_num:-$issue_display} --repo ${gh_repo} (glab 미설치/미인증 시 PR description 으로 판단)"
         else
-            issue_lookup_line="- 이슈 컨텍스트: glab issue view ${issue_num_review:-$issue_display} (현재 project 기준; glab 미설치/미인증 시 PR description 으로 판단)"
+            issue_lookup_line="- 이슈 컨텍스트: glab issue view ${gl_issue_num:-$issue_display} (현재 project 기준; glab 미설치/미인증 시 PR description 으로 판단)"
         fi
         ;;
     jira) issue_lookup_line="- 이슈 컨텍스트: jira issue view ${issue_display} --plain (jira-cli 미설치/미인증 시 PR description 으로 판단)" ;;
