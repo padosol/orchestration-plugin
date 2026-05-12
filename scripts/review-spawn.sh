@@ -131,57 +131,32 @@ case "$tracker" in
     none|*) issue_lookup_line="- 이슈 컨텍스트: 트래커 없음 — PR description / leader 가 보낸 spec 으로만 판단" ;;
 esac
 
-first_msg="너는 ${worker_id} reviewer 다 (PR #${pr} 단발성). 10년차 시니어 스태프 엔지니어로서 ${stack} 코드의 정확성 / 회귀 위험 / 사이드이펙트 / 단순성 / 가독성을 판단한다. **코드 수정·커밋·push 금지** (읽기 전용). 답신은 GitHub PR 코멘트 + leader($mp_id) inbox 두 채널 의무.
+protocols_path_review="${plugin_root_review}/references/orch-protocols.md"
 
-[컨텍스트]
+first_msg="너는 ${worker_id} reviewer 다 (PR #${pr} 단발성). ${stack} 코드의 정확성 / 회귀 위험 / 사이드이펙트 / 단순성 / 가독성을 판단한다.
+
+[컨텍스트 — spawn 시 주입]
 - 이슈 ${issue_display} / PR #${pr} / $project ($project_path)
 - tech: $stack / 설명: $desc
+- leader: ${mp_id}
+- ${workflow_review_line}
+- ${issue_lookup_line}
 
-[리뷰 체크리스트]
-시작 시 ${guidelines_path} 1회 Read — 4원칙을 평가 잣대로 사용 (특히 Surgical / Simplicity / Goal-Driven).
-${workflow_review_line}
-1. 코드 정확성 — diff 가 의도된 변경을 정확히 구현? off-by-one / null / 분기 누락?
-2. 사이드이펙트 — 변경이 의도 외 영역에 영향? 공용 유틸 / API 시그니처 변경 시 호출자 영향?
-3. 테스트 커버리지 — 대응 테스트 있나? 누락 엣지 케이스?
-4. 회귀 — 기존 기능 회귀 위험? 데이터 마이그레이션 / 호환성?
-5. 스타일·가독성 — 네이밍·구조·주석, repo 컨벤션?
+[필수 — 첫 마디로 Skill 로딩]
+1) Skill 도구 invoke: **orch-reviewer**. 페르소나·체크리스트·두 채널 답신·verdict 형식·worker-shutdown 절차 전체가 본 SKILL 에 담겨 있다.
+2) Skill 로드 실패 시 fallback: \`Read ${plugin_root_review}/skills/orch-reviewer/SKILL.md\` 1회. 본문 그대로 따른다.
+3) 공통 운영 규약 단일 source: \`Read ${protocols_path_review}\` 1회 (hub-and-spoke / PR 4단계 / shutdown).
+4) 시작 시 \`Read ${guidelines_path}\` 1회 — 4원칙을 평가 잣대로 사용 (특히 Surgical / Simplicity / Goal-Driven).
 
-[정보 도구]
-- gh pr view ${pr} --json title,body,files,headRefName,baseRefName
-- gh pr diff ${pr}  /  gh pr checks ${pr}
-- base 탐색: $project_path 안에서 grep / Read
-${issue_lookup_line}
+[Hard Guards — 본 first_msg 만으로도 절대 어기지 말 것]
+1. **읽기 전용 — 코드 수정·커밋·push 금지.** Edit / Write / git commit / git push 호출 금지. 지적은 코멘트로만.
+2. **답신은 두 채널 같은 본문 의무** — GitHub PR (\`gh pr comment ${pr}\`) + leader (${mp_id}) inbox (\`send.sh\`). 채널마다 다른 본문 보내지 말 것.
+3. **verdict 형식 고정**: 본문 첫 줄 \`[review PR #${pr}] <LGTM | needs-changes>\`.
+4. **본 PR 변경분 범위 안에서만 평가** — PR 밖 리팩터 권고는 후속 이슈 메모로 leader 에 알리되 본 PR 차단 사유로 쓰지 말 것.
+5. **답신 직후 자기 종료 의무** — \`bash \\\$ORCH_BIN_DIR/worker-shutdown.sh\` 한 번. \`exit\` 키 입력 금지. 한 reviewer 는 1회 검토.
 
-[답신 — 두 채널 의무]
-**같은 본문** 을 GitHub PR + leader inbox 둘 다에 게시. PR 코멘트는 사용자가 머지 검토 시 참고 자료.
-
-본문 형식:
-[review PR #${pr}] <LGTM | needs-changes>
-
-요약: <한 줄>
-
-코멘트:
-- <파일:line> <지적 + 권고>
-(없으면 \\\"코멘트 없음\\\" 명시)
-
-송신:
-1. GitHub PR (필수):
-gh pr comment ${pr} --body-file - <<'GH_MSG'
-<본문>
-GH_MSG
-2. leader inbox (필수):
-bash -c \"\$ORCH_BIN_DIR/send.sh $mp_id <<'ORCH_MSG'
-<본문>
-ORCH_MSG\"
-
-[종료 — 필수]
-답신 직후 \`bash \$ORCH_BIN_DIR/worker-shutdown.sh\` 한 번 (registry 해제 + pane kill). \`exit\` 키 입력 금지. 추가 라운드 필요하면 leader 가 새 reviewer 띄움 — 한 reviewer 는 1회 검토.
-
-[범위]
-- 본 PR 변경분 안에서만. 'PR 밖 리팩터 권고' 는 후속 이슈 메모로 leader 에 알리되 본 PR 차단 사유로 쓰지 말 것.
-- 사소한 스타일은 LGTM + 코멘트로만 남기고 차단하지 않기.
-
-준비되면 PR 검토 후 답신 + worker-shutdown.sh."
+[진입 액션]
+- 위 1) Skill 도구 invoke (orch-reviewer) → 2) orch-protocols.md Read → 3) coding-guidelines.md Read → PR #${pr} 검토 → 두 채널 답신 → \`worker-shutdown.sh\`."
 
 orch_send_keys_line "$reviewer_pane" "$first_msg" \
     || echo "WARN: reviewer first_msg 송신 실패 (pane=$reviewer_pane)" >&2

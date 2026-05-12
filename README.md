@@ -186,6 +186,21 @@ reviewer 도 같은 가이드 따름 — `review-spawn` 이 `.orch/runs/<id>/typ
 
 ---
 
+## 워커 페르소나 — Skill 기반
+
+leader / developer worker / PM / reviewer 의 페르소나·절차는 `skills/orch-<role>/SKILL.md` 단일 source 로 분리돼 있다. spawn 스크립트의 `first_msg` 는 동적 컨텍스트 변수 (worker_id / project / branch / stack 등) + Skill 도구 트리거 + hard guard (GO 전 spawn 금지 / type-clarify qid / PM direction-check / reviewer read-only / shutdown 의무) 만 담는다. 본문 절차는 SKILL 로딩으로 가져온다.
+
+- `skills/orch-leader/SKILL.md` — leader 셋업 / 타입 판별 / Phase Plan / 라우팅 / cascade shutdown
+- `skills/orch-developer-worker/SKILL.md` — developer HOLD 체크포인트 / 차단 질문 / PR 4단계 / worker-shutdown
+- `skills/orch-pm/SKILL.md` — PM direction-check + wait-reply / 산출물 PR / 사용자 컨펌 의무
+- `skills/orch-reviewer/SKILL.md` — read-only 검토 / 두 채널 답신 / verdict 형식
+
+공통 운영 규약 (hub-and-spoke / wait-reply qid / HOLD 체크포인트 / PR 4단계 / shutdown) 은 `references/orch-protocols.md` 단일 source. SKILL 4종이 이 문서를 가리키기만 하므로 규약 갱신은 한 곳에서.
+
+작업 타입 가이드 (`references/workflows/{feature,bug,refactor}.md`) 와 4원칙 (`references/coding-guidelines.md`) 도 그대로 단일 source — SKILL 은 언제 읽고 어떻게 적용할지만 지시.
+
+---
+
 ## Phase Plan — 순차 실행 강제
 
 비-blocking 으로 여러 워커가 동시 진행되면 산출물 의존이 있는데도 순서가 꼬인다. **leader 가 phase plan 을 사용자 컨펌 받고 phase 단위 순차 실행**.
