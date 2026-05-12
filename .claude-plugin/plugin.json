@@ -1,6 +1,6 @@
 {
   "name": "orch",
-  "description": "tmux 멀티 세션 오케스트레이션. leader_id 는 사용자가 /orch:issue-up 에 넘긴 트래커 키 그대로 ([A-Za-z0-9_-]+, 대소문자 보존 — Linear MP-13 / Jira PROJ-456 / GitHub 142 / GitLab #45 / 자유 issue42). leader 가 작업 타입 (feature/bug/refactor) 을 label·title 로 자동 추론 (모호 시 [type-clarify:<qid>] 로 orch 경유 — leader 직접 AskUserQuestion 금지) → 타입별 워크플로우 가이드 (references/workflows/) 기반 phase plan 작성 → 사용자 컨펌 후 순차 실행 (사용자 [plan-confirm] GO 전 PM 포함 워커 spawn 금지). 마무리 phase 에서 leader 가 /orch:report 자체 호출 → REPORT.html + errors_check/ai_ready_check 후보 도출 → [follow-up-candidates] 라벨로 orch 인박스 송신 → orch 가 사용자와 검토 후 트래커 등록 (자동 등록 X). 워커는 wait-reply.sh 로 leader 답을 차단 대기. reviewer 도 같은 타입 가이드의 'Review 체크리스트' 절을 평가 잣대로 적용. /orch:setup 이 issue_tracker(linear|jira|github|gitlab|none) + git_host(github|gitlab|none) + notify(on|off) 를 AskUserQuestion TUI 로 일괄 수집. 네 트래커 모두 자동 fetch: linear(mcp), github(gh issue view), gitlab(glab issue view), jira(jira-cli — ankitpokhrel/jira-cli).",
+  "description": "tmux 패널 기반 멀티 워커 오케스트레이션 — PM(orch) + 이슈별 leader + project 별 worker 계층으로 PR 라이프사이클을 자동화.",
   "version": "0.16.1",
   "author": {
     "name": "padosol"
