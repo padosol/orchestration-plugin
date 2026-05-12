@@ -178,7 +178,7 @@ MP-13/repo-a          ← MP-13 산하 repo-a 워커
 판별 절차 (leader 1회 수행):
 
 1. spec 의 label / title prefix / Jira issuetype 으로 자동 추론.
-2. 모호하면 **AskUserQuestion** TUI 3택 — 추측 진행 금지.
+2. 모호하면 **orch 경유** — leader 가 `[type-clarify:<qid> <issue_id>]` + `[question:<qid>]` 로 orch 에 송신 (`wait-reply.sh <qid>` 로 차단 대기) → orch 가 **AskUserQuestion** TUI 3택 → `[type-decision:<qid>] <feature|bug|refactor>` + `[reply:<qid>]` 로 회신. leader 가 직접 `AskUserQuestion` 호출하면 허브 구조 위반.
 3. 결정 직후 `.orch/runs/<id>/type` 에 한 줄 기록.
 4. 해당 가이드의 'Phase 템플릿' 을 phase plan 골격으로 사용.
 

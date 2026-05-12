@@ -368,29 +368,41 @@ orch_settings_project_base_branch() {
 
 # ─── Worker registry ──────────────────────────────────────────────────
 
-# 인자: worker_id, kind, window_id, pane_id, cwd
+# 인자: worker_id, kind, window_id, pane_id, cwd, [project_alias]
+# project_alias 는 worker (특히 PM — worker_id=<issue>/pm) 의 worktree 가 어느 settings.projects
+# 키 아래에 만들어졌는지 명시 보존용. 없으면 null. orch_cleanup_merged_worktrees 가 이 필드를
+# 우선 참고하고, 없으면 worker_id 의 role 토큰 (예: 'server') 을 alias 로 가정한다 (구버전 호환).
+#
+# JSON 본문은 jq -n --arg 로 생성 — cwd 등 입력에 따옴표·백슬래시가 섞여 있어도 자동 escape.
 orch_worker_register() {
-    local wid="$1" kind="$2" window_id="$3" pane_id="$4" cwd="$5"
-    local path scope scope_json
+    local wid="$1" kind="$2" window_id="$3" pane_id="$4" cwd="$5" project="${6:-}"
+    local path scope started
     path="$(orch_worker_path "$wid")" || return 1
     mkdir -p "$(dirname "$path")"
     scope="$(orch_wid_scope "$wid")"
-    if [ -n "$scope" ] && [ "$scope" != "$wid" ]; then
-        scope_json="\"$scope\""
-    else
-        scope_json="null"
+    if [ -z "$scope" ] || [ "$scope" = "$wid" ]; then
+        scope=""
     fi
-    cat >"$path" <<EOF
-{
-  "worker_id": "${wid}",
-  "kind": "${kind}",
-  "scope": ${scope_json},
-  "window_id": "${window_id}",
-  "pane_id": "${pane_id}",
-  "cwd": "${cwd}",
-  "started_at": "$(date -Iseconds)"
-}
-EOF
+    started="$(date -Iseconds)"
+    jq -n \
+        --arg wid "$wid" \
+        --arg kind "$kind" \
+        --arg scope "$scope" \
+        --arg window_id "$window_id" \
+        --arg pane_id "$pane_id" \
+        --arg cwd "$cwd" \
+        --arg project "$project" \
+        --arg started "$started" \
+        '{
+            worker_id: $wid,
+            kind: $kind,
+            scope: (if $scope == "" then null else $scope end),
+            window_id: $window_id,
+            pane_id: $pane_id,
+            cwd: $cwd,
+            project: (if $project == "" then null else $project end),
+            started_at: $started
+        }' >"$path"
 }
 
 orch_worker_field() {
@@ -799,7 +811,7 @@ orch_cleanup_merged_worktrees() {
         return 0
     fi
 
-    local sub_wid role worktree_path project_path branch project_base current_branch any=0
+    local sub_wid role project_alias worktree_path project_path branch project_base current_branch any=0
     local cleaned=0 kept=0 skipped=0 partial=0
     declare -A pulled_paths=()
     # workers-archive 도 포함 — 워커가 wait-merge 답신 후 self-shutdown 으로 archive 된 상태에서
@@ -807,6 +819,15 @@ orch_cleanup_merged_worktrees() {
     for sub_wid in $(orch_all_sub_workers "$mp_id"); do
         any=1
         role="${sub_wid##*/}"
+        # project alias 해석:
+        # 1. registry 의 project 필드 우선 (leader-spawn/review-spawn 이 기록). PM (role=pm)
+        #    이나 reviewer (role=review-<project>) 의 worktree 가 어느 settings.projects 키
+        #    아래 만들어졌는지 정확히 알 수 있는 유일한 경로.
+        # 2. 없으면 role 토큰을 alias 로 폴백 (구버전 호환 — dev 워커는 role==project alias).
+        project_alias="$(orch_worker_field "$sub_wid" project 2>/dev/null || true)"
+        if [ -z "$project_alias" ] || [ "$project_alias" = "null" ]; then
+            project_alias="$role"
+        fi
         worktree_path="$(orch_worker_field "$sub_wid" cwd 2>/dev/null || true)"
         if [ -z "$worktree_path" ] || [ ! -d "$worktree_path" ]; then
             echo "  cleanup skip $sub_wid: worktree 경로 없음"
@@ -814,15 +835,15 @@ orch_cleanup_merged_worktrees() {
             continue
         fi
 
-        project_path="$(orch_settings_project_field "$role" path 2>/dev/null || true)"
+        project_path="$(orch_settings_project_field "$project_alias" path 2>/dev/null || true)"
         if [ -z "$project_path" ] || [ ! -d "$project_path" ]; then
-            echo "  cleanup skip $sub_wid: settings.json 의 project '$role' path 없음"
+            echo "  cleanup skip $sub_wid: settings.json 의 project '$project_alias' path 없음 (role='$role')"
             skipped=$((skipped + 1))
             continue
         fi
 
         # 프로젝트별 default_base_branch (없으면 'develop' 으로 폴백 — orch_settings_project_base_branch 책임).
-        project_base="$(orch_settings_project_base_branch "$role" 2>/dev/null || true)"
+        project_base="$(orch_settings_project_base_branch "$project_alias" 2>/dev/null || true)"
         [ -n "$project_base" ] || project_base="develop"
 
         # project_path 의 local <base> ref 갱신 (project당 1회). 현재 체크아웃이 base 면
