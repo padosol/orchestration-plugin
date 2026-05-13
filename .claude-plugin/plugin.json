@@ -1,7 +1,7 @@
 {
   "name": "orch",
   "description": "tmux 패널 기반 멀티 워커 오케스트레이션 — PM(orch) + 이슈별 leader + project 별 worker 계층으로 PR 라이프사이클을 자동화.",
-  "version": "0.16.1",
+  "version": "0.17.0",
   "author": {
     "name": "padosol"
   }
