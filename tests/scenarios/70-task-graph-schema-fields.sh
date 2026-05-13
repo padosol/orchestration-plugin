@@ -34,9 +34,10 @@ graph_required=(
     "workflow_template"
     "current_step"
     "artifacts"
-    # role / status enum
+    # role / status enum — Role enum 전체 (developer/reviewer/pm/integration/leader)
     "developer"
     "reviewer"
+    "pm"
     "integration"
     "leader"
     "pending"
