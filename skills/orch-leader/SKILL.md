@@ -174,7 +174,7 @@ execution 진입 후 leader 는 다음 규칙으로 ready task 를 식별·spawn
 - **failed / skipped 처리**: 후속 task 자동 ready 금지. leader 가 `approved_task_graph.revision` 을 +1 하고 graph 재계획 (선행 task 재실행, 후속 skipped 마킹, 새 task 추가 등) 후 ready 재계산.
 - **트리거**: 워커 종료 보고 (`PR #N merged` / worker-shutdown 완료 / failed 보고) 받을 때마다 leader 가 task-graph.json 갱신 + ready 재계산. 별도 poll loop 없음 (v1).
 - **동시 spawn 한도**: v1 무제한. orch 가 자원 부족 / 사용자 휴식 등 신호 보내면 leader 가 일부만 spawn 하는 재량 가능.
-- **placeholder template 사용 금지**: `references/workflows/task-templates/<name>.json` 의 `status` 가 `placeholder` 인 template (예: `pm_design_v1`, `integration_check_v1`) 으로는 task spawn 금지. stable 전환 (작업 5·6·7) 후에만 사용.
+- **placeholder template 사용 금지**: `references/workflows/task-templates/<name>.json` 의 `status` 가 `placeholder` 인 template 으로는 task spawn 금지. 현재 placeholder 파일: `integration_check_v1` (작업 6/7 에서 stable 화). `reviewer_pr_v1` / `report_cleanup_v1` 은 아직 파일 미생성 — 작업 6/7 에서 추가 후 stable. stable 파일: `developer_pr_v1`, `pm_design_v1`.
 
 ### 3.5.5 Step 순서 invariant — leader 측 강제 (4건)
 

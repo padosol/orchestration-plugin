@@ -26,6 +26,14 @@ required=(
     "사용자 컨펌"
     "phase"
     "API"
+    "Design-first Task Graph"
+    "proposed_task_graph"
+    "approved_task_graph"
+    "제안자"
+    "최종 확정자"
+    "Proposed Task Graph"
+    "proposed-task-graph.json"
+    "pm_design_v1"
 )
 missing=()
 for phrase in "${required[@]}"; do
