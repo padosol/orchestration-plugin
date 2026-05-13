@@ -321,10 +321,12 @@ Workflow step status:
   - Task Graph 결과는 verdict 기존 5섹션에 흡수 (별도 섹션 안 만듦)
   - E2E 대체 검증 기준 (§5) 유지
 
-- [ ] 8. issue-up / first_msg hard guard 정리
-  - 긴 절차는 SKILL 로 이동 유지
-  - task graph 승인 전 developer spawn 금지
-  - PR review 전 merge wait 금지
+- [x] 8. issue-up / first_msg hard guard 정리 → [issue-up.sh first_msg + orch-leader SKILL §3.5.5](../../scripts/issue-up.sh)
+  - first_msg Hard Guards 5→6 (절차는 SKILL 위임, 런타임 불변식만 first_msg 노출)
+  - Guard #1 강화: 복잡 이슈 Round 2 GO (approved_task_graph 승인) 전 developer/reviewer/integration spawn 금지 명시
+  - Guard #2 신설: PR workflow step 순서 invariant (ci done 전 ready_for_review / review LGTM 전 wait_merge / wait_merge done 전 shutdown 금지)
+  - SKILL §3.5.5 step/token 명칭 정렬 (approved_task_graph / ready_for_review / wait_merge / shutdown)
+  - 회귀 테스트 20 / 65 키워드 갱신
 
 - [ ] 9. 회귀 테스트 추가
   - leader SKILL 에 Design-first Task Graph Workflow 존재
