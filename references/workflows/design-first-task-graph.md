@@ -153,7 +153,105 @@ Core artifact:
 
 Core artifact 는 PM direction-check 와 task graph 생성에 필요한 최소 계약이다. 확장 artifact 는 PM 능력 강화나 프로젝트 특성에 따라 추가한다.
 
+## PM 적용 분기
+
+복잡도 신호에 따라 PM session 사용 여부가 갈린다. 본 표는 사용자 가독용 요약이며 실행 canonical 은 `skills/orch-leader/SKILL.md` §3.5.1 — leader 가 결정 시 SKILL 본문을 우선 본다.
+
+| 신호 | 분류 | PM session |
+| --- | --- | --- |
+| project ≥ 2 개 (멀티 repo) | 복잡 | **필수** |
+| API contract / DB model / migration / auth / 권한 / 외부 연동 변경 | 복잡 | **권장** |
+| 비기능 리스크 (성능 / 보안 / 호환성) 또는 acceptance criteria 모호 | 복잡 | **권장** |
+| 위 조건 모두 해당 안 됨 (단일 repo, 명확 AC, 작은 UI / 단순 fix / refactor) | 단순 | **생략 — leader lightweight design** |
+
+PM 권장 케이스인데 leader 가 PM 을 생략하기로 결정하면 phases.md 에 생략 사유 한 줄 기록 (예: "단일 API endpoint 추가, contract 기존 패턴 그대로"). 단순 이슈는 leader 가 task-graph.json 의 `design.proposed_by = "leader"` 로 lightweight design 직접 작성.
+
 ## 예시 Task Graph
+
+두 예시 모두 `references/schemas/task-graph.schema.json` strict 형식. shorthand string-array 또는 root.tasks 필드는 schema 위반 — 따르지 말 것.
+
+### 단순 이슈 예시 — lightweight design (PM 생략)
+
+단일 repo, 명확 acceptance, 작은 UI fix. PM session 없이 leader 가 design + execution 두 절을 1 라운드로 작성.
+
+```json
+{
+  "issue_id": "MP-200",
+  "workflow_version": 1,
+  "phase": "execution",
+  "design": {
+    "status": "approved",
+    "proposed_by": "leader",
+    "pm_pr": null,
+    "summary": "Increase content-list pagination size from 20 to 50",
+    "artifacts": {
+      "problem_frame": { "summary": "기본 페이지 크기가 너무 작아 사용자 클릭이 많아짐" },
+      "architecture_decision": { "summary": "기존 페이지네이션 컴포넌트 그대로, 기본값 상수만 변경" },
+      "implementation_brief": { "summary": "constants.ts 의 DEFAULT_PAGE_SIZE 20→50 + 회귀 테스트 보강" },
+      "risk_register": [],
+      "open_decisions": [],
+      "proposed_task_graph": {
+        "tasks": [
+          {
+            "id": "pagination-fix",
+            "project": "management-ui",
+            "role": "developer",
+            "type": "fix",
+            "depends_on": [],
+            "workflow_template": "developer_pr_v1"
+          }
+        ]
+      }
+    }
+  },
+  "execution": {
+    "approved_by": "leader",
+    "approved_at": "2026-05-13T09:00:00Z",
+    "approved_task_graph": {
+      "revision": 0,
+      "tasks": [
+        {
+          "id": "pagination-fix",
+          "project": "management-ui",
+          "role": "developer",
+          "type": "fix",
+          "depends_on": [],
+          "status": "pending",
+          "current_step": "receive_instruction",
+          "workflow_template": "developer_pr_v1",
+          "workflow": [
+            { "id": "receive_instruction", "owner": "leader",    "status": "pending", "required": true, "blocking": true },
+            { "id": "analyze",             "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "hold_before_edit",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "brief_validation",    "owner": "developer", "status": "pending", "required": true, "blocking": false },
+            { "id": "implement",           "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "test",                "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "commit",              "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "hold_before_push",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "push_and_pr",         "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "ci",                  "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "ready_for_review",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "review",              "owner": "reviewer",  "status": "pending", "required": true, "blocking": true },
+            { "id": "wait_merge",          "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "shutdown",            "owner": "developer", "status": "pending", "required": true, "blocking": true }
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "pr": null,
+            "ci_url": null,
+            "review_verdict": null
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+### 멀티 repo 이슈 예시 — PM 필수
+
+project ≥ 2. PM session 으로 design artifact 6개 산출 + proposed_task_graph 에 3 TaskDraft (backend / mgmt-ui / integration-check). leader 는 approved_task_graph 로 확장하되, `integration-check` 는 `integration_check_v1` 이 아직 placeholder 라 현재 revision 의 approved 에 포함하지 않는다 — stable 화 (작업 11+ 후속) 후 leader 가 `revision +1` 로 추가. 따라서 현재 approved 는 2 Task (`backend-api` + `mgmt-ui`).
 
 ```json
 {
@@ -166,70 +264,89 @@ Core artifact 는 PM direction-check 와 task graph 생성에 필요한 최소 �
     "pm_pr": 42,
     "summary": "Add publishing flow across API and management UI",
     "artifacts": {
-      "problem_frame": {
-        "summary": "Publishing flow requires API and management UI changes"
-      },
-      "architecture_decision": {
-        "summary": "API owns publishing state; management UI calls the new endpoint"
-      },
-      "implementation_brief": {
-        "summary": "Implement backend endpoint and management UI action"
-      },
+      "problem_frame": { "summary": "Publishing flow requires API and management UI changes" },
+      "architecture_decision": { "summary": "API owns publishing state; management UI calls the new endpoint" },
+      "implementation_brief": { "summary": "Implement backend endpoint and management UI action" },
       "risk_register": [
-        {
-          "risk": "Frontend and backend contract mismatch",
-          "mitigation": "Add integration_check task after both PRs merge"
-        }
+        { "risk": "Frontend / backend contract mismatch", "mitigation": "Add integration_check task after both PRs merge" }
       ],
       "open_decisions": [],
       "proposed_task_graph": {
-        "tasks": ["backend-api", "mgmt-ui", "integration-check"]
+        "tasks": [
+          { "id": "backend-api",        "project": "contents-hub-api-serv", "role": "developer",   "type": "feat", "depends_on": [],                                "workflow_template": "developer_pr_v1" },
+          { "id": "mgmt-ui",            "project": "management-ui",         "role": "developer",   "type": "feat", "depends_on": [],                                "workflow_template": "developer_pr_v1" },
+          { "id": "integration-check",  "project": null,                    "role": "integration",                 "depends_on": ["backend-api", "mgmt-ui"],        "workflow_template": "integration_check_v1" }
+        ]
       }
     }
   },
   "execution": {
     "approved_by": "leader",
+    "approved_at": "2026-05-13T09:00:00Z",
     "approved_task_graph": {
-      "tasks": ["backend-api", "mgmt-ui", "integration-check"]
+      "revision": 0,
+      "tasks": [
+        {
+          "id": "backend-api",
+          "project": "contents-hub-api-serv",
+          "role": "developer",
+          "type": "feat",
+          "depends_on": [],
+          "status": "pending",
+          "current_step": "receive_instruction",
+          "workflow_template": "developer_pr_v1",
+          "workflow": [
+            { "id": "receive_instruction", "owner": "leader",    "status": "pending", "required": true, "blocking": true },
+            { "id": "analyze",             "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "hold_before_edit",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "brief_validation",    "owner": "developer", "status": "pending", "required": true, "blocking": false },
+            { "id": "implement",           "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "test",                "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "commit",              "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "hold_before_push",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "push_and_pr",         "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "ci",                  "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "ready_for_review",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "review",              "owner": "reviewer",  "status": "pending", "required": true, "blocking": true },
+            { "id": "wait_merge",          "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "shutdown",            "owner": "developer", "status": "pending", "required": true, "blocking": true }
+          ],
+          "artifacts": { "branch": null, "commit": null, "pr": null, "ci_url": null, "review_verdict": null }
+        },
+        {
+          "id": "mgmt-ui",
+          "project": "management-ui",
+          "role": "developer",
+          "type": "feat",
+          "depends_on": [],
+          "status": "pending",
+          "current_step": "receive_instruction",
+          "workflow_template": "developer_pr_v1",
+          "workflow": [
+            { "id": "receive_instruction", "owner": "leader",    "status": "pending", "required": true, "blocking": true },
+            { "id": "analyze",             "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "hold_before_edit",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "brief_validation",    "owner": "developer", "status": "pending", "required": true, "blocking": false },
+            { "id": "implement",           "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "test",                "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "commit",              "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "hold_before_push",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "push_and_pr",         "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "ci",                  "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "ready_for_review",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "review",              "owner": "reviewer",  "status": "pending", "required": true, "blocking": true },
+            { "id": "wait_merge",          "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "shutdown",            "owner": "developer", "status": "pending", "required": true, "blocking": true }
+          ],
+          "artifacts": { "branch": null, "commit": null, "pr": null, "ci_url": null, "review_verdict": null }
+        }
+      ]
     }
-  },
-  "tasks": [
-    {
-      "id": "backend-api",
-      "project": "contents-hub-api-serv",
-      "role": "developer",
-      "type": "feat",
-      "depends_on": ["pm-design"],
-      "status": "pending",
-      "current_step": "receive_instruction",
-      "workflow_template": "developer_pr_v1",
-      "workflow": [
-        { "id": "receive_instruction", "owner": "leader", "status": "pending", "required": true },
-        { "id": "analyze", "owner": "developer", "status": "pending", "required": true },
-        { "id": "hold_before_edit", "owner": "developer", "status": "pending", "required": true },
-        { "id": "brief_validation", "owner": "developer", "status": "pending", "required": true, "blocking": false },
-        { "id": "implement", "owner": "developer", "status": "pending", "required": true },
-        { "id": "test", "owner": "developer", "status": "pending", "required": true },
-        { "id": "commit", "owner": "developer", "status": "pending", "required": true },
-        { "id": "hold_before_push", "owner": "developer", "status": "pending", "required": true },
-        { "id": "push_and_pr", "owner": "developer", "status": "pending", "required": true },
-        { "id": "ci", "owner": "developer", "status": "pending", "required": true },
-        { "id": "ready_for_review", "owner": "developer", "status": "pending", "required": true },
-        { "id": "review", "owner": "reviewer", "status": "pending", "required": true },
-        { "id": "wait_merge", "owner": "developer", "status": "pending", "required": true },
-        { "id": "shutdown", "owner": "developer", "status": "pending", "required": true }
-      ],
-      "artifacts": {
-        "branch": null,
-        "commit": null,
-        "pr": null,
-        "ci_url": null,
-        "review_verdict": null
-      }
-    }
-  ]
+  }
 }
 ```
+
+위 approved 는 `revision: 0`. `integration_check_v1` stable 화 후 leader 가 `revision: 1` 로 `integration-check` Task (depends_on: ["backend-api", "mgmt-ui"], workflow_template: "integration_check_v1") 를 추가하는 흐름. proposed_task_graph 에는 placeholder 참조 TaskDraft 를 둘 수 있지만 approved_task_graph 의 Task 로 확장은 stable template 필요 — leader SKILL §3.5.4 "placeholder template 사용 금지" invariant.
 
 ## 상태 값 초안
 
@@ -335,10 +452,11 @@ Workflow step status:
   - schema 에 depends_on / workflow_template / workflow 존재 — covered by test 70 (grep 기반 필드 / role / status enum) + test 72 (jsonschema Draft 2020-12 self-check + 모든 task-template/*.json validate)
   - 기존 PR 4단계 / HOLD / hub-and-spoke 규약 유지 — covered by test 69 (orch-protocols.md 단일 source) + test 67 (developer SKILL workflow step / HOLD / PR 4단계 keyword)
 
-- [ ] 10. 문서 예시 갱신
-  - 단순 issue 예시
-  - 멀티 repo issue 예시
-  - PM 생략 조건 / PM 필수 조건
+- [x] 10. 문서 예시 갱신 → [design-first-task-graph.md PM 적용 분기 / 예시 두 sub-section](design-first-task-graph.md)
+  - 단순 issue 예시 — lightweight design (proposed_by=leader / pm_pr=null / risk_register=[] / 1 TaskDraft → 1 Task)
+  - 멀티 repo issue 예시 — PM 필수 (proposed_by=pm / pm_pr=42 / 3 TaskDraft → 2 Task in approved revision 0; integration-check 는 integration_check_v1 stable 화 후 revision +1 로 추가)
+  - PM 생략 / 필수 조건 — 새 "## PM 적용 분기" 절 (canonical: orch-leader SKILL §3.5.1 mirror)
+  - 기존 예시의 schema 위반 정리 (root.tasks 제거 / tasks: string[] → object array / 두 예시 모두 schema strict)
 
 ## 첫 작업
 
