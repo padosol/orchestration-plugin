@@ -284,11 +284,12 @@ Workflow step status:
   - 필수 필드 / enum / artifacts 구조 정의
   - core 필드와 extension 필드 구분
 
-- [ ] 3. workflow template 파일 추가
-  - `references/workflows/task-templates/developer_pr_v1.json`
-  - `references/workflows/task-templates/pm_design_v1.json`
-  - `references/workflows/task-templates/integration_check_v1.json`
-  - role 별 template versioning 규칙 포함
+- [x] 3. workflow template 파일 추가 → [task-templates/](task-templates/) + [task-template.schema.json](../schemas/task-template.schema.json)
+  - `references/workflows/task-templates/developer_pr_v1.json` (stable, 14 step)
+  - `references/workflows/task-templates/pm_design_v1.json` (placeholder — 작업 5)
+  - `references/workflows/task-templates/integration_check_v1.json` (placeholder — 작업 6/7)
+  - `reviewer_pr_v1.json` / `report_cleanup_v1.json` 은 작업 6/7 에서 추가
+  - role 별 template versioning 규칙: 계약 §10.2 single source. 파일 안에 `{name, version, status}` metadata.
 
 - [ ] 4. leader SKILL 개정
   - `Design-first Task Graph Workflow` 도입

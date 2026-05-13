@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orch-plugin.padosol.dev/schemas/task-template.schema.json",
+  "title": "Workflow Template v1",
+  "description": "task-graph-contract.md §9 의 workflow template 정의 파일 schema (Draft 2020-12). status=stable 은 즉시 spawn 가능, status=placeholder 는 step id 만 등록된 후속 작업 (계약 §9.2~§9.5) 대상. versioning 규칙은 계약 §10.2 참조.",
+  "type": "object",
+  "required": ["name", "version", "status", "description", "steps"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^(developer|pm|reviewer|integration|report)_[a-z][a-z0-9_]*_v[0-9]+$"
+    },
+    "version": { "type": "integer", "minimum": 1 },
+    "status": { "enum": ["stable", "placeholder"] },
+    "description": { "type": "string", "minLength": 1 },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Step" }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "stable" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "items": { "$ref": "#/$defs/StableStep" }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "placeholder" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "items": { "$ref": "#/$defs/PlaceholderStep" }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Step": {
+      "description": "공통 base. 실제 검증은 status 에 따라 StableStep / PlaceholderStep 으로 분기.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "owner": { "enum": ["leader", "developer", "reviewer", "pm"] },
+        "required": { "type": "boolean" },
+        "blocking": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "StableStep": {
+      "description": "spawn 가능 template 의 step. owner / required 필수, blocking 기본 true.",
+      "type": "object",
+      "required": ["id", "owner", "required"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "owner": { "enum": ["leader", "developer", "reviewer", "pm"] },
+        "required": { "type": "boolean" },
+        "blocking": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "PlaceholderStep": {
+      "description": "step id 만 등록된 단계. owner / required / blocking 은 후속 SKILL 개정 (계약 §9.2~§9.5 참조) 에서 채운다.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

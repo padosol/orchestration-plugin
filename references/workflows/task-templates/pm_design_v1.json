@@ -1,0 +1,20 @@
+{
+  "name": "pm_design_v1",
+  "version": 1,
+  "status": "placeholder",
+  "description": "PM session lifecycle (analyze → direction-check → finalize artifacts → PR). 계약 task-graph-contract.md §9.2 참조. owner / required / blocking 은 작업 5 (PM SKILL 개정) 에서 확정.",
+  "steps": [
+    { "id": "receive_instruction" },
+    { "id": "analyze" },
+    { "id": "direction_check" },
+    { "id": "wait_user_confirm" },
+    { "id": "finalize_artifacts" },
+    { "id": "commit" },
+    { "id": "push_and_pr" },
+    { "id": "ci" },
+    { "id": "ready_for_review" },
+    { "id": "review" },
+    { "id": "wait_merge" },
+    { "id": "shutdown" }
+  ]
+}

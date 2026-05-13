@@ -1,0 +1,22 @@
+{
+  "name": "developer_pr_v1",
+  "version": 1,
+  "status": "stable",
+  "description": "developer 의 PR lifecycle (HOLD 2마디 + brief-validation FYI + PR 4단계). 계약 task-graph-contract.md §9.1 참조.",
+  "steps": [
+    { "id": "receive_instruction", "owner": "leader",    "required": true, "blocking": true },
+    { "id": "analyze",             "owner": "developer", "required": true, "blocking": true },
+    { "id": "hold_before_edit",    "owner": "developer", "required": true, "blocking": true },
+    { "id": "brief_validation",    "owner": "developer", "required": true, "blocking": false },
+    { "id": "implement",           "owner": "developer", "required": true, "blocking": true },
+    { "id": "test",                "owner": "developer", "required": true, "blocking": true },
+    { "id": "commit",              "owner": "developer", "required": true, "blocking": true },
+    { "id": "hold_before_push",    "owner": "developer", "required": true, "blocking": true },
+    { "id": "push_and_pr",         "owner": "developer", "required": true, "blocking": true },
+    { "id": "ci",                  "owner": "developer", "required": true, "blocking": true },
+    { "id": "ready_for_review",    "owner": "developer", "required": true, "blocking": true },
+    { "id": "review",              "owner": "reviewer",  "required": true, "blocking": true },
+    { "id": "wait_merge",          "owner": "developer", "required": true, "blocking": true },
+    { "id": "shutdown",            "owner": "developer", "required": true, "blocking": true }
+  ]
+}

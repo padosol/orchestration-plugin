@@ -1,0 +1,13 @@
+{
+  "name": "integration_check_v1",
+  "version": 1,
+  "status": "placeholder",
+  "description": "멀티 task 통합 검증 lifecycle (백엔드 + 프론트엔드 PR 머지 후 contract 일치 확인 등). 계약 task-graph-contract.md §9.4 참조. owner / required / blocking 은 작업 6·7 (reviewer/issue-up 정리) 에서 확정. 방향성: leader-orchestrated checklist (별도 worker spawn 없이 leader 가 merged PR artifacts 기반으로 검증).",
+  "steps": [
+    { "id": "receive_instruction" },
+    { "id": "verify_dependencies_merged" },
+    { "id": "run_integration_scenario" },
+    { "id": "report" },
+    { "id": "shutdown" }
+  ]
+}
