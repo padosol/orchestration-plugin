@@ -20,6 +20,11 @@ required_phrases=(
     "PM 포함 어떤 워커도 spawn 금지"
     # hard guard — orch 컨펌 라벨
     "[plan-confirm] GO"
+    # hard guard — 복잡 이슈 Round 2 GO (approved_task_graph 승인) 전 developer/reviewer/integration spawn 금지
+    "Round 2 GO"
+    "approved_task_graph"
+    # hard guard — PR workflow step 순서 invariant (review LGTM 전 wait_merge 금지)
+    "review LGTM 전 wait_merge"
 )
 
 content="$(cat "$src")"

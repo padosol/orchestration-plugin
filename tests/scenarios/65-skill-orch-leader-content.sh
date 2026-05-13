@@ -40,7 +40,7 @@ required=(
     "depends_on"
     "ready task"
     "placeholder template"
-    "task graph 승인 전"
+    "approved_task_graph 승인 전"
 )
 missing=()
 for phrase in "${required[@]}"; do
