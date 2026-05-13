@@ -328,12 +328,12 @@ Workflow step status:
   - SKILL §3.5.5 step/token 명칭 정렬 (approved_task_graph / ready_for_review / wait_merge / shutdown)
   - 회귀 테스트 20 / 65 키워드 갱신
 
-- [ ] 9. 회귀 테스트 추가
-  - leader SKILL 에 Design-first Task Graph Workflow 존재
-  - PM SKILL 에 Proposed Task Graph 존재
-  - developer workflow 에 review 전 wait_merge 순서 존재
-  - schema 에 depends_on / workflow_template / workflow 존재
-  - 기존 PR 4단계 / HOLD / hub-and-spoke 규약 유지
+- [x] 9. 회귀 테스트 추가 → [tests/scenarios/70~72](../../tests/scenarios/) + 기존 65/66/67/69 유지
+  - leader SKILL 에 Design-first Task Graph Workflow 존재 — covered by test 65 (`Design-first Task Graph` / `approved_task_graph` / `placeholder template` 등)
+  - PM SKILL 에 Proposed Task Graph 존재 — covered by test 66 (`Proposed Task Graph` / `proposed-task-graph.json` / `pm_design_v1`)
+  - developer workflow 에 review 전 wait_merge 순서 존재 — covered by test 67 (SKILL content / step keyword) + test 71 (`developer_pr_v1.json` step 순서 / blocking / owner 구조 검증)
+  - schema 에 depends_on / workflow_template / workflow 존재 — covered by test 70 (grep 기반 필드 / role / status enum) + test 72 (jsonschema Draft 2020-12 self-check + 모든 task-template/*.json validate)
+  - 기존 PR 4단계 / HOLD / hub-and-spoke 규약 유지 — covered by test 69 (orch-protocols.md 단일 source) + test 67 (developer SKILL workflow step / HOLD / PR 4단계 keyword)
 
 - [ ] 10. 문서 예시 갱신
   - 단순 issue 예시
