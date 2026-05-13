@@ -279,7 +279,7 @@ Workflow step status:
   - role 별 workflow template 확장 규칙 확정
   - strict core / flexible extensions 경계 확정
 
-- [ ] 2. JSON schema 초안 추가
+- [x] 2. JSON schema 초안 추가 → [task-graph.schema.json](../schemas/task-graph.schema.json)
   - `references/schemas/task-graph.schema.json`
   - 필수 필드 / enum / artifacts 구조 정의
   - core 필드와 extension 필드 구분

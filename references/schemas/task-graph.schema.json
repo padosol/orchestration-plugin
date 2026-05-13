@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orch-plugin.padosol.dev/schemas/task-graph.schema.json",
+  "title": "Task Graph v1",
+  "description": "Design-first task graph 워크플로우의 데이터 계약 v1. references/workflows/task-graph-contract.md 의 §1~§11 을 그대로 옮긴 schema. core 는 strict, extension 위치는 snake_case key 허용.",
+  "type": "object",
+  "required": ["issue_id", "workflow_version", "phase", "design"],
+  "properties": {
+    "issue_id": { "type": "string", "minLength": 1 },
+    "workflow_version": { "const": 1 },
+    "phase": { "enum": ["design", "execution", "report"] },
+    "design": { "$ref": "#/$defs/Design" },
+    "execution": { "$ref": "#/$defs/Execution" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "phase": { "enum": ["execution", "report"] } },
+        "required": ["phase"]
+      },
+      "then": { "required": ["execution"] }
+    }
+  ],
+  "$defs": {
+    "TaskStatus": {
+      "enum": [
+        "pending",
+        "ready",
+        "running",
+        "blocked",
+        "needs_changes",
+        "merged",
+        "done",
+        "failed",
+        "skipped"
+      ]
+    },
+    "StepStatus": {
+      "enum": ["pending", "running", "done", "failed", "skipped"]
+    },
+    "Role": {
+      "enum": ["developer", "reviewer", "pm", "integration", "leader"]
+    },
+    "StepOwner": {
+      "enum": ["leader", "developer", "reviewer", "pm"]
+    },
+    "TaskType": {
+      "enum": ["feat", "fix", "refactor", "chore", "docs", "test"]
+    },
+    "WorkflowTemplateName": {
+      "type": "string",
+      "pattern": "^(developer|pm|reviewer|integration|report)_[a-z][a-z0-9_]*_v[0-9]+$",
+      "description": "v1 권장: developer_pr_v1 / pm_design_v1 / reviewer_pr_v1 / integration_check_v1 / report_cleanup_v1. 새 template 은 동일 pattern."
+    },
+    "ReviewVerdict": {
+      "enum": ["LGTM", "needs-changes"]
+    },
+    "ExtensionKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+
+    "CoreArtifact": {
+      "description": "problem_frame / architecture_decision / implementation_brief 의 형식. object 면 summary 필수, string 도 허용.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["summary"],
+          "properties": {
+            "summary": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": true
+        },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
+    "RiskEntry": {
+      "type": "object",
+      "required": ["risk", "mitigation"],
+      "properties": {
+        "risk": { "type": "string", "minLength": 1 },
+        "mitigation": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "OpenDecisionEntry": {
+      "type": "object",
+      "required": ["id", "question"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "question": { "type": "string", "minLength": 1 },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "recommended": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+
+    "DesignArtifacts": {
+      "type": "object",
+      "required": [
+        "problem_frame",
+        "architecture_decision",
+        "implementation_brief",
+        "risk_register",
+        "open_decisions",
+        "proposed_task_graph"
+      ],
+      "properties": {
+        "problem_frame": { "$ref": "#/$defs/CoreArtifact" },
+        "architecture_decision": { "$ref": "#/$defs/CoreArtifact" },
+        "implementation_brief": { "$ref": "#/$defs/CoreArtifact" },
+        "risk_register": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RiskEntry" }
+        },
+        "open_decisions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OpenDecisionEntry" }
+        },
+        "proposed_task_graph": { "$ref": "#/$defs/ProposedTaskGraph" }
+      },
+      "patternProperties": {
+        "^(?!problem_frame$|architecture_decision$|implementation_brief$|risk_register$|open_decisions$|proposed_task_graph$)[a-z][a-z0-9_]*$": true
+      },
+      "additionalProperties": false
+    },
+
+    "Design": {
+      "type": "object",
+      "required": ["status", "proposed_by", "summary", "artifacts"],
+      "properties": {
+        "status": { "enum": ["draft", "proposed", "approved"] },
+        "proposed_by": { "enum": ["pm", "leader"] },
+        "pm_pr": { "type": ["integer", "null"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "artifacts": { "$ref": "#/$defs/DesignArtifacts" }
+      },
+      "additionalProperties": false
+    },
+
+    "ProposedTaskGraph": {
+      "type": "object",
+      "required": ["tasks"],
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TaskDraft" }
+        },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "TaskDraft": {
+      "description": "PM 이 제안 단계에 결정하는 부분집합. leader 가 approved 단계에서 §2 Task 로 확장.",
+      "type": "object",
+      "required": ["id", "project", "role", "depends_on"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "project": { "type": ["string", "null"] },
+        "role": { "$ref": "#/$defs/Role" },
+        "type": { "$ref": "#/$defs/TaskType" },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "workflow_template": { "$ref": "#/$defs/WorkflowTemplateName" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "Execution": {
+      "type": "object",
+      "required": ["approved_by", "approved_task_graph"],
+      "properties": {
+        "approved_by": { "const": "leader" },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "approved_task_graph": { "$ref": "#/$defs/ApprovedTaskGraph" }
+      },
+      "additionalProperties": false
+    },
+
+    "ApprovedTaskGraph": {
+      "type": "object",
+      "required": ["tasks", "revision"],
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Task" }
+        },
+        "revision": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+
+    "Task": {
+      "type": "object",
+      "required": [
+        "id",
+        "project",
+        "role",
+        "depends_on",
+        "status",
+        "current_step",
+        "workflow_template",
+        "workflow",
+        "artifacts"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "project": { "type": ["string", "null"] },
+        "role": { "$ref": "#/$defs/Role" },
+        "type": { "$ref": "#/$defs/TaskType" },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": { "$ref": "#/$defs/TaskStatus" },
+        "current_step": { "type": "string", "minLength": 1 },
+        "workflow_template": { "$ref": "#/$defs/WorkflowTemplateName" },
+        "workflow": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/WorkflowStep" }
+        },
+        "artifacts": { "$ref": "#/$defs/TaskArtifacts" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "role": { "const": "developer" } },
+            "required": ["role"]
+          },
+          "then": { "required": ["type"] }
+        }
+      ]
+    },
+
+    "WorkflowStep": {
+      "type": "object",
+      "required": ["id", "owner", "status", "required"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "owner": { "$ref": "#/$defs/StepOwner" },
+        "status": { "$ref": "#/$defs/StepStatus" },
+        "required": { "type": "boolean" },
+        "blocking": { "type": "boolean" }
+      },
+      "patternProperties": {
+        "^(?!id$|owner$|status$|required$|blocking$)[a-z][a-z0-9_]*$": true
+      },
+      "additionalProperties": false
+    },
+
+    "TaskArtifacts": {
+      "description": "§8 role 별 표준 키 + extension snake_case key 허용. 모든 표준 키 optional.",
+      "type": "object",
+      "properties": {
+        "branch": { "type": ["string", "null"] },
+        "commit": { "type": ["string", "null"] },
+        "pr": { "type": ["integer", "null"] },
+        "ci_url": { "type": ["string", "null"] },
+        "review_verdict": {
+          "oneOf": [
+            { "$ref": "#/$defs/ReviewVerdict" },
+            { "type": "null" }
+          ]
+        },
+        "merged_at": { "type": ["string", "null"], "format": "date-time" },
+        "verdict": {
+          "oneOf": [
+            { "$ref": "#/$defs/ReviewVerdict" },
+            { "type": "null" }
+          ]
+        },
+        "comment_url": { "type": ["string", "null"] },
+        "spec_path": { "type": ["string", "null"] },
+        "verified_prs": {
+          "type": ["array", "null"],
+          "items": { "type": "integer" }
+        },
+        "report_path": { "type": ["string", "null"] }
+      },
+      "patternProperties": {
+        "^(?!branch$|commit$|pr$|ci_url$|review_verdict$|merged_at$|verdict$|comment_url$|spec_path$|verified_prs$|report_path$)[a-z][a-z0-9_]*$": true
+      },
+      "additionalProperties": false
+    }
+  }
+}
