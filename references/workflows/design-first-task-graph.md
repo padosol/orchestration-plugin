@@ -298,11 +298,12 @@ Workflow step status:
   - ready task spawn 규칙 (depends_on ∈ {merged, done}, worker report 트리거)
   - step 순서 invariant 4건 (SKILL §3.5.5 + orch-protocols.md 4절)
 
-- [ ] 5. PM SKILL 개정
-  - direction-check 유지
-  - `Proposed Task Graph` 산출물 추가
-  - typed design artifacts 작성 규칙 추가
-  - PM 은 제안자, leader 는 최종 확정자임을 명시
+- [x] 5. PM SKILL 개정 → [orch-pm §1·§2·§2.1](../../skills/orch-pm/SKILL.md)
+  - direction-check 6 섹션 확장 (`## Proposed Task Graph` 추가)
+  - typed design artifacts 산출물 2 종 (`docs/spec/<id>/design.md` + `proposed-task-graph.json`)
+  - `pm_design_v1.json` placeholder → stable 승격 (11 step, owner/required/blocking 확정 — `direction_check` 가 wait-reply 차단 대기 포함)
+  - PM = `proposed_task_graph` 제안자 / leader = `approved_task_graph` 최종 확정자 명시
+  - PM 의 `.orch/runs/<mp_id>/task-graph.json` 직접 수정 금지
 
 - [ ] 6. developer SKILL 개정
   - `developer_pr_v1` workflow step 과 기존 PR 4단계 연결

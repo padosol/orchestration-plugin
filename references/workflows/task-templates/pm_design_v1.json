@@ -1,20 +1,19 @@
 {
   "name": "pm_design_v1",
   "version": 1,
-  "status": "placeholder",
-  "description": "PM session lifecycle (analyze → direction-check → finalize artifacts → PR). 계약 task-graph-contract.md §9.2 참조. owner / required / blocking 은 작업 5 (PM SKILL 개정) 에서 확정.",
+  "status": "stable",
+  "description": "PM session lifecycle (analyze → direction-check + 사용자 컨펌 차단 대기 → finalize artifacts → PR). 계약 task-graph-contract.md §9.2 참조. direction_check step 은 wait-reply 차단 대기 (사용자 컨펌) 까지 포함.",
   "steps": [
-    { "id": "receive_instruction" },
-    { "id": "analyze" },
-    { "id": "direction_check" },
-    { "id": "wait_user_confirm" },
-    { "id": "finalize_artifacts" },
-    { "id": "commit" },
-    { "id": "push_and_pr" },
-    { "id": "ci" },
-    { "id": "ready_for_review" },
-    { "id": "review" },
-    { "id": "wait_merge" },
-    { "id": "shutdown" }
+    { "id": "receive_instruction", "owner": "leader",   "required": true, "blocking": true },
+    { "id": "analyze",             "owner": "pm",       "required": true, "blocking": true },
+    { "id": "direction_check",     "owner": "pm",       "required": true, "blocking": true },
+    { "id": "finalize_artifacts",  "owner": "pm",       "required": true, "blocking": true },
+    { "id": "commit",              "owner": "pm",       "required": true, "blocking": true },
+    { "id": "push_and_pr",         "owner": "pm",       "required": true, "blocking": true },
+    { "id": "ci",                  "owner": "pm",       "required": true, "blocking": true },
+    { "id": "ready_for_review",    "owner": "pm",       "required": true, "blocking": true },
+    { "id": "review",              "owner": "reviewer", "required": true, "blocking": true },
+    { "id": "wait_merge",          "owner": "pm",       "required": true, "blocking": true },
+    { "id": "shutdown",            "owner": "pm",       "required": true, "blocking": true }
   ]
 }

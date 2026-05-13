@@ -185,11 +185,30 @@ role 별 step 순서를 고정한 template. task 가 spawn 될 때 template 의 
 - `review` 가 `done` (verdict=LGTM) 이 되기 전 `wait_merge` 진입 금지.
 - `wait_merge` 가 `done` (PR merged) 이 되기 전 `shutdown` 진입 금지.
 
-### 9.2 `pm_design_v1` (placeholder)
+### 9.2 `pm_design_v1` (11 step)
 
-PM SKILL §1 책임 범위 + §2 direction-check 흐름을 step 으로 직렬화. v1 에서는 step id 만 등록하고 owner / required / blocking 은 후속 작업 (4·5번) 에서 SKILL 개정과 함께 확정.
+PM SKILL §1 책임 범위 + §2 direction-check 흐름 + §5 PR 4단계를 step 으로 직렬화. `direction_check` step 은 wait-reply 사용자 컨펌 차단 대기까지 포함하므로 별도 `wait_user_confirm` step 은 두지 않는다.
 
-step id 후보: `receive_instruction` → `analyze` → `direction_check` → `wait_user_confirm` → `finalize_artifacts` → `commit` → `push_and_pr` → `ci` → `ready_for_review` → `review` → `wait_merge` → `shutdown`.
+| 순서 | step id | owner | required | blocking |
+| --- | --- | --- | --- | --- |
+| 1 | `receive_instruction` | leader | yes | yes |
+| 2 | `analyze` | pm | yes | yes |
+| 3 | `direction_check` | pm | yes | yes |
+| 4 | `finalize_artifacts` | pm | yes | yes |
+| 5 | `commit` | pm | yes | yes |
+| 6 | `push_and_pr` | pm | yes | yes |
+| 7 | `ci` | pm | yes | yes |
+| 8 | `ready_for_review` | pm | yes | yes |
+| 9 | `review` | reviewer | yes | yes |
+| 10 | `wait_merge` | pm | yes | yes |
+| 11 | `shutdown` | pm | yes | yes |
+
+순서 invariant (`developer_pr_v1` 와 동일 패턴):
+
+- `direction_check` 가 `done` (사용자 컨펌 수신) 이 되기 전 `finalize_artifacts` 진입 금지.
+- `ci` 가 `done` 이 되기 전 `ready_for_review` 진입 금지.
+- `review` 가 `done` (verdict=LGTM) 이 되기 전 `wait_merge` 진입 금지.
+- `wait_merge` 가 `done` 이 되기 전 `shutdown` 진입 금지.
 
 ### 9.3 `reviewer_pr_v1` (placeholder)
 
