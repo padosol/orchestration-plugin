@@ -65,17 +65,40 @@ base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 fi
 
 **같은 본문** 을 GitHub PR + leader inbox 둘 다에 게시. PR 코멘트는 사용자가 머지 검토 시 참고 자료.
 
-### 본문 형식 (verdict)
+### 본문 형식 (verdict) — 5 섹션 고정
 
 ```
 [review PR #<pr>] <LGTM | needs-changes>
 
 요약: <한 줄>
 
-코멘트:
-- <파일:line> <지적 + 권고>
-(없으면 "코멘트 없음" 명시)
+## Merge blockers
+- <파일:line> <차단 사유 + 권고>
+(없으면 "없음")
+
+## Non-blocking comments
+- <파일:line> <지적 + 권고 — 본 PR 차단 아님>
+(없으면 "없음")
+
+## Test gaps
+- <누락된 테스트 케이스 또는 검증 경로>
+(없으면 "없음")
+
+## Regression risks checked
+- <확인한 회귀 위험 영역 + 결과 — 최소 1건. "영향 없음 — 변경분이 X 에 한정" 도 OK>
+
+## Verdict rationale
+- <LGTM / needs-changes 결론 사유 1~3줄>
 ```
+
+### needs-changes 기준 — 차단/비차단 경계
+
+- **Merge blockers 1건 이상 → needs-changes 의무.** 정확성·회귀·보안·계약 위반은 blocker.
+- Non-blocking comments / 스타일·네이밍·미세 가독성만 → LGTM (코멘트 남기되 차단 X).
+- Test gaps 가 본 PR acceptance criteria 와 직결되는 경로 누락 → blocker. 단순 edge case 보강은 non-blocking.
+- Regression risks 가 본 PR 영향 범위에서 mitigation 없이 남아 있음 → blocker.
+
+판단 모호하면 blocker 가 아니라 non-blocking + Verdict rationale 에 사유 명시 (사용자가 머지 시 참고).
 
 ### 송신
 
@@ -101,6 +124,19 @@ base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 fi
 - **본 PR 변경분 안에서만 평가.** 'PR 밖 리팩터 권고' 는 후속 이슈 메모로 leader 에 알리되 본 PR 차단 사유로 쓰지 말 것.
 - 사소한 스타일은 LGTM + 코멘트로만 남기고 차단하지 않기.
 - **코드 수정·커밋·push 금지** — `Edit` / `Write` / `git commit` / `git push` 호출 금지. 잘못된 부분은 코멘트로만.
+
+### E2E 자동화 불가 — 대체 검증 확인
+
+내부망 전용 API / 2FA 로그인 / 외부 의존 mock 불가 등으로 자동 E2E 가 어려운 변경은, 워커가 PR 본문에 다음 형식의 '대체 검증' 절을 남기는 게 약속이다 (developer SKILL §5 참고):
+
+- 수동 시나리오 (스텝 + 기대 결과)
+- 단위/통합 테스트 커버 범위
+- E2E 자동화 불가 사유
+
+reviewer 가 직접 E2E 환경을 띄울 수는 없으므로 평가는 **기록된 시나리오의 타당성** 으로 한다.
+
+- 본문에 '대체 검증' 절 있고 acceptance criteria 를 커버 → Test gaps 에 영향 없음.
+- 절 부재 또는 시나리오가 acceptance criteria 를 안 덮음 → Test gaps blocker.
 
 ---
 
