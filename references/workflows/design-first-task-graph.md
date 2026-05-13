@@ -251,7 +251,7 @@ PM 권장 케이스인데 leader 가 PM 을 생략하기로 결정하면 phases.
 
 ### 멀티 repo 이슈 예시 — PM 필수
 
-project ≥ 2. PM session 으로 design artifact 6개 산출 + proposed_task_graph 작성. leader 가 approved_task_graph 로 확장. 실행 task 3건 (backend / mgmt-ui / integration-check).
+project ≥ 2. PM session 으로 design artifact 6개 산출 + proposed_task_graph 에 3 TaskDraft (backend / mgmt-ui / integration-check). leader 는 approved_task_graph 로 확장하되, `integration-check` 는 `integration_check_v1` 이 아직 placeholder 라 현재 revision 의 approved 에 포함하지 않는다 — stable 화 (작업 11+ 후속) 후 leader 가 `revision +1` 로 추가. 따라서 현재 approved 는 2 Task (`backend-api` + `mgmt-ui`).
 
 ```json
 {
@@ -312,6 +312,33 @@ project ≥ 2. PM session 으로 design artifact 6개 산출 + proposed_task_gra
             { "id": "shutdown",            "owner": "developer", "status": "pending", "required": true, "blocking": true }
           ],
           "artifacts": { "branch": null, "commit": null, "pr": null, "ci_url": null, "review_verdict": null }
+        },
+        {
+          "id": "mgmt-ui",
+          "project": "management-ui",
+          "role": "developer",
+          "type": "feat",
+          "depends_on": [],
+          "status": "pending",
+          "current_step": "receive_instruction",
+          "workflow_template": "developer_pr_v1",
+          "workflow": [
+            { "id": "receive_instruction", "owner": "leader",    "status": "pending", "required": true, "blocking": true },
+            { "id": "analyze",             "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "hold_before_edit",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "brief_validation",    "owner": "developer", "status": "pending", "required": true, "blocking": false },
+            { "id": "implement",           "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "test",                "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "commit",              "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "hold_before_push",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "push_and_pr",         "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "ci",                  "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "ready_for_review",    "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "review",              "owner": "reviewer",  "status": "pending", "required": true, "blocking": true },
+            { "id": "wait_merge",          "owner": "developer", "status": "pending", "required": true, "blocking": true },
+            { "id": "shutdown",            "owner": "developer", "status": "pending", "required": true, "blocking": true }
+          ],
+          "artifacts": { "branch": null, "commit": null, "pr": null, "ci_url": null, "review_verdict": null }
         }
       ]
     }
@@ -319,7 +346,7 @@ project ≥ 2. PM session 으로 design artifact 6개 산출 + proposed_task_gra
 }
 ```
 
-`mgmt-ui` / `integration-check` task 본문은 간결성을 위해 생략. 형식은 `backend-api` 와 동일하되 `integration-check` 는 `workflow_template = "integration_check_v1"` (placeholder — stable 화 전까지 spawn 금지). 전체 schema 적합 예시는 [task-graph-contract.md §12](task-graph-contract.md) 참조.
+위 approved 는 `revision: 0`. `integration_check_v1` stable 화 후 leader 가 `revision: 1` 로 `integration-check` Task (depends_on: ["backend-api", "mgmt-ui"], workflow_template: "integration_check_v1") 를 추가하는 흐름. proposed_task_graph 에는 placeholder 참조 TaskDraft 를 둘 수 있지만 approved_task_graph 의 Task 로 확장은 stable template 필요 — leader SKILL §3.5.4 "placeholder template 사용 금지" invariant.
 
 ## 상태 값 초안
 
@@ -427,7 +454,7 @@ Workflow step status:
 
 - [x] 10. 문서 예시 갱신 → [design-first-task-graph.md PM 적용 분기 / 예시 두 sub-section](design-first-task-graph.md)
   - 단순 issue 예시 — lightweight design (proposed_by=leader / pm_pr=null / risk_register=[] / 1 TaskDraft → 1 Task)
-  - 멀티 repo issue 예시 — PM 필수 (proposed_by=pm / pm_pr=42 / 3 TaskDraft → 3 Task incl. integration_check_v1)
+  - 멀티 repo issue 예시 — PM 필수 (proposed_by=pm / pm_pr=42 / 3 TaskDraft → 2 Task in approved revision 0; integration-check 는 integration_check_v1 stable 화 후 revision +1 로 추가)
   - PM 생략 / 필수 조건 — 새 "## PM 적용 분기" 절 (canonical: orch-leader SKILL §3.5.1 mirror)
   - 기존 예시의 schema 위반 정리 (root.tasks 제거 / tasks: string[] → object array / 두 예시 모두 schema strict)
 
