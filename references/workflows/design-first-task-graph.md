@@ -291,12 +291,12 @@ Workflow step status:
   - `reviewer_pr_v1.json` / `report_cleanup_v1.json` 은 작업 6/7 에서 추가
   - role 별 template versioning 규칙: 계약 §10.2 single source. 파일 안에 `{name, version, status}` metadata.
 
-- [ ] 4. leader SKILL 개정
+- [x] 4. leader SKILL 개정 → [orch-leader §3.5](../../skills/orch-leader/SKILL.md)
   - `Design-first Task Graph Workflow` 도입
-  - 단순 이슈와 복잡 이슈 분기
+  - 단순 이슈와 복잡 이슈 분기 (project ≥ 2 / API · DB · migration · auth 시그널)
   - Phase 0 design 승인 후 execution task graph 확정
-  - ready task spawn 규칙
-  - step 순서 위반 감지 규칙
+  - ready task spawn 규칙 (depends_on ∈ {merged, done}, worker report 트리거)
+  - step 순서 invariant 4건 (SKILL §3.5.5 + orch-protocols.md 4절)
 
 - [ ] 5. PM SKILL 개정
   - direction-check 유지

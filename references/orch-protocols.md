@@ -80,6 +80,14 @@ leader 의 HOLD / 취소 / 방향 전환 메시지가 자기 작업에 묻히지
 
 워커 (developer / PM 산출물 PR) 가 PR 을 만든 뒤 다음 4단계를 그대로 따른다.
 
+### 순서 invariant (워커 자체 검증)
+
+design-first task graph (`references/workflows/task-graph-contract.md` §9.1 developer_pr_v1) 와 일관되게 워커는 다음 invariant 를 위반하지 않는다. 위반 시 leader 가 HOLD 로 차단.
+
+- `ci` step `status="done"` 전 `ready_for_review` 진입 금지.
+- `review` step `status="done"` (verdict=LGTM) 전 `wait_merge` 진입 금지.
+- `wait_merge` step `status="done"` (PR merged) 전 `worker-shutdown.sh` 호출 금지.
+
 ### 1. CI
 
 ```bash

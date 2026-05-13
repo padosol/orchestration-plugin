@@ -34,6 +34,13 @@ required=(
     "issue-down"
     "report.sh"
     "REPORT-data.md"
+    "Design-first Task Graph"
+    "task-graph.json"
+    "approved_task_graph"
+    "depends_on"
+    "ready task"
+    "placeholder template"
+    "task graph 승인 전"
 )
 missing=()
 for phrase in "${required[@]}"; do
