@@ -24,6 +24,15 @@ required=(
     "needs-changes"
     "worker-shutdown.sh"
     "coding-guidelines.md"
+    "Design-first Task Graph"
+    "reviewer_pr_v1"
+    "workflow step"
+    "respond"
+    "acceptance criteria"
+    "depends_on"
+    "Task Graph"
+    "first_msg"
+    "task-graph.json"
 )
 missing=()
 for phrase in "${required[@]}"; do

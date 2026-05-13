@@ -312,10 +312,14 @@ Workflow step status:
   - §8 진입 액션 step 1 / 2 명시
   - developer 의 `.orch/runs/<mp_id>/task-graph.json` 직접 수정 금지 (PM SKILL 과 같은 패턴)
 
-- [ ] 7. reviewer SKILL 개정
-  - task graph / workflow step 기준으로 PR review
-  - 해당 task acceptance criteria / depends_on 결과 확인
-  - E2E 대체 검증 기준 유지
+- [x] 7. reviewer SKILL 개정 → [orch-reviewer §0.5·§2·§4·§5·§7](../../skills/orch-reviewer/SKILL.md)
+  - `reviewer_pr_v1.json` 신설 (stable, 5 step: receive_instruction → read_pr → evaluate → respond → shutdown)
+  - 계약 §9.3 도 stable 5-step 표로 갱신
+  - §0.5 Workflow Step Map + 권한 경계 (task-graph.json 직접 read/write 금지 + first_msg 단일 입력 + 누락 시 leader 질문)
+  - §2 일반 체크리스트 5항목 → 7항목 (6. Task acceptance criteria / 7. depends_on 정합성)
+  - §4 답신 = step 4 `respond` 명시 (GitHub PR + leader inbox 둘 다 끝나야 done)
+  - Task Graph 결과는 verdict 기존 5섹션에 흡수 (별도 섹션 안 만듦)
+  - E2E 대체 검증 기준 (§5) 유지
 
 - [ ] 8. issue-up / first_msg hard guard 정리
   - 긴 절차는 SKILL 로 이동 유지

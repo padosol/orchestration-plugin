@@ -1,0 +1,13 @@
+{
+  "name": "reviewer_pr_v1",
+  "version": 1,
+  "status": "stable",
+  "description": "단발성 PR review lifecycle (PR read → evaluate → 두 채널 답신 → shutdown). 계약 task-graph-contract.md §9.3 참조. respond step 은 GitHub PR comment + leader inbox 송신 둘 다 포함 (본문 동일성 invariant).",
+  "steps": [
+    { "id": "receive_instruction", "owner": "leader",   "required": true, "blocking": true },
+    { "id": "read_pr",             "owner": "reviewer", "required": true, "blocking": true },
+    { "id": "evaluate",            "owner": "reviewer", "required": true, "blocking": true },
+    { "id": "respond",             "owner": "reviewer", "required": true, "blocking": true },
+    { "id": "shutdown",            "owner": "reviewer", "required": true, "blocking": true }
+  ]
+}
