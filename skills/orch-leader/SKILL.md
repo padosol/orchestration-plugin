@@ -178,7 +178,7 @@ execution 진입 후 leader 는 다음 규칙으로 ready task 를 식별·spawn
 
 ### 3.5.5 Step 순서 invariant — leader 측 강제 (4건)
 
-워커 step 보고를 받을 때 leader 가 다음 순서 invariant 를 검증한다. 위반 시 즉시 워커에 HOLD 보내고 사유 명시. first_msg Hard Guard 와 step/token 명칭 일관 (approved_task_graph / ready_for_review / wait_merge / shutdown).
+워커 step 보고를 받을 때 leader 가 다음 순서 invariant 를 검증한다. 위반 시 즉시 워커에 HOLD 보내고 사유 명시. first_msg Hard Guard 와 step/token 명칭 일관 (approved_task_graph / ready_for_review / wait_merge / shutdown). **invariant 2~4 (ci / review / wait_merge 순서) 는 해당 step 이 있는 workflow 기준 — 즉 developer 등 PR 구현 workflow 에 적용**. 단발성 reviewer 처럼 wait_merge step 이 없는 workflow 는 자기 template 의 step 순서 기준 (`reviewer_pr_v1` 은 respond → shutdown).
 
 1. **approved_task_graph 승인 전 developer spawn 금지** — `design.status != "approved"` 거나 `execution.approved_task_graph` 미작성 상태에서 developer / reviewer 워커 spawn 금지. PM 만 허용. 사용자 Round 2 GO (복잡 이슈) 또는 1 라운드 GO (단순 이슈) 가 곧 approved_task_graph 승인.
 2. **ci done 전 ready_for_review 금지** — task 의 `workflow[].id="ci"` 가 `status="done"` 이 되기 전에 `ready_for_review` 진입 보고 금지.

@@ -175,7 +175,7 @@ first_msg="너는 ${mp_id} 팀리더(leader)다. 사용자가 위임한 ${issue_
 
 [Hard Guards — 본 first_msg 만으로도 절대 어기지 말 것]
 1. **사용자 GO 전 PM 포함 어떤 워커도 spawn 금지.** 단순 이슈는 1 라운드 \`[plan-confirm] GO\` 후 spawn. 복잡 이슈는 Round 1 GO 로 PM 만 spawn 가능, **Round 2 GO (approved_task_graph 승인) 전 developer/reviewer/integration 워커 spawn 금지.** 상세 절차는 orch-leader SKILL §3.5.3.
-2. **PR workflow step 순서 invariant 준수** — ci done 전 ready_for_review 금지 / review LGTM 전 wait_merge 금지 / wait_merge done 전 shutdown 금지. 워커 보고가 위반이면 leader 즉시 HOLD. 상세는 SKILL §3.5.5.
+2. **PR workflow step 순서 invariant 준수 (developer 등 wait_merge step 이 있는 PR 구현 workflow 기준)** — ci done 전 ready_for_review 금지 / review LGTM 전 wait_merge 금지 / wait_merge done 전 shutdown 금지. 워커 보고가 위반이면 leader 즉시 HOLD. 단발성 reviewer 처럼 wait_merge step 이 없는 workflow 는 자기 template 기준 (reviewer 는 respond → shutdown). 상세는 SKILL §3.5.5.
 3. **작업 타입 모호 시 leader 가 직접 AskUserQuestion 호출 금지** (허브 위반). orch 에 \`[type-clarify:<qid> ${issue_display}]\` + \`[question:<qid>]\` 송신 후 \`bash \\\$ORCH_BIN_DIR/wait-reply.sh <qid>\` 로 차단 대기 → orch 가 같은 qid 박은 \`[type-decision:<qid>]\` + \`[reply:<qid>]\` 로 회신.
 4. orch 에 phase plan 송신은 \`[phase-plan ${issue_display}]\` 라벨 의무 — orch 가 이 라벨로 컨펌 절차 트리거.
 5. PM \`[direction-check]\` 본문 임의 요약·삭제 금지 — 원문 그대로 orch forward.
