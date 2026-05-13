@@ -25,6 +25,18 @@ required=(
     "gh pr"
     "wait-merge.sh"
     "coding-guidelines.md"
+    "Design-first Task Graph"
+    "developer_pr_v1"
+    "workflow step"
+    "hold_before_edit"
+    "hold_before_push"
+    "brief_validation"
+    "push_and_pr"
+    "ci"
+    "ready_for_review"
+    "wait_merge"
+    "순서 invariant"
+    "Task Graph"
 )
 missing=()
 for phrase in "${required[@]}"; do

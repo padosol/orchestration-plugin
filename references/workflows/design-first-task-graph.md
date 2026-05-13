@@ -305,11 +305,12 @@ Workflow step status:
   - PM = `proposed_task_graph` 제안자 / leader = `approved_task_graph` 최종 확정자 명시
   - PM 의 `.orch/runs/<mp_id>/task-graph.json` 직접 수정 금지
 
-- [ ] 6. developer SKILL 개정
-  - `developer_pr_v1` workflow step 과 기존 PR 4단계 연결
-  - step 순서 위반 금지
-  - CI 통과 전 ready for review 금지
-  - review LGTM 전 wait-merge 금지
+- [x] 6. developer SKILL 개정 → [orch-developer-worker §0.5·§2·§6·§8](../../skills/orch-developer-worker/SKILL.md)
+  - §0.5 Workflow Step Map (14 step ↔ SKILL 절 매핑 + invariant 3건 + 권한 경계)
+  - §2 HOLD 마디 2건에 step 3 / 4 / 8 인라인
+  - §6 PR 4단계에 step 9~14 인라인 + 순서 invariant 3건 재기술
+  - §8 진입 액션 step 1 / 2 명시
+  - developer 의 `.orch/runs/<mp_id>/task-graph.json` 직접 수정 금지 (PM SKILL 과 같은 패턴)
 
 - [ ] 7. reviewer SKILL 개정
   - task graph / workflow step 기준으로 PR review
