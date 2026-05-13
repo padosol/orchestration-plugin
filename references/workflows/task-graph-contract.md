@@ -210,9 +210,19 @@ PM SKILL §1 책임 범위 + §2 direction-check 흐름 + §5 PR 4단계를 step
 - `review` 가 `done` (verdict=LGTM) 이 되기 전 `wait_merge` 진입 금지.
 - `wait_merge` 가 `done` 이 되기 전 `shutdown` 진입 금지.
 
-### 9.3 `reviewer_pr_v1` (placeholder)
+### 9.3 `reviewer_pr_v1` (5 step)
 
-reviewer SKILL §4 답신 + §6 shutdown 흐름을 step 으로 직렬화. step id 후보: `receive_instruction` → `read_pr` → `evaluate` → `post_comment` → `report_to_leader` → `shutdown`.
+단발성 PR review lifecycle. reviewer SKILL §3 정보 도구 + §2 평가 체크리스트 + §4 두 채널 답신 + §6 shutdown 을 step 으로 직렬화. `respond` step 은 GitHub PR comment + leader inbox 송신 둘 다 포함 — 본문 동일성이 invariant 이므로 송신 채널을 별도 step 으로 분리하지 않는다.
+
+| 순서 | step id | owner | required | blocking |
+| --- | --- | --- | --- | --- |
+| 1 | `receive_instruction` | leader | yes | yes |
+| 2 | `read_pr` | reviewer | yes | yes |
+| 3 | `evaluate` | reviewer | yes | yes |
+| 4 | `respond` | reviewer | yes | yes |
+| 5 | `shutdown` | reviewer | yes | yes |
+
+reviewer 는 단발성 (PR 1개 검토 후 shutdown). 추가 라운드 필요하면 leader 가 새 reviewer 워커 spawn — 같은 reviewer 가 두 번 평가하지 않는다.
 
 ### 9.4 `integration_check_v1` (placeholder)
 
