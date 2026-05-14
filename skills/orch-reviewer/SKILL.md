@@ -34,7 +34,7 @@ Design-first Task Graph 의 `reviewer_pr_v1` workflow template (계약 `referenc
 | 순서 | step id | owner | required | blocking | 본 SKILL 절 매핑 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `receive_instruction` | leader | yes | yes | §7 진입 액션 (first_msg 수신) |
-| 2 | `read_pr` | reviewer | yes | yes | §3 정보 도구 (`gh pr view / diff / checks`) + §1 type 가이드 + base 탐색 |
+| 2 | `read_pr` | reviewer | yes | yes | §3 정보 도구 (`<pr_view_json_cmd>` / `<pr_diff_cmd>`) + §1 type 가이드 + base 탐색 |
 | 3 | `evaluate` | reviewer | yes | yes | §2 일반 7항목 체크리스트 + type 가이드 |
 | 4 | `respond` | reviewer | yes | yes | §4 두 채널 답신 (GitHub PR comment + leader inbox 같은 본문) |
 | 5 | `shutdown` | reviewer | yes | yes | §6 종료 (`worker-shutdown.sh`) |
@@ -74,10 +74,11 @@ leader 가 `.orch/runs/<issue_id>/type` 에 작업 타입 (feature|bug|refactor)
 
 ## 3. 정보 도구
 
+first_msg 가 git_host (github/gitlab) 별로 다음 명령을 주입한다 — reviewer 는 그대로 실행 (gh ↔ glab 분기 안 해도 됨, JSON 키는 host 간 통일):
+
 ```bash
-gh pr view <pr> --json title,body,files,headRefName,baseRefName
-gh pr diff <pr>
-gh pr checks <pr>
+<pr_view_json_cmd>   # title / body / headRefName / baseRefName (정규화 키)
+<pr_diff_cmd>        # PR/MR diff text — 변경된 파일·라인은 여기서 직접 확인
 ```
 
 base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 first_msg 의 `<issue_lookup_line>` 이 트래커별로 알려준다 (linear / github / gitlab / jira / none 또는 GitHub 자유 id 의 lookup 생략).
@@ -86,7 +87,7 @@ base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 fi
 
 ## 4. 답신 — 두 채널 의무 (step 4 `respond`)
 
-**같은 본문** 을 GitHub PR + leader inbox 둘 다에 게시. PR 코멘트는 사용자가 머지 검토 시 참고 자료. `reviewer_pr_v1` step 4 `respond` 는 GitHub 송신 + leader 송신 둘 다 끝나야 `done` — 한 채널만 보내고 step 5 `shutdown` 진입 금지.
+**같은 본문** 을 host PR/MR + leader inbox 둘 다에 게시. PR 코멘트는 사용자가 머지 검토 시 참고 자료. `reviewer_pr_v1` step 4 `respond` 는 host 송신 + leader 송신 둘 다 끝나야 `done` — 한 채널만 보내고 step 5 `shutdown` 진입 금지.
 
 ### 본문 형식 (verdict) — 5 섹션 고정
 
@@ -134,11 +135,14 @@ base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 fi
 
 ### 송신
 
-1. **GitHub PR (필수)**:
+1. **호스트 PR/MR (필수)** — body 를 file 로 쓰고 first_msg 의 `<pr_comment_from_file_cmd>` 호출. file 인터페이스가 gh/glab heredoc 차이를 흡수:
    ```bash
-   gh pr comment <pr> --body-file - <<'GH_MSG'
+   body_file="$(mktemp)"
+   cat > "$body_file" <<'BODY'
    <본문>
-   GH_MSG
+   BODY
+   <pr_comment_from_file_cmd>
+   rm "$body_file"
    ```
 2. **leader inbox (필수)**:
    ```bash

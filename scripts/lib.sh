@@ -444,6 +444,83 @@ orch_pr_merged_by_branch() {
     [ "${count:-0}" -gt 0 ]
 }
 
+# ─── Git host PR/MR 명령 fragment 헬퍼 ────────────────────────────────
+# git_host (github/gitlab) 별로 다른 CLI (gh / glab), subcommand (pr / mr), 인자
+# 명을 흡수한다. spawn script (leader-spawn / review-spawn) 가 본 헬퍼들로 first_msg
+# 의 <pr_*_cmd> 변수를 채우고, SKILL 본문은 그 변수만 참조 — host 분기 없음.
+#
+# 출력 형식: 워커 셸이 그대로 실행할 명령 문자열. $pr / $body_file 등 placeholder
+# 는 워커 런타임 변수로 평가됨 (작은따옴표 escape 으로 spawn 시점 평가 차단).
+#
+# 사용 패턴:
+#   pr_create_cmd="$(orch_pr_create_cmd)"
+#   first_msg="...
+#   <pr_create_cmd>: ${pr_create_cmd}
+#   ..."
+
+# PR/MR 생성. 워커가 'base / title / body' 변수 미리 채워두고 호출.
+orch_pr_create_cmd() {
+    case "$(orch_settings_git_host)" in
+        github) printf 'gh pr create --base "$base" --title "$title" --body "$body"' ;;
+        gitlab) printf 'glab mr create --target-branch "$base" --title "$title" --description "$body"' ;;
+        *)      return 2 ;;
+    esac
+}
+
+# PR/MR 본문 + 메타 fetch (JSON). 워커가 '$pr' 변수 미리 채우고 호출. 출력 JSON 의
+# top-level 키를 host 간 통일 — title / body / headRefName / baseRefName.
+# (files 키는 host 마다 별도 endpoint 필요 — reviewer 는 <pr_diff_cmd> 로 변경분 직접 확인)
+# gitlab: glab mr view 는 --output json 미지원 → glab api REST 우회 (`projects/:fullpath/...`).
+orch_pr_view_json_cmd() {
+    case "$(orch_settings_git_host)" in
+        github) printf 'gh pr view "$pr" --json title,body,headRefName,baseRefName' ;;
+        gitlab) printf 'glab api "projects/:fullpath/merge_requests/$pr" | jq "{title, body: .description, headRefName: .source_branch, baseRefName: .target_branch}"' ;;
+        *)      return 2 ;;
+    esac
+}
+
+# PR/MR diff. 워커가 '$pr' 미리 채우고 호출.
+orch_pr_diff_cmd() {
+    case "$(orch_settings_git_host)" in
+        github) printf 'gh pr diff "$pr"' ;;
+        gitlab) printf 'glab mr diff "$pr"' ;;
+        *)      return 2 ;;
+    esac
+}
+
+# PR/MR 코멘트 — body 를 file 로 받음. 워커가 '$pr' / '$body_file' 미리 준비 후 호출.
+# stdin heredoc 패턴이 두 host 에서 달라서 file 인터페이스로 통일.
+orch_pr_comment_from_file_cmd() {
+    case "$(orch_settings_git_host)" in
+        github) printf 'gh pr comment "$pr" --body-file "$body_file"' ;;
+        gitlab) printf 'glab mr note "$pr" --message "$(cat "$body_file")"' ;;
+        *)      return 2 ;;
+    esac
+}
+
+# CI 체크 watch (블록). 워커가 '$pr' 미리 채우고 호출.
+# github: 'gh pr checks --watch --required' 가 PR 의 필수 체크 끝까지 block.
+# gitlab: 'glab ci status --live' (---wait 미지원, --live 가 pipeline ends 까지 real-time 출력).
+#         현재 cwd 의 git remote 의 latest pipeline 기준. '$pr' 인자 사용 안 함.
+orch_pr_checks_watch_cmd() {
+    case "$(orch_settings_git_host)" in
+        github) printf 'gh pr checks "$pr" --watch --required' ;;
+        gitlab) printf 'glab ci status --live' ;;
+        *)      return 2 ;;
+    esac
+}
+
+# CI 실패 로그 head 200줄. 워커가 github 은 '$run_id', gitlab 은 '$pipeline_id' 미리 준비.
+# gitlab: 'glab ci view' 는 TUI interactive — automation 불가. REST API 로 jobs + trace 받기.
+#         (Job iid 별 trace 가 큰 응답이라 head -200 으로 잘라야 안전.)
+orch_pr_run_log_failed_cmd() {
+    case "$(orch_settings_git_host)" in
+        github) printf 'gh run view "$run_id" --log-failed | head -200' ;;
+        gitlab) printf 'glab api "projects/:fullpath/pipelines/$pipeline_id/jobs?scope[]=failed" | jq -r ".[] | .id" | head -1 | xargs -I{} glab api "projects/:fullpath/jobs/{}/trace" | head -200' ;;
+        *)      return 2 ;;
+    esac
+}
+
 orch_settings_project_exists() {
     local project="$1"
     orch_settings_exists || return 1
