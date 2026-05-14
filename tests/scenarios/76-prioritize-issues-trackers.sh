@@ -26,17 +26,18 @@ for output in 'linear' 'github' 'gitlab' 'jira' 'none'; do
     fi
 done
 
-# 3. §2-A 4 트래커 fetch 지시 — 각 트래커별 실제 list 명령 + 부분 fetch 명령
+# 3. §2-A 4 트래커 fetch 지시 — 각 트래커별 실제 list 명령 + 부분 fetch 명령.
+#    gitlab 은 glab CLI 1.36+ 가 --output json 미지원 → glab api REST 호출 (projects/:fullpath/issues).
 declare -A list_cmd=(
     [linear]='mcp__linear-server__list_issues'
     [github]='gh issue list'
-    [gitlab]='glab issue list'
+    [gitlab]='glab api'
     [jira]='jira issue list'
 )
 declare -A view_cmd=(
     [linear]='get_issue'
     [github]='gh issue view'
-    [gitlab]='glab issue view'
+    [gitlab]='issues/<iid>'
     [jira]='jira issue view'
 )
 for tracker in linear github gitlab jira; do
@@ -48,12 +49,22 @@ for tracker in linear github gitlab jira; do
     fi
 done
 
+# 3b. gitlab 분기는 invalid stale flag (--state opened / --output json) 잔존 금지
+if grep -qE 'glab issue list.*--state' "$skill"; then
+    echo "FAIL: prioritize-issues SKILL gitlab 분기에 stale 'glab issue list --state ...' 잔존 (glab 1.36+ 미지원)" >&2
+    exit 1
+fi
+if grep -qE 'glab issue view.*--output json' "$skill"; then
+    echo "FAIL: prioritize-issues SKILL gitlab 분기에 stale 'glab issue view --output json' 잔존" >&2
+    exit 1
+fi
+
 # 4. §자주하는 실수 — '메인에서 직접 ... 호출 금지' 가 4 트래커 모두 언급
 warn_line="$(grep -E '메인에서 직접' "$skill" || true)"
 if [ -z "$warn_line" ]; then
     echo "FAIL: prioritize-issues SKILL 에 '메인에서 직접 ... 호출 금지' 절 없음" >&2; exit 1
 fi
-for cmd in 'list_issues' 'gh issue list' 'glab issue list' 'jira issue list'; do
+for cmd in 'list_issues' 'gh issue list' 'glab' 'jira issue list'; do
     if ! grep -qF "$cmd" <<<"$warn_line"; then
         echo "FAIL: '메인에서 직접 호출 금지' 절에 '${cmd}' 누락" >&2; exit 1
     fi

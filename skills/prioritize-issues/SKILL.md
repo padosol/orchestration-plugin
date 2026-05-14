@@ -53,8 +53,11 @@ labels 와 title 로 1차 분류. 추가 정보 필요한 N건만 gh issue view 
 
 **gitlab**:
 ```
-glab issue list --repo <group/project> --state opened --output json (최대 100건; --per-page 100)
-labels 와 title 로 1차 분류. 추가 정보 필요한 N건만 glab issue view <num> --repo <group/project> --output json
+glab CLI 1.36+ 는 issue list / view 에 --state / --output json 옵션이 없음 — REST API 로 직접 호출.
+list:  glab api "projects/:fullpath/issues?state=opened&per_page=100" (cwd 의 repo 기준; --hostname 으로 self-hosted 선택)
+       repo override: glab api "projects/<URL-encoded group%2Fproject>/issues?state=opened&per_page=100"
+labels 와 title 로 1차 분류. 추가 정보 필요한 N건만:
+view:  glab api "projects/:fullpath/issues/<iid>"
 ```
 
 **jira**:
