@@ -376,6 +376,74 @@ orch_settings_github_issue_repo() {
     jq -r '.github_issue_repo // ""' "$ORCH_SETTINGS"
 }
 
+# ─── Git host CLI 추상화 ──────────────────────────────────────────────
+# git_host (github | gitlab) 에 따라 gh / glab CLI 명령을 분기. 호출자 (script / SKILL)
+# 는 host 신경 안 쓰고 본 절의 헬퍼만 호출. 새 host 추가 시 본 절만 보강.
+
+# host 별 필수 CLI 가용성 검증. github→gh / gitlab→glab. host 누락이면 실패.
+# 호출 예: orch_require_git_host_cli || exit 2
+orch_require_git_host_cli() {
+    case "$(orch_settings_git_host)" in
+        github) command -v gh   >/dev/null 2>&1 || { echo "ERROR: gh CLI 필요"   >&2; return 2; } ;;
+        gitlab) command -v glab >/dev/null 2>&1 || { echo "ERROR: glab CLI 필요" >&2; return 2; } ;;
+        *)      echo "ERROR: settings.json 의 git_host 가 github|gitlab 이어야 함" >&2; return 2 ;;
+    esac
+}
+
+# PR (github) / MR (gitlab) state 조회 후 정규화. 출력:
+#   merged | closed | open | unknown | '' (조회 실패 또는 state 비어 있음).
+# 사용 예: state="$(orch_pr_state "$pr" [project_path])"
+orch_pr_state() {
+    local pr="$1" project_path="${2:-.}" host raw
+    [ -n "$pr" ] || return 2
+    host="$(orch_settings_git_host)"
+    case "$host" in
+        github)
+            command -v gh >/dev/null 2>&1 || return 2
+            raw="$(cd "$project_path" 2>/dev/null && gh pr view "$pr" --json state -q .state 2>/dev/null || true)"
+            ;;
+        gitlab)
+            command -v glab >/dev/null 2>&1 || return 2
+            # glab mr view 는 --output json 옵션이 없음 (glab 1.36+). REST API 직접 호출.
+            raw="$(cd "$project_path" 2>/dev/null && glab api "projects/:fullpath/merge_requests/$pr" 2>/dev/null | jq -r '.state // ""' 2>/dev/null || true)"
+            ;;
+        *) return 2 ;;
+    esac
+    case "$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')" in
+        merged)        printf 'merged' ;;
+        closed|locked) printf 'closed' ;;
+        open|opened)   printf 'open'   ;;
+        '')            printf ''       ;;
+        *)             printf 'unknown' ;;
+    esac
+}
+
+# 브랜치 이름으로 merged PR/MR 존재 여부. 0=merged, 1=not, 2=CLI 부재 또는 host 모름.
+# 사용 예: orch_pr_merged_by_branch "$branch" "$project_path"
+orch_pr_merged_by_branch() {
+    local branch="$1" project_path="${2:-.}" host count
+    [ -n "$branch" ] || return 2
+    host="$(orch_settings_git_host)"
+    case "$host" in
+        github)
+            command -v gh >/dev/null 2>&1 || return 2
+            count="$(cd "$project_path" 2>/dev/null && gh pr list --state merged --head "$branch" --limit 1 --json number --jq 'length' 2>/dev/null || true)"
+            ;;
+        gitlab)
+            command -v glab >/dev/null 2>&1 || return 2
+            # glab mr list 는 --state / --output json 옵션이 없음 (glab 1.36+). REST API 직접 호출.
+            # branch 에 #, +, @, . 등 자연 키가 포함될 수 있으므로 URL-encode 필수
+            # (issue-id sanitize 가 이런 문자를 허용해 leader-spawn 의 branch_name 에 들어감).
+            # jq @uri 로 인코딩, jq 부재 시 raw fallback (host CLI 자체가 jq 의존).
+            local encoded_branch
+            encoded_branch="$(printf '%s' "$branch" | jq -sRr @uri 2>/dev/null || printf '%s' "$branch")"
+            count="$(cd "$project_path" 2>/dev/null && glab api "projects/:fullpath/merge_requests?state=merged&source_branch=$encoded_branch&per_page=1" 2>/dev/null | jq 'length' 2>/dev/null || true)"
+            ;;
+        *) return 2 ;;
+    esac
+    [ "${count:-0}" -gt 0 ]
+}
+
 orch_settings_project_exists() {
     local project="$1"
     orch_settings_exists || return 1
@@ -768,17 +836,14 @@ orch_inbox_mtime() {
 # issue-down 시 산하 워커의 머지된 브랜치 worktree 만 자동 정리. 미머지·dirty 는 보존.
 
 # orch_branch_merged <project_path> <branch> <base_branch>
-# 머지 확인. gh PR(squash/rebase 포함) → git merge commit 순으로 검사. 0=merged, 1=not.
+# 머지 확인. host (github/gitlab) 의 merged PR/MR (squash/rebase 포함) → git merge commit
+# 순으로 검사. 0=merged, 1=not. host CLI 가 없으면 git fallback 만 사용.
 orch_branch_merged() {
     local project_path="$1" branch="$2" base="$3"
     [ -d "$project_path" ] || return 1
 
-    if command -v gh >/dev/null 2>&1; then
-        local merged_count
-        merged_count="$(cd "$project_path" 2>/dev/null && gh pr list --state merged --head "$branch" --limit 1 --json number --jq 'length' 2>/dev/null || true)"
-        if [ "${merged_count:-0}" -gt 0 ]; then
-            return 0
-        fi
+    if orch_pr_merged_by_branch "$branch" "$project_path"; then
+        return 0
     fi
 
     git -C "$project_path" fetch origin "$base" --quiet 2>/dev/null || true
