@@ -53,13 +53,26 @@ for raw in merged closed open opened; do
     fi
 done
 
-# 4. orch_pr_merged_by_branch: gh 와 glab 의 인자 명이 다름 — gh '--head', glab '--source-branch'.
+# 4. orch_pr_merged_by_branch: github 분기 `--head <branch>`, gitlab 분기 glab api REST
+#    (glab mr list 는 --state / --output json 옵션 없음 → glab api projects/:fullpath/
+#    merge_requests?state=merged&source_branch=... 우회 필수)
 merged_body="$(extract_fn "$lib" "orch_pr_merged_by_branch")"
 if ! grep -q -- '--head' <<<"$merged_body"; then
     echo "FAIL: orch_pr_merged_by_branch 의 github 분기에 '--head' 인자 누락" >&2; exit 1
 fi
-if ! grep -q -- '--source-branch' <<<"$merged_body"; then
-    echo "FAIL: orch_pr_merged_by_branch 의 gitlab 분기에 '--source-branch' 인자 누락" >&2; exit 1
+if ! grep -q 'glab api' <<<"$merged_body"; then
+    echo "FAIL: orch_pr_merged_by_branch 의 gitlab 분기에 'glab api' 호출 누락 (glab mr list 는 --state/--output 미지원, REST API 우회 필수)" >&2
+    exit 1
+fi
+if ! grep -q 'source_branch=' <<<"$merged_body"; then
+    echo "FAIL: orch_pr_merged_by_branch 의 gitlab 분기에 'source_branch=' (REST query) 누락" >&2; exit 1
+fi
+
+# 4b. orch_pr_state: gitlab 분기도 glab api 사용 (glab mr view 는 --output json 옵션 없음)
+state_gitlab_block="$(awk '/^\s*gitlab\)/,/;;/' <<<"$state_body")"
+if ! grep -q 'glab api' <<<"$state_gitlab_block"; then
+    echo "FAIL: orch_pr_state 의 gitlab 분기에 'glab api' 호출 누락 (glab mr view 는 --output json 미지원)" >&2
+    exit 1
 fi
 
 # 5. wait-merge.sh 가 직접 gh / glab 호출하지 않고 헬퍼만 사용

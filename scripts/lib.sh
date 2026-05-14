@@ -370,7 +370,8 @@ orch_pr_state() {
             ;;
         gitlab)
             command -v glab >/dev/null 2>&1 || return 2
-            raw="$(cd "$project_path" 2>/dev/null && glab mr view "$pr" --output json 2>/dev/null | jq -r '.state // ""' 2>/dev/null || true)"
+            # glab mr view 는 --output json 옵션이 없음 (glab 1.36+). REST API 직접 호출.
+            raw="$(cd "$project_path" 2>/dev/null && glab api "projects/:fullpath/merge_requests/$pr" 2>/dev/null | jq -r '.state // ""' 2>/dev/null || true)"
             ;;
         *) return 2 ;;
     esac
@@ -396,7 +397,8 @@ orch_pr_merged_by_branch() {
             ;;
         gitlab)
             command -v glab >/dev/null 2>&1 || return 2
-            count="$(cd "$project_path" 2>/dev/null && glab mr list --state merged --source-branch "$branch" --per-page 1 --output json 2>/dev/null | jq 'length' 2>/dev/null || true)"
+            # glab mr list 는 --state / --output json 옵션이 없음 (glab 1.36+). REST API 직접 호출.
+            count="$(cd "$project_path" 2>/dev/null && glab api "projects/:fullpath/merge_requests?state=merged&source_branch=$branch&per_page=1" 2>/dev/null | jq 'length' 2>/dev/null || true)"
             ;;
         *) return 2 ;;
     esac
