@@ -15,9 +15,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 self="$(orch_detect_self 2>/dev/null || true)"
@@ -56,7 +58,7 @@ orch_worker_archive_local "$self" || true
 role="$(orch_wid_role "$self" 2>/dev/null || true)"
 if [ "${role#review-}" != "$role" ]; then
     scope="$(orch_wid_scope "$self" 2>/dev/null || true)"
-    "${LIB_DIR}/notify-slack.sh" pr_ready "$scope" "${self}: 리뷰 코멘트 게시 완료, 머지 가능" || true
+    "${LIB_DIR}/notify/notify-slack.sh" pr_ready "$scope" "${self}: 리뷰 코멘트 게시 완료, 머지 가능" || true
 fi
 
 # 마지막 명령: 자기 pane kill. 이 명령 이후로는 stdout/stderr 모두 사라진다.

@@ -22,7 +22,7 @@ if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
     # 환경변수 미설정 = 비정상 호출 (수동 실행 등) — 안내 없이 조용히 종료.
     exit 0
 fi
-LIB_PATH="${CLAUDE_PLUGIN_ROOT}/scripts/lib.sh"
+LIB_PATH="${CLAUDE_PLUGIN_ROOT}/scripts/core/lib.sh"
 [ -f "$LIB_PATH" ] || exit 0
 # shellcheck source=/dev/null
 source "$LIB_PATH"

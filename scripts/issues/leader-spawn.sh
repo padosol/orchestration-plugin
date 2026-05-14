@@ -6,9 +6,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 usage() {
@@ -190,10 +192,10 @@ ${pr_host_block}
 [필수 — 첫 마디로 Skill 로딩]
 1) Skill 도구 invoke: **orch-pm**. 페르소나·책임·direction-check 차단·산출물 PR 4단계·종료 절차 전체가 본 SKILL 에 담겨 있다.
 2) Skill 로드 실패 시 fallback: \`Read ${plugin_root_ls}/skills/orch-pm/SKILL.md\` 1회. 본문 그대로 따른다.
-3) 공통 운영 규약 단일 source: \`Read ${protocols_path}\` 1회 (hub-and-spoke / wait-reply qid / HOLD / PR 4단계 / shutdown).
+3) 공통 운영 규약 단일 source: \`Read ${protocols_path}\` 1회 (leader-worker hub-and-spoke / 사용자 직접 확인 / wait-reply qid / HOLD / PR 4단계 / shutdown).
 
 [Hard Guards — 본 first_msg 만으로도 절대 어기지 말 것]
-1. **사용자 컨펌 없이 산출물 finalize / commit / push 금지.** 분석 직후 mandatory \`[direction-check]\` + \`[question:<qid>]\` 송신 → \`bash \\\$ORCH_BIN_DIR/wait-reply.sh <qid>\` 차단 대기. 답 반영 후에야 산출물 확정.
+1. **사용자 컨펌 없이 산출물 finalize / commit / push 금지.** 분석 직후 mandatory \`[direction-check]\` + \`[question:<qid>]\` 를 leader (${mp_id}) 에 송신 → \`bash \\\$ORCH_BIN_DIR/messages/wait-reply.sh <qid>\` 차단 대기. leader 가 사용자에게 직접 확인한 답을 반영 후에야 산출물 확정.
 2. direction-check 단계 생략 금지 — 추측 진행이 PM 의 최대 함정.
 3. developer / reviewer 와 직접 통신 금지 — 모든 라우팅은 leader (${mp_id}) 경유.
 4. phase 계획·실행 순서는 leader 소유. PM 은 산출물 (사양 / 문서 / 스키마 / 다이어그램) 만 책임.
@@ -215,14 +217,14 @@ ${pr_host_block}
 [필수 — 첫 마디로 Skill 로딩]
 1) Skill 도구 invoke: **orch-developer-worker**. 페르소나·HOLD 체크포인트·차단 질문·PR 4단계·worker-shutdown 절차 전체가 본 SKILL 에 담겨 있다.
 2) Skill 로드 실패 시 fallback: \`Read ${plugin_root_ls}/skills/orch-developer-worker/SKILL.md\` 1회. 본문 그대로 따른다.
-3) 공통 운영 규약 단일 source: \`Read ${protocols_path}\` 1회 (hub-and-spoke / wait-reply qid / HOLD / PR 4단계 / shutdown).
+3) 공통 운영 규약 단일 source: \`Read ${protocols_path}\` 1회 (leader-worker hub-and-spoke / 사용자 직접 확인 / wait-reply qid / HOLD / PR 4단계 / shutdown).
 4) 분석 단계 시작 시 \`Read ${guidelines_path}\` 1회 — 4원칙 (Think Before / Simplicity / Surgical / Goal-Driven) 의식적 적용.
 
 [Hard Guards — 본 first_msg 만으로도 절대 어기지 말 것]
 1. **모호한 spec 은 추측 진행 금지** — leader (${mp_id}) 에 \`[question:<qid>]\` + \`wait-reply.sh\` 차단 대기. 답 도착 전 다른 마디 진행 금지.
 2. **HOLD 체크포인트**: (a) 분석 → 편집 전환 직전 / (b) push 직전 — 두 마디에서 \`/orch:check-inbox\` 1회. HOLD / 취소 발견 시 즉시 중단 후 leader ack.
 3. **다른 워커 / 다른 프로젝트 직접 통신 금지** — 모든 라우팅은 leader 경유. send.sh 가드가 거부.
-4. **PR 4단계 마지막 자기 종료 의무** — \`bash \\\$ORCH_BIN_DIR/worker-shutdown.sh\` 한 번. \`exit\` 키 입력 금지.
+4. **PR 4단계 마지막 자기 종료 의무** — \`bash \\\$ORCH_BIN_DIR/issues/worker-shutdown.sh\` 한 번. \`exit\` 키 입력 금지.
 
 [진입 액션]
 - 위 1) Skill 도구 invoke (orch-developer-worker) → 2) orch-protocols.md Read → 3) coding-guidelines.md Read → \`/orch:check-inbox\` 로 leader 의 첫 지시 받아라."

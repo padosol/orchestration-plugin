@@ -81,7 +81,7 @@ first_msg 가 git_host (github/gitlab) 별로 다음 명령을 주입한다 — 
 <pr_diff_cmd>        # PR/MR diff text — 변경된 파일·라인은 여기서 직접 확인
 ```
 
-base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 first_msg 의 `<issue_lookup_line>` 이 트래커별로 알려준다 (linear / github / gitlab / jira / none 또는 GitHub 자유 id 의 lookup 생략).
+base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 first_msg 의 `<issue_lookup_line>` 이 트래커별로 알려준다 (linear / github / gitlab / none 또는 GitHub 자유 id 의 lookup 생략).
 
 ---
 
@@ -146,7 +146,7 @@ base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 fi
    ```
 2. **leader inbox (필수)**:
    ```bash
-   bash -c "$ORCH_BIN_DIR/send.sh <leader_id> <<'ORCH_MSG'
+   bash -c "$ORCH_BIN_DIR/messages/send.sh <leader_id> <<'ORCH_MSG'
    <본문>
    ORCH_MSG"
    ```
@@ -179,7 +179,7 @@ reviewer 가 직접 E2E 환경을 띄울 수는 없으므로 평가는 **기록�
 
 ## 6. 종료 — 필수
 
-답신 직후 `bash $ORCH_BIN_DIR/worker-shutdown.sh` 한 번 (registry 해제 + pane kill). `exit` 키 입력 금지. 추가 라운드 필요하면 leader 가 새 reviewer 띄움 — 한 reviewer 는 1회 검토.
+답신 직후 `bash $ORCH_BIN_DIR/issues/worker-shutdown.sh` 한 번 (registry 해제 + pane kill). `exit` 키 입력 금지. 추가 라운드 필요하면 leader 가 새 reviewer 띄움 — 한 reviewer 는 1회 검토.
 
 ---
 

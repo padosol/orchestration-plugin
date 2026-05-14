@@ -5,12 +5,11 @@
 # 핵심 정책:
 #   (a) 사용자 [plan-confirm] GO 전에는 PM 포함 어떤 워커도 spawn 금지.
 #       PM 이 필요하면 phase plan 의 'Phase 0: 분석/설계' 또는 첫 phase 로 명시 후 GO 받고 spawn.
-#   (b) 작업 타입 모호 시 leader 가 직접 AskUserQuestion 호출 금지 — orch 경유:
-#       [type-clarify:<qid>] 송신 → orch AskUserQuestion → [type-decision:<qid>] 회신.
+#   (b) 작업 타입 모호 시 leader 가 직접 AskUserQuestion 으로 사용자에게 확인.
 #
-# leader first_msg (scripts/issue-up.sh) 가 이미 워크플로우 .md / README 를 읽도록
+# leader first_msg (scripts/issues/issue-up.sh) 가 이미 워크플로우 .md / README 를 읽도록
 # 안내하므로, 그 문서들에 옛 충돌 문구가 남아 있으면 사용자 GO 전 PM spawn / leader
-# 직접 AskUserQuestion 같은 재발이 일어난다.
+# orch 중계 같은 재발이 일어난다.
 
 set -euo pipefail
 
@@ -47,32 +46,25 @@ if ! grep -q 'GO 전 PM 포함 어떤 워커도 spawn 금지' "$fmd"; then
     exit 1
 fi
 
-# 3. 워크플로우 문서 — leader 가 직접 AskUserQuestion 호출하라는 권유 금지.
-#    'leader 직접 AskUserQuestion' 또는 '여기서 AskUserQuestion' 같은 표현은 모호하므로
-#    AskUserQuestion 이 나오면 같은 줄·근처에 'orch escalate' / 'orch 경유' / '호출 금지'
-#    같은 안전 토큰이 있어야 한다.
+# 3. 워크플로우 문서 — AskUserQuestion 언급은 leader 직접 확인 정책과 충돌하지 않아야 한다.
 for f in "$workflows_dir"/{feature,bug,refactor}.md; do
     while IFS= read -r line; do
-        if grep -qE 'orch (escalate|경유)|호출 금지|leader 직접 .*금지' <<<"$line"; then
+        if grep -qE 'leader 가 직접|leader 직접|사용자에게 확인' <<<"$line"; then
             continue
         fi
-        echo "FAIL: $f 의 AskUserQuestion 언급이 'orch 경유' / '직접 호출 금지' 안전 토큰 없이 등장:" >&2
+        echo "FAIL: $f 의 AskUserQuestion 언급이 leader 직접 확인 정책 없이 등장:" >&2
         echo "  > $line" >&2
         exit 1
     done < <(grep -n AskUserQuestion "$f" || true)
 done
 
-# 4. README 의 타입 판별 절차 — orch 경유 표현으로 정정됐는지
-if ! grep -q 'type-clarify:' "$readme"; then
-    echo "FAIL: README.md 에 '[type-clarify:<qid>]' 흐름 안내 없음 — 옛 'AskUserQuestion 직접' 문구일 가능성" >&2
+# 4. README 의 타입 판별 절차 — leader 직접 확인 표현으로 정정됐는지
+if ! grep -q 'leader 가 직접 .*AskUserQuestion' "$readme"; then
+    echo "FAIL: README.md 에 leader 직접 AskUserQuestion 흐름 안내 없음" >&2
     exit 1
 fi
-if ! grep -q 'type-decision:' "$readme"; then
-    echo "FAIL: README.md 에 '[type-decision:<qid>]' 회신 라벨 안내 없음" >&2
-    exit 1
-fi
-if ! grep -q '직접 .*AskUserQuestion.*위반\|leader 가 직접 .*AskUserQuestion' "$readme"; then
-    echo "FAIL: README.md 에 'leader 직접 AskUserQuestion = 허브 위반' 명시 없음" >&2
+if grep -qE 'type-clarify:|type-decision:|orch 경유' "$readme"; then
+    echo "FAIL: README.md 에 옛 orch 중계 타입 판별 문구 잔존" >&2
     exit 1
 fi
 

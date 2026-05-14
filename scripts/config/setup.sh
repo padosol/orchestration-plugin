@@ -8,9 +8,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 UPDATE_MODE=0
@@ -19,7 +21,7 @@ GITHUB_ISSUE_REPO=""
 GIT_HOST=""
 NOTIFY=""
 USAGE='사용법: /orch:setup [--update]
-                  [--issue-tracker linear|jira|github|gitlab|none]
+                  [--issue-tracker linear|github|gitlab|none]
                   [--github-repo owner/repo]
                   [--git-host github|gitlab|none]
                   [--notify on|off]'
@@ -30,15 +32,15 @@ while [ "$#" -gt 0 ]; do
             shift
             ISSUE_TRACKER="${1:-}"
             case "$ISSUE_TRACKER" in
-                linear|jira|github|gitlab|none) ;;
-                *) echo "ERROR: --issue-tracker 는 linear|jira|github|gitlab|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
+                linear|github|gitlab|none) ;;
+                *) echo "ERROR: --issue-tracker 는 linear|github|gitlab|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
             esac
             ;;
         --issue-tracker=*)
             ISSUE_TRACKER="${1#--issue-tracker=}"
             case "$ISSUE_TRACKER" in
-                linear|jira|github|gitlab|none) ;;
-                *) echo "ERROR: --issue-tracker 는 linear|jira|github|gitlab|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
+                linear|github|gitlab|none) ;;
+                *) echo "ERROR: --issue-tracker 는 linear|github|gitlab|none ('$ISSUE_TRACKER')" >&2; exit 2 ;;
             esac
             ;;
         --github-repo)

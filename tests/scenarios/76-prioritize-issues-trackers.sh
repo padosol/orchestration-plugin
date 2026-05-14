@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regression guard: prioritize-issues SKILL 이 4 트래커 (linear / github / gitlab / jira)
+# Regression guard: prioritize-issues SKILL 이 3 트래커 (linear / github / gitlab)
 # + none 분기를 모두 cover 하는지 + setup.md 의 GitLab 표기가 "후속 작업" stale 에서
 # glab PR/MR 자동화 지원으로 갱신됐는지 정적 검증.
 
@@ -11,36 +11,40 @@ setup_md="$PLUGIN_ROOT/commands/setup.md"
 [ -f "$skill" ]    || { echo "FAIL: $skill 없음" >&2; exit 1; }
 [ -f "$setup_md" ] || { echo "FAIL: $setup_md 없음" >&2; exit 1; }
 
-# 1. frontmatter description 에 Linear / GitHub / GitLab / Jira 모두 등장
+# 1. frontmatter description 에 Linear / GitHub / GitLab 모두 등장, Jira 는 제거
 fm_block="$(awk '/^---$/{c++; if (c==2) exit; if (c==1) next} c==1' "$skill")"
-for tracker in Linear GitHub GitLab Jira; do
+for tracker in Linear GitHub GitLab; do
     if ! grep -qF "$tracker" <<<"$fm_block"; then
         echo "FAIL: prioritize-issues SKILL frontmatter description 에 '${tracker}' 누락" >&2; exit 1
     fi
 done
+if grep -qF "Jira" <<<"$fm_block"; then
+    echo "FAIL: prioritize-issues SKILL frontmatter description 에 제거된 Jira 잔존" >&2; exit 1
+fi
 
-# 2. §1 트래커 확인 절에 linear / github / gitlab / jira / none 5종 출력 분기
-for output in 'linear' 'github' 'gitlab' 'jira' 'none'; do
+# 2. §1 트래커 확인 절에 linear / github / gitlab / none 4종 출력 분기
+for output in 'linear' 'github' 'gitlab' 'none'; do
     if ! grep -qE "출력 .${output}." "$skill"; then
         echo "FAIL: prioritize-issues SKILL 의 트래커 확인 절에 '출력 ${output}' 분기 누락" >&2; exit 1
     fi
 done
+if grep -qE "출력 .jira." "$skill"; then
+    echo "FAIL: prioritize-issues SKILL 에 제거된 '출력 jira' 분기 잔존" >&2; exit 1
+fi
 
-# 3. §2-A 4 트래커 fetch 지시 — 각 트래커별 실제 list 명령 + 부분 fetch 명령.
+# 3. §2-A 3 트래커 fetch 지시 — 각 트래커별 실제 list 명령 + 부분 fetch 명령.
 #    gitlab 은 glab CLI 1.36+ 가 --output json 미지원 → glab api REST 호출 (projects/:fullpath/issues).
 declare -A list_cmd=(
     [linear]='mcp__linear-server__list_issues'
     [github]='gh issue list'
     [gitlab]='glab api'
-    [jira]='jira issue list'
 )
 declare -A view_cmd=(
     [linear]='get_issue'
     [github]='gh issue view'
     [gitlab]='issues/<iid>'
-    [jira]='jira issue view'
 )
-for tracker in linear github gitlab jira; do
+for tracker in linear github gitlab; do
     if ! grep -qF "${list_cmd[$tracker]}" "$skill"; then
         echo "FAIL: prioritize-issues SKILL 의 ${tracker} fetch 지시에 '${list_cmd[$tracker]}' 없음" >&2; exit 1
     fi
@@ -48,6 +52,9 @@ for tracker in linear github gitlab jira; do
         echo "FAIL: prioritize-issues SKILL 의 ${tracker} fetch 지시에 '${view_cmd[$tracker]}' 없음" >&2; exit 1
     fi
 done
+if grep -q 'jira issue' "$skill"; then
+    echo "FAIL: prioritize-issues SKILL 에 제거된 jira fetch 지시 잔존" >&2; exit 1
+fi
 
 # 3b. gitlab 분기는 invalid stale flag (--state opened / --output json) 잔존 금지
 if grep -qE 'glab issue list.*--state' "$skill"; then
@@ -59,12 +66,12 @@ if grep -qE 'glab issue view.*--output json' "$skill"; then
     exit 1
 fi
 
-# 4. §자주하는 실수 — '메인에서 직접 ... 호출 금지' 가 4 트래커 모두 언급
+# 4. §자주하는 실수 — '메인에서 직접 ... 호출 금지' 가 3 트래커 모두 언급
 warn_line="$(grep -E '메인에서 직접' "$skill" || true)"
 if [ -z "$warn_line" ]; then
     echo "FAIL: prioritize-issues SKILL 에 '메인에서 직접 ... 호출 금지' 절 없음" >&2; exit 1
 fi
-for cmd in 'list_issues' 'gh issue list' 'glab' 'jira issue list'; do
+for cmd in 'list_issues' 'gh issue list' 'glab'; do
     if ! grep -qF "$cmd" <<<"$warn_line"; then
         echo "FAIL: '메인에서 직접 호출 금지' 절에 '${cmd}' 누락" >&2; exit 1
     fi

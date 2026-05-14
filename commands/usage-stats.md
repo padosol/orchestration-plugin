@@ -27,8 +27,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/usage-stats.py:*)
 **Dead code 후보 찾는 워크플로**:
 ```bash
 # 1. 현재 등록된 .sh 파일 목록 생성
-ls ${CLAUDE_PLUGIN_ROOT}/scripts/*.sh ${CLAUDE_PLUGIN_ROOT}/hooks/*.sh 2>/dev/null \
-    | xargs -n1 basename > /tmp/orch-sh.txt
+find ${CLAUDE_PLUGIN_ROOT}/scripts ${CLAUDE_PLUGIN_ROOT}/hooks -name '*.sh' -type f 2>/dev/null \
+    | sed "s#^${CLAUDE_PLUGIN_ROOT}/##" > /tmp/orch-sh.txt
 
 # 2. 카운트 0 인 파일 식별
 /orch:usage-stats --zero /tmp/orch-sh.txt --zero-category scripts
@@ -38,4 +38,4 @@ ls ${CLAUDE_PLUGIN_ROOT}/commands/*.md | xargs -n1 basename | sed 's/\.md$//' | 
 /orch:usage-stats --plugin orch: --zero /tmp/orch-cmds.txt
 ```
 
-**주의**: 카운트 0 ≠ 즉시 삭제 OK. user-facing 슬래시는 사용자가 알아야 하는 entry-point 라 한 번도 안 불렸어도 의미 있을 수 있음. Bash 스크립트가 다른 스크립트 안에서만 호출되는 lib 형 (lib.sh, inbox-parse.py) 는 다른 카운트로 추론. 최종 삭제 결정 전 grep 으로 cross-reference 권장.
+**주의**: 카운트 0 ≠ 즉시 삭제 OK. user-facing 슬래시는 사용자가 알아야 하는 entry-point 라 한 번도 안 불렸어도 의미 있을 수 있음. Bash 스크립트가 다른 스크립트 안에서만 호출되는 core/lib 형 (`scripts/core/lib.sh`, `inbox-parse.py`) 는 다른 카운트로 추론. 최종 삭제 결정 전 grep 으로 cross-reference 권장.

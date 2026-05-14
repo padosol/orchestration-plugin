@@ -1,11 +1,11 @@
 ---
 description: 플러그인 자체 위생 검증 — 문법(bash/python/json) + 종속어(절대경로 등) 검출
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-plugin.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/validate-plugin.sh:*)
 ---
 
 다음 명령으로 플러그인을 검증하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/validate-plugin.sh`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/config/validate-plugin.sh`
 
 **역할**:
 - bash / python / json 파일의 **문법 오류** 검사 (커밋 전 회귀 차단)

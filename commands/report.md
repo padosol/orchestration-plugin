@@ -1,12 +1,12 @@
 ---
 description: MP 운영 데이터 덤프 + 결정적 템플릿으로 REPORT.html 작성
 argument-hint: <mp-id>
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/report.sh:*), Bash(python3:*), Write
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inspect/report.sh:*), Bash(python3:*), Write
 ---
 
 다음 명령으로 데이터 덤프를 받습니다.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/report.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/inspect/report.sh $ARGUMENTS`
 
 **역할**: 위 출력은 해당 MP 의 운영 흐름·코드 변경·토큰 사용량·도구 분포·에러·메시지 카운트가 담긴 **원본 데이터** 입니다. orch 가 이를 해석해 회고 REPORT.html 을 작성합니다.
 
@@ -108,7 +108,7 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
       - `auto_issue` 필드는 비워둔다 — orch 가 사용자와 등록 결정 후 채울 수도, 안 채울 수도 있음 (선택). leader 가 채우지 않음.
    5. **orch 인박스로 후보 송신** (패턴 ≥ 1건일 때만) — `[follow-up-candidates <issue_id>]` 라벨 + `errors_check` 카테고리:
       ```
-      bash -c "$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'
+      bash -c "$ORCH_BIN_DIR/messages/send.sh orch <<'ORCH_MSG'
       [follow-up-candidates <issue_id>] errors_check
       - send.sh / rc=2 / 3회 / 'ERROR: ...' → first_msg 의 heredoc 절 보강
       - notify-slack.sh / rc=1 / 1회 / 'curl: …' → 토큰 검증 옵션 추가
@@ -159,7 +159,7 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
       - REPORT.html 의 `ai_ready_check.stale_items` 에 stale 위치 + 사유 기록.
       - **orch 인박스로 후보 송신** (stale ≥ 1건일 때만) — `[follow-up-candidates <issue_id>]` 라벨 + `ai_ready_check` 카테고리:
         ```
-        bash -c "$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'
+        bash -c "$ORCH_BIN_DIR/messages/send.sh orch <<'ORCH_MSG'
         [follow-up-candidates <issue_id>] ai_ready_check
         - CLAUDE.md:12-20 / "API endpoint 목록" 절 / src/api/v2/foo.go 신규로 누락
         - docs/architecture.md:34 / "auth flow" 절 / 토큰 저장 위치 변경됨

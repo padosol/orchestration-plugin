@@ -7,9 +7,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 self="$(orch_detect_self 2>/dev/null || true)"
@@ -30,8 +32,8 @@ mkdir -p "$(dirname "$archive")"
 
 if [ "$#" -lt 1 ] || [ -z "$1" ]; then
     echo "ERROR: <msg-id> 인자 필요. 메시지 한 건씩 처리하고 그 ID 만 archive 하세요." >&2
-    echo "  - 단건: \$ORCH_BIN_DIR/inbox-archive.sh <msg-id>" >&2
-    echo "  - 일괄(긴급용 — 평소 사용 금지): \$ORCH_BIN_DIR/inbox-archive.sh --all" >&2
+    echo "  - 단건: \$ORCH_BIN_DIR/messages/inbox-archive.sh <msg-id>" >&2
+    echo "  - 일괄(긴급용 — 평소 사용 금지): \$ORCH_BIN_DIR/messages/inbox-archive.sh --all" >&2
     echo "" >&2
     echo "현재 inbox 메시지 ID 목록:" >&2
     python3 "${LIB_DIR}/inbox-parse.py" ids "$inbox" | sed 's/^/  /' >&2

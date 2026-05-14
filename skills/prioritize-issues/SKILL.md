@@ -1,6 +1,6 @@
 ---
 name: prioritize-issues
-description: 워크스페이스에 등록된 이슈 트래커(Linear / GitHub / GitLab / Jira) 의 미완료 이슈를 분석해 루브릭 점수 기반 Top N (기본 3) 을 추천한다. /orch:prioritize 호출 시 사용. 메인 컨텍스트 부담을 줄이기 위해 list/get 호출은 서브에이전트(Agent general-purpose) 로 위임하고 메인은 점수표 + 추천만 받는다. issue_tracker=none 워크스페이스에서는 NA 로 종료.
+description: 워크스페이스에 등록된 이슈 트래커(Linear / GitHub / GitLab) 의 미완료 이슈를 분석해 루브릭 점수 기반 Top N (기본 3) 을 추천한다. /orch:prioritize 호출 시 사용. 메인 컨텍스트 부담을 줄이기 위해 list/get 호출은 서브에이전트(Agent general-purpose) 로 위임하고 메인은 점수표 + 추천만 받는다. issue_tracker=none 워크스페이스에서는 NA 로 종료.
 ---
 
 # prioritize-issues
@@ -9,26 +9,25 @@ description: 워크스페이스에 등록된 이슈 트래커(Linear / GitHub / 
 
 `.orch/settings.json` 의 `issue_tracker` 설정을 읽어 그에 맞는 트래커에서 미완료 이슈(`Backlog` / `Todo` / `In Progress`) 를 가져오고, 정의된 루브릭으로 점수화 → Top N 을 추천한다.
 
-핵심 원칙: **메인 컨텍스트는 결과 (점수표 + Top N + 추천 next) 만 받는다.** 이슈 description fetch 같은 무거운 read 는 반드시 `Agent(general-purpose)` 서브에이전트에 위임. 메인이 직접 `mcp__linear-server__list_issues` / `gh issue list` / `glab issue list` / `jira issue list` 를 호출하면 description 이 메인 컨텍스트에 누적되어 후속 작업 효율이 떨어진다.
+핵심 원칙: **메인 컨텍스트는 결과 (점수표 + Top N + 추천 next) 만 받는다.** 이슈 description fetch 같은 무거운 read 는 반드시 `Agent(general-purpose)` 서브에이전트에 위임. 메인이 직접 `mcp__linear-server__list_issues` / `gh issue list` / `glab issue list` 를 호출하면 description 이 메인 컨텍스트에 누적되어 후속 작업 효율이 떨어진다.
 
 ## 절차
 
 ### 1. 트래커 확인
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/lib.sh   # source 용 — 직접 실행 X
+${CLAUDE_PLUGIN_ROOT}/scripts/core/lib.sh   # source 용 — 직접 실행 X
 ```
 
 대신 다음 명령으로 현재 트래커 확인:
 
 ```bash
-bash -c 'source ${CLAUDE_PLUGIN_ROOT}/scripts/lib.sh && orch_settings_issue_tracker'
+bash -c 'source ${CLAUDE_PLUGIN_ROOT}/scripts/core/lib.sh && orch_settings_issue_tracker'
 ```
 
 - 출력 `linear` → 단계 2 (Linear 위임).
 - 출력 `github` → 단계 2 (GitHub 위임). `orch_settings_github_issue_repo` 로 repo 도 함께 확보.
 - 출력 `gitlab` → 단계 2 (GitLab 위임). `orch_settings_github_issue_repo` (gitlab 환경에서는 `group/project` 로 재해석) 함께 확보.
-- 출력 `jira` → 단계 2 (Jira 위임). 사이트 URL / 토큰은 `~/.config/.jira/.config.yml` 사전 등록 가정.
 - 출력 `none` → "이슈 트래커 미사용 모드 — prioritize 대상 없음" 안내 후 종료.
 - 명령 실패 (`.orch/settings.json` 없음) → "워크스페이스 셋업 안 됨. `/orch:setup` 먼저" 안내 후 종료.
 
@@ -58,12 +57,6 @@ list:  glab api "projects/:fullpath/issues?state=opened&per_page=100" (cwd 의 r
        repo override: glab api "projects/<URL-encoded group%2Fproject>/issues?state=opened&per_page=100"
 labels 와 title 로 1차 분류. 추가 정보 필요한 N건만:
 view:  glab api "projects/:fullpath/issues/<iid>"
-```
-
-**jira**:
-```
-jira issue list --jql 'statusCategory != Done' --plain --columns key,summary,priority,status,labels (또는 --output json -p '...')
-labels 와 summary 로 1차 분류. 추가 정보 필요한 N건만 jira issue view <key> --plain
 ```
 
 #### 2-B. 루브릭 (사용자 지정 가능)
@@ -122,7 +115,7 @@ labels 와 summary 로 1차 분류. 추가 정보 필요한 N건만 jira issue v
 
 ## 자주 하는 실수 (피하라)
 
-- **메인에서 직접 트래커 list 호출 금지** — `mcp__linear-server__list_issues` / `gh issue list` / `glab issue list` / `jira issue list` 모두 서브에이전트 위임 의무. 컨텍스트 효율이 이 스킬의 핵심 이유. 위임 안 하면 스킬 만든 의미 없음.
+- **메인에서 직접 트래커 list 호출 금지** — `mcp__linear-server__list_issues` / `gh issue list` / `glab issue list` 모두 서브에이전트 위임 의무. 컨텍스트 효율이 이 스킬의 핵심 이유. 위임 안 하면 스킬 만든 의미 없음.
 - **루브릭 임의 변경 금지** — 사용자가 명시적으로 다른 루브릭 요청하지 않으면 위 5차원 그대로. 일관성이 비교 가치.
 - **Top N 안에 들지 못한 이슈 자동 무시 금지** — 점수표는 전체 보여주기. Top 은 강조일 뿐, 사용자가 다른 항목을 골라도 OK.
 - **자동 실행 금지** — Top 1 이슈로 바로 작업 시작하지 말 것. 사용자가 어느 트랙으로 갈지 결정.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# $ORCH_BIN_DIR/wait-merge.sh <pr-num>
+# $ORCH_BIN_DIR/issues/wait-merge.sh <pr-num>
 # 워커가 자기 PR 의 머지를 폴링한다 (30s 간격, 24h timeout).
 #   exit 0  → MERGED
 #   exit 1  → CLOSED 미머지 (사용자가 닫음)
@@ -8,9 +8,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 if [ "$#" -lt 1 ]; then

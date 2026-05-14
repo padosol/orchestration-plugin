@@ -1,12 +1,12 @@
 ---
 description: 워커 pane 마지막 30줄 + 활동 시각 + inbox 카운트 — 응답 없는 워커 진단용
 argument-hint: <worker-id>
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/peek.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inspect/peek.sh:*)
 ---
 
 다음 명령으로 peek 합니다.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/peek.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/inspect/peek.sh $ARGUMENTS`
 
 **언제 사용**:
 - 워커 답신이 한참 없을 때 — 정말 멈췄는지, 긴 작업(빌드/테스트) 중인지 확인

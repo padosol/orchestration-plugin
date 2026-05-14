@@ -10,7 +10,7 @@
 
 ## Phase 템플릿
 
-1. **요구사항 정의** — 유스케이스, 입력, 출력, 비기능 요건 (성능 / 보안 / 호환성) 을 문장으로 정리. 모호하면 orch 에 escalate (leader 직접 `AskUserQuestion` 호출 금지 — 사용자 TUI 접점은 orch 단독). 추측 진행 금지.
+1. **요구사항 정의** — 유스케이스, 입력, 출력, 비기능 요건 (성능 / 보안 / 호환성) 을 문장으로 정리. 모호하면 leader 가 직접 `AskUserQuestion` 으로 사용자에게 확인. 추측 진행 금지.
 2. **인터페이스 설계** — 데이터 모델 / API 시그니처 / 상태 변화 / 호환성 영향. 큰 기능이면 PM 산출물 (`docs/spec/<id>/...` + design-first task graph design artifact) 이 필요하므로 phase plan 에 **Phase 0: 분석/설계** (또는 첫 phase) 로 명시 → `[plan-confirm] GO` 받은 뒤 그 phase 시작 시점에 PM 워커 spawn. **GO 전 PM 포함 어떤 워커도 spawn 금지.** 멀티 repo / API contract / DB model 변경이면 task graph (proposed → approved) 가 phase plan 본문에 포함 — leader SKILL §3.5 참조.
 3. **스코프 분할** — 작업 가능한 단위로 쪼개기. 각 단위는 **독립적으로 머지 가능** 해야 함 (한 PR 이 다른 PR 의 미머지 코드에 의존하면 phase 분리 실패).
 4. **테스트 케이스 정의** — 정상 케이스 + 엣지 케이스 + 실패 모드. 가능하면 TDD (테스트 먼저 작성 → 빨강 확인 → 구현 → 초록).

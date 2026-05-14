@@ -13,7 +13,7 @@ if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
     exit 0
 fi
 
-LIB_PATH="${CLAUDE_PLUGIN_ROOT}/scripts/lib.sh"
+LIB_PATH="${CLAUDE_PLUGIN_ROOT}/scripts/core/lib.sh"
 [ -f "$LIB_PATH" ] || exit 0
 # shellcheck source=/dev/null
 source "$LIB_PATH"

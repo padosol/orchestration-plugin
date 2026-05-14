@@ -1,12 +1,12 @@
 ---
 description: MP-XXX leader cascade shutdown (산하 워커 + scope dir archive + 머지 브랜치 자동 정리)
 argument-hint: <issue-id> [--no-cleanup]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issues/issue-down.sh:*)
 ---
 
 다음 명령으로 cascade shutdown을 실행하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/issues/issue-down.sh $ARGUMENTS`
 
 **호출자별 동작**:
 - **orch가 호출**: leader pane에 `/orch:issue-down <id>` 자동 전달 → leader가 cleanup 수행. leader pane이 이미 죽었으면 직접 정리.

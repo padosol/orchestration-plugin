@@ -1,12 +1,12 @@
 ---
 description: leader가 산하 워커 pane을 띄움 (worktree + tmux + claude). --role 로 developer / PM 선택.
 argument-hint: <project-alias> [feat|fix|refactor|chore|docs] [--role pm|dev]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/leader-spawn.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issues/leader-spawn.sh:*)
 ---
 
 다음 명령으로 산하 워커를 띄우세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/leader-spawn.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/issues/leader-spawn.sh $ARGUMENTS`
 
 **역할 (--role)**:
 - `dev` (기본): 구현 담당 developer. `worker_id = <issue_id>/<project>`. 프로젝트당 하나.
@@ -21,8 +21,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/leader-spawn.sh:*)
 **복잡 이슈 워크플로 (PM → developer)**:
 1. 분석/스펙/API/데이터모델 필요하면 phase plan 에 **Phase 0: 분석/설계** 로 명시. **`[plan-confirm] GO` 받기 전 PM 포함 어떤 워커도 spawn 금지.**
 2. GO 후 그 phase 시작 시점에 PM spawn: `/orch:leader-spawn <project> --role pm`
-3. PM 이 `[direction-check]` + `[question:<qid>]` 송신 → leader 가 본문 그대로 `/orch:send orch` 로 forward
-4. 사용자 답신 (orch → leader inbox) 을 같은 `[reply:<qid>]` 마커로 PM 에 forward
+3. PM 이 `[direction-check]` + `[question:<qid>]` 송신 → leader 가 본문 그대로 사용자에게 보여주고 직접 `AskUserQuestion`
+4. 사용자 답신을 같은 `[reply:<qid>]` 마커로 PM 에 forward
 5. PM 산출물 finalize → PR 머지 후 다음 phase 시작 시점에 developer spawn → 구현
 
 **worktree 격리 — 강제**:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 어디서든 한 명령으로 워크스페이스 진입.
-#   bash <plugin>/scripts/bootstrap.sh [<workspace-path>]
+#   bash <plugin>/scripts/session/bootstrap.sh [<workspace-path>]
 # - workspace-path 없으면 현재 디렉토리.
 # - tmux 세션 이름 = workspace 디렉토리 basename.
 # - 새 세션이면 claude 실행 + /orch:up 자동 입력. 기존 세션이면 attach.

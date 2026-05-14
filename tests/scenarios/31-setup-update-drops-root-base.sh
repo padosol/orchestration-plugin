@@ -30,7 +30,7 @@ jq -n \
       }
     }' > "$ws/.orch/settings.json"
 
-ORCH_ROOT="$ws/.orch" bash "$PLUGIN_ROOT/scripts/setup.sh" --update >/dev/null
+ORCH_ROOT="$ws/.orch" bash "$PLUGIN_ROOT/scripts/config/setup.sh" --update >/dev/null
 
 python3 - "$ws/.orch/settings.json" <<'PY'
 import json, sys

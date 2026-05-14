@@ -1,11 +1,11 @@
 ---
 description: 전체 위계 + inbox 상태 (orch + leader + 산하 워커)
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/status.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inspect/status.sh:*)
 ---
 
 다음 명령으로 위계 상태를 확인하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/status.sh`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/inspect/status.sh`
 
 **출력 구성**:
 - tmux 세션 상태 (UP/DOWN)

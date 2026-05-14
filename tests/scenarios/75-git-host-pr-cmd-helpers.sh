@@ -7,19 +7,21 @@
 
 set -euo pipefail
 
-lib="$PLUGIN_ROOT/scripts/lib.sh"
-leader_spawn="$PLUGIN_ROOT/scripts/leader-spawn.sh"
-review_spawn="$PLUGIN_ROOT/scripts/review-spawn.sh"
+lib="$PLUGIN_ROOT/scripts/core/lib.sh"
+github_provider="$PLUGIN_ROOT/scripts/providers/git-host/github.sh"
+gitlab_provider="$PLUGIN_ROOT/scripts/providers/git-host/gitlab.sh"
+leader_spawn="$PLUGIN_ROOT/scripts/issues/leader-spawn.sh"
+review_spawn="$PLUGIN_ROOT/scripts/issues/review-spawn.sh"
 dev_skill="$PLUGIN_ROOT/skills/orch-developer-worker/SKILL.md"
 pm_skill="$PLUGIN_ROOT/skills/orch-pm/SKILL.md"
 rv_skill="$PLUGIN_ROOT/skills/orch-reviewer/SKILL.md"
 protocols="$PLUGIN_ROOT/references/orch-protocols.md"
 
-for f in "$lib" "$leader_spawn" "$review_spawn" "$dev_skill" "$pm_skill" "$rv_skill" "$protocols"; do
+for f in "$lib" "$github_provider" "$gitlab_provider" "$leader_spawn" "$review_spawn" "$dev_skill" "$pm_skill" "$rv_skill" "$protocols"; do
     [ -f "$f" ] || { echo "FAIL: $f 없음" >&2; exit 1; }
 done
 
-# 1. lib.sh 의 6 헬퍼 정의 + 본문에 github + gitlab 두 case
+# 1. lib.sh 의 6 헬퍼 정의 + provider 위임
 extract_fn() {
     awk -v fn="$2" '
         $0 ~ "^"fn"\\(\\)" { capture = 1 }
@@ -33,20 +35,20 @@ for fn in orch_pr_create_cmd orch_pr_view_json_cmd orch_pr_diff_cmd orch_pr_comm
         echo "FAIL: lib.sh 에 ${fn}() 정의 누락" >&2; exit 1
     fi
     body="$(extract_fn "$lib" "$fn")"
-    if ! grep -qE '^\s*github\)' <<<"$body"; then
-        echo "FAIL: ${fn} 본문에 github) case 누락" >&2; exit 1
-    fi
-    if ! grep -qE '^\s*gitlab\)' <<<"$body"; then
-        echo "FAIL: ${fn} 본문에 gitlab) case 누락" >&2; exit 1
+    if ! grep -q 'orch_git_host_provider_' <<<"$body"; then
+        echo "FAIL: ${fn} 이 git-host provider 로 위임하지 않음" >&2; exit 1
     fi
 done
+if ! grep -q 'providers/git-host/github.sh' "$lib" || ! grep -q 'providers/git-host/gitlab.sh' "$lib"; then
+    echo "FAIL: lib.sh git-host provider allowlist 에 github/gitlab 누락" >&2; exit 1
+fi
 
 # 2. orch_pr_view_json_cmd 가 host 간 정규화 키 (title/body/headRefName/baseRefName) cover.
 #    gitlab 분기는 glab api REST 우회 + jq 로 description→body / source_branch→headRefName /
 #    target_branch→baseRefName 매핑.
 #    (files 키는 제거 — reviewer 는 별도 <pr_diff_cmd> 로 변경분 확인. glab mr view 의
 #    --output json 미지원 + changes 키는 별도 endpoint 라 단순화.)
-view_body="$(extract_fn "$lib" "orch_pr_view_json_cmd")"
+view_body="$(cat "$github_provider" "$gitlab_provider")"
 for token in title body headRefName baseRefName description source_branch target_branch; do
     if ! grep -qF "$token" <<<"$view_body"; then
         echo "FAIL: orch_pr_view_json_cmd 가 host 정규화 키워드 '${token}' 누락" >&2; exit 1
@@ -58,8 +60,7 @@ if ! grep -q 'glab api' <<<"$view_body"; then
 fi
 
 # 2b. orch_pr_checks_watch_cmd 의 gitlab 분기는 --live (glab 1.36+ 에서 --wait 미지원).
-watch_body="$(extract_fn "$lib" "orch_pr_checks_watch_cmd")"
-watch_gitlab="$(awk '/^\s*gitlab\)/,/;;/' <<<"$watch_body")"
+watch_gitlab="$(cat "$gitlab_provider")"
 if grep -q -- '--wait' <<<"$watch_gitlab"; then
     echo "FAIL: orch_pr_checks_watch_cmd gitlab 분기에 stale '--wait' 잔존 (glab 1.36+ 는 '--live')" >&2
     exit 1
@@ -69,8 +70,7 @@ if ! grep -q -- '--live' <<<"$watch_gitlab"; then
 fi
 
 # 2c. orch_pr_run_log_failed_cmd 의 gitlab 분기는 glab api (glab ci view 는 TUI 라 automation 불가).
-log_body="$(extract_fn "$lib" "orch_pr_run_log_failed_cmd")"
-log_gitlab="$(awk '/^\s*gitlab\)/,/;;/' <<<"$log_body")"
+log_gitlab="$(cat "$gitlab_provider")"
 if grep -qE 'glab ci view.*--trace' <<<"$log_gitlab"; then
     echo "FAIL: orch_pr_run_log_failed_cmd gitlab 분기에 stale 'glab ci view --trace' 잔존 (TUI / 미지원 flag)" >&2
     exit 1

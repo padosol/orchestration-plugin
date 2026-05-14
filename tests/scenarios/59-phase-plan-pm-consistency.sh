@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-src="$PLUGIN_ROOT/scripts/issue-up.sh"
+src="$PLUGIN_ROOT/scripts/issues/issue-up.sh"
 skill="$PLUGIN_ROOT/skills/orch-leader/SKILL.md"
 [ -f "$src" ]   || { echo "FAIL: $src 없음" >&2; exit 1; }
 [ -f "$skill" ] || { echo "FAIL: $skill 없음" >&2; exit 1; }

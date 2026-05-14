@@ -7,14 +7,18 @@
 
 set -euo pipefail
 
-src_up="$PLUGIN_ROOT/scripts/issue-up.sh"
-src_rev="$PLUGIN_ROOT/scripts/review-spawn.sh"
+src_up="$PLUGIN_ROOT/scripts/issues/issue-up.sh"
+src_rev="$PLUGIN_ROOT/scripts/issues/review-spawn.sh"
+gitlab_provider="$PLUGIN_ROOT/scripts/providers/issue-tracker/gitlab.sh"
+github_provider="$PLUGIN_ROOT/scripts/providers/issue-tracker/github.sh"
 
 [ -f "$src_up" ]  || { echo "FAIL: $src_up 없음" >&2; exit 1; }
 [ -f "$src_rev" ] || { echo "FAIL: $src_rev 없음" >&2; exit 1; }
+[ -f "$gitlab_provider" ] || { echo "FAIL: $gitlab_provider 없음" >&2; exit 1; }
+[ -f "$github_provider" ] || { echo "FAIL: $github_provider 없음" >&2; exit 1; }
 
 # 1. GitLab fallback 의 첫 숫자 추출은 '|| true' 안전 패턴이어야 (pipefail 사고 방지)
-for f in "$src_up" "$src_rev"; do
+for f in "$gitlab_provider"; do
     if ! grep -qE "grep -Eo '\[0-9\]\+' \| head -1 \|\| true" "$f"; then
         echo "FAIL: $f 에 '|| true' 안전 패턴 누락 — pipefail 아래 grep 실패 → 스크립트 종료 위험" >&2
         exit 1
@@ -40,10 +44,10 @@ if grep -q '전체 숫자 issue 번호가 아님' "$src_up"; then
     exit 1
 fi
 
-# 4. review-spawn.sh 의 github 분기가 자유 id 일 때 PR description 으로 판단하는
-#    fallback 메시지 유지 (PR 리뷰 컨텍스트라 fuzzy 가 아닌 description 기반 판단).
-if ! grep -q "전체 숫자 id 가 아님" "$src_rev"; then
-    echo "FAIL: review-spawn.sh github + 자유 id fallback 안내 누락" >&2
+# 4. github provider 가 자유 id 일 때 PR description 으로 판단하는 fallback 메시지 유지
+#    (PR 리뷰 컨텍스트라 fuzzy 가 아닌 description 기반 판단).
+if ! grep -q "전체 숫자 id 가 아님" "$github_provider"; then
+    echo "FAIL: github issue-tracker provider 의 자유 id fallback 안내 누락" >&2
     exit 1
 fi
 

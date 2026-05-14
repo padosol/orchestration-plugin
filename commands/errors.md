@@ -1,12 +1,12 @@
 ---
 description: 누적된 orch 에러 로그 조회 — scope-aware (top-level + 모든 issue scope errors.jsonl 통합)
 argument-hint: [--tail N] [--analyze] [--mp <id>] [--worker <wid>] [--script <name>] [--clear]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/errors.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inspect/errors.sh:*)
 ---
 
 다음 명령으로 누적된 에러 로그를 확인하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/errors.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/inspect/errors.sh $ARGUMENTS`
 
 **역할**:
 - orch 스크립트 비0 종료 시 자동으로 errors.jsonl 에 한 줄 JSON 로그 추가

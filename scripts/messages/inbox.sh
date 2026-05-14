@@ -5,9 +5,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 self="$(orch_detect_self 2>/dev/null || true)"
@@ -32,7 +34,7 @@ if [ "$#" -ge 1 ] && [ -n "$1" ]; then
         echo "=== INBOX worker_id=$self id=$msg_id ==="
         python3 "${LIB_DIR}/inbox-parse.py" body "$inbox" "$msg_id"
         echo "=== END ==="
-        echo "(처리 후 단건 archive: \$ORCH_BIN_DIR/inbox-archive.sh $msg_id)"
+        echo "(처리 후 단건 archive: \$ORCH_BIN_DIR/messages/inbox-archive.sh $msg_id)"
     } 9>"${inbox}.lock"
 else
     # 요약 모드
@@ -55,7 +57,7 @@ else
             echo "=== END ==="
             echo ""
             echo "▶ 다음 호출 (필수): /orch:check-inbox $first_id   ← message_id 인자 강제"
-            echo "  단건 archive: \$ORCH_BIN_DIR/inbox-archive.sh <id>"
+            echo "  단건 archive: \$ORCH_BIN_DIR/messages/inbox-archive.sh <id>"
             echo "  reply: ● = 답신 필요 / ○ = [답신 불필요] 마커 있음."
             if [ "$reply_needed" -gt 0 ]; then
                 echo "  ⚠ 답신 필요 (●) 메시지 ${reply_needed}건 — 답신 보내기 전 다음 작업 진행 금지."

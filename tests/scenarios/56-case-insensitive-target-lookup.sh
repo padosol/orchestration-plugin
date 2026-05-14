@@ -19,7 +19,7 @@ EOF
 
 resolve() {
     ORCH_ROOT="$ws/.orch" bash -c '
-        source "$0/scripts/lib.sh"
+        source "$0/scripts/core/lib.sh"
         orch_resolve_worker_id_case "$1"
     ' "$PLUGIN_ROOT" "$1"
 }
@@ -56,7 +56,7 @@ EOF
 out="$(
     ORCH_ROOT="$ws/.orch" \
     ORCH_WORKER_ID=orch \
-    bash "$PLUGIN_ROOT/scripts/send.sh" mp-75 'test body' 2>&1 || true
+    bash "$PLUGIN_ROOT/scripts/messages/send.sh" mp-75 'test body' 2>&1 || true
 )"
 # INFO 메시지에 정규화 흔적
 grep -qF "target case 정규화 'mp-75' → 'MP-75'" <<<"$out" \

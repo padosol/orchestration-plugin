@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Regression guard: issue-up.sh 4 트래커 분기 fetch 실패 시 fuzzy fallback 안내 +
-# SKILL.md §1.1 의 fuzzy fallback 프로토콜 (search → orch 경유 사용자 질문 → wait-reply) 존재.
+# Regression guard: issue-up.sh 3 트래커 분기 fetch 실패 시 fuzzy fallback 안내 +
+# SKILL.md §1.1 의 fuzzy fallback 프로토콜 (search → leader 직접 사용자 질문) 존재.
 #
 # 정책: leader 가 primary fetch 실패 시 임의 spawn 진행 금지, 트래커 search 로 후보 N 건
-# 수집 → orch 경유 사용자 질문 ([issue-clarify:<qid>] + [question:<qid>]) → wait-reply →
-# [issue-decision:<qid>] 회신 받고 진행.
+# 수집 → leader 가 AskUserQuestion 으로 사용자 결정 받고 진행.
 
 set -euo pipefail
 
-src_up="$PLUGIN_ROOT/scripts/issue-up.sh"
+src_up="$PLUGIN_ROOT/scripts/issues/issue-up.sh"
+provider_dir="$PLUGIN_ROOT/scripts/providers/issue-tracker"
 skill="$PLUGIN_ROOT/skills/orch-leader/SKILL.md"
 
 [ -f "$src_up" ] || { echo "FAIL: $src_up 없음" >&2; exit 1; }
+[ -d "$provider_dir" ] || { echo "FAIL: $provider_dir 없음" >&2; exit 1; }
 [ -f "$skill" ]  || { echo "FAIL: $skill 없음" >&2; exit 1; }
 
 # 1. issue-up.sh 의 4 트래커 분기 모두 fuzzy fallback 진입 안내를 포함해야 한다.
@@ -19,16 +20,12 @@ declare -A fuzzy_marker=(
     [linear]="list_issues"
     [github]="gh issue list --search"
     [gitlab]="glab issue list --search"
-    [jira]="jira issue list --jql"
 )
 
-# case 블록 추출 — 각 트래커 case 라벨부터 다음 ';;' 까지.
-for tracker in linear github gitlab jira; do
-    block="$(awk -v t="$tracker" '
-        $0 ~ "^    " t ")" { capture = 1; next }
-        capture && /;;/ { capture = 0 }
-        capture { print }
-    ' "$src_up")"
+for tracker in linear github gitlab; do
+    file="$provider_dir/$tracker.sh"
+    [ -f "$file" ] || { echo "FAIL: issue-tracker provider 없음: $file" >&2; exit 1; }
+    block="$(cat "$file")"
     if [ -z "$block" ]; then
         echo "FAIL: issue-up.sh 에 ${tracker} case 블록 추출 실패" >&2
         exit 1
@@ -43,14 +40,18 @@ for tracker in linear github gitlab jira; do
     fi
 done
 
+if grep -q 'jira issue' "$src_up"; then
+    echo "FAIL: issue-up.sh 에 제거된 jira fuzzy fallback 안내 잔존" >&2
+    exit 1
+fi
+
 # 2. SKILL.md §1.1 — fuzzy fallback 프로토콜 필수 요소 포함.
 required_skill_phrases=(
     "fetch 실패 fallback"
-    "[issue-clarify:"
-    "[question:"
-    "[issue-decision:"
-    "wait-reply.sh"
-    "AskUserQuestion 직접 호출 금지"
+    "AskUserQuestion"
+    "후보 선택"
+    "다른 ID"
+    "취소"
 )
 content="$(cat "$skill")"
 missing=()

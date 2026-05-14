@@ -1,33 +1,32 @@
 ---
 description: 이슈 팀리더(leader) pane을 띄운다 — orch 전용
 argument-hint: <issue-id> [--force] [--no-issue]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-up.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issues/issue-up.sh:*)
 ---
 
 다음 명령으로 leader를 띄우세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/issue-up.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/issues/issue-up.sh $ARGUMENTS`
 
 **v2 변경**: repo 인자 없음. leader가 settings.json 보고 어느 프로젝트(들)에서 작업할지 결정.
 
 **사용 규칙**:
 - **orch 전용 명령** — 다른 워커에서 호출하면 거부됨
-- `issue-id`: 트래커의 키 그대로 사용 (대소문자 보존). 거부 문자: 공백·제어문자 / shell metacharacters (`;|&$\` \\`) / redirect·quoting·grouping (`<>!(){}[]"'`) / path traversal (`..`) / slash (worker_id delimiter). 자연 키 (`#`, `.`, `+`, `@`, `~`, `-`, `_`) 와 alnum 은 통과. 예: Linear `MP-13` / Jira `PROJ-456` / GitHub `142` / GitLab `my-issue#42` / 자유 `issue42`. 이슈가 없으면 사용자가 임의로 골라도 OK. `orch` 는 reserved.
+- `issue-id`: 트래커의 키 그대로 사용 (대소문자 보존). 거부 문자: 공백·제어문자 / shell metacharacters (`;|&$\` \\`) / redirect·quoting·grouping (`<>!(){}[]"'`) / path traversal (`..`) / slash (worker_id delimiter). 자연 키 (`#`, `.`, `+`, `@`, `~`, `-`, `_`) 와 alnum 은 통과. 예: Linear `MP-13` / GitHub `142` / GitLab `my-issue#42` / 자유 `issue42`. 이슈가 없으면 사용자가 임의로 골라도 OK. `orch` 는 reserved.
 - 같은 leader가 이미 있으면 에러. cascade 재생성은 끝에 `--force`
 - leader pane은 **`<issue_id>` 이름의 새 tmux 윈도우** 로 생성됨 (orch 윈도우 split 아님). 같은 윈도우 안에 leader 가 자기 산하 워커 pane 들을 split 으로 띄워 (`/orch:leader-spawn` / `/orch:review-spawn` 이 자동 tiled) leader+worker 가 한 화면에 모인다.
 - leader는 settings.json 의 `issue_tracker` 값에 따라 컨텍스트를 가져오고 작업 계획을 orch에 보고
   - `linear` → Linear MCP 로 이슈 fetch
-  - `github` → `gh issue view` 로 fetch (settings.github_issue_repo 기준). 숫자 키 아니거나 이슈 없음 → leader 가 `gh issue list --search` 로 후보 → orch 경유 사용자 질문 (fuzzy fallback, SKILL §1.1).
+  - `github` → `gh issue view` 로 fetch (settings.github_issue_repo 기준). 숫자 키 아니거나 이슈 없음 → leader 가 `gh issue list --search` 로 후보 → 사용자에게 직접 질문 (fuzzy fallback, SKILL §1.1).
   - `gitlab` → `glab issue view` 로 fetch. 실패 시 동일 fuzzy fallback (`glab issue list --search`).
-  - `jira` → `jira issue view` 로 fetch. 실패 시 동일 fuzzy fallback (`jira issue list --jql`).
   - `none` → orch 에 spec 직접 요청
-- **`--no-issue`**: 워크스페이스가 `linear`/`github` 트래커 모드여도 이번 호출만 fetch 스킵 (이슈 없음 → leader 가 orch 에 spec 직접 요청). 다음 호출부터는 워크스페이스 설정 그대로 적용. 사용 케이스: 이슈 만들기 번거로운 작은 작업, 이슈 미발행 상태에서 try-out, 사용자가 spec 만 구두 전달.
+- **`--no-issue`**: 워크스페이스가 `linear`/`github`/`gitlab` 트래커 모드여도 이번 호출만 fetch 스킵 (이슈 없음 → leader 가 사용자에게 spec 직접 확인). 다음 호출부터는 워크스페이스 설정 그대로 적용. 사용 케이스: 이슈 만들기 번거로운 작은 작업, 이슈 미발행 상태에서 try-out, 사용자가 spec 만 구두 전달.
 
-**PM (orch) 행동 규약 — 사용자 결정 후 즉시 invoke**:
+**orch 행동 규약 — 사용자 결정 후 즉시 invoke**:
 
 - 사용자와 spec/계획을 컨펌한 직후 `issue-up`, `send`, `issue-down`, `report` 같은 슬래시 명령은 **orch 가 Skill 도구로 직접 invoke** 한다.
 - ❌ "이 명령을 입력해주세요" 같이 사용자에게 떠넘기지 말 것. orch 의 역할은 사용자 결정을 받아 직접 실행하고 결과를 보고하는 것.
-- 사용자 ↔ orch 토론 → 결정 → orch → leader 전송 구조를 유지. 사용자가 워커에 직접 명령을 내리는 흐름이 되지 않도록 한다.
+- 사용자 ↔ orch 토론 → issue-up 실행 → leader 가 이후 작업 결정은 사용자와 직접 확인. 사용자가 워커에 직접 명령을 내리는 흐름이 되지 않도록 한다.
 - 예외: 사용자가 명시적으로 "직접 입력하겠다" 라고 했거나, 인터랙티브 외부 인증 (예: `gcloud auth login`) 같은 경우만 사용자에게 떠넘김.
 
 **MP 마무리 — 책무 분리 (leader vs orch)**:

@@ -5,9 +5,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 if [ "$#" -lt 1 ]; then
@@ -118,7 +120,7 @@ if [ "$self" = "orch" ]; then
     orch_inbox_cleanup "$mp_id"
     echo "OK archived $archive_dir"
     # Slack 알림 — leader pane 이미 죽어서 orch 가 직접 정리한 경로.
-    "${LIB_DIR}/notify-slack.sh" mp_done "$mp_id" "leader 이미 종료, 정리 완료" "$archive_dir" || true
+    "${LIB_DIR}/notify/notify-slack.sh" mp_done "$mp_id" "leader 이미 종료, 정리 완료" "$archive_dir" || true
     exit 0
 fi
 
@@ -181,7 +183,7 @@ orch_append_message "$mp_id" "orch" "[issue-down] $mp_id cascade shutdown 완료
 orch_notify "orch" || true
 
 # Slack 알림 — MP 완료. archive 경로 + REPORT 작성 안내.
-"${LIB_DIR}/notify-slack.sh" mp_done "$mp_id" "cascade shutdown 완료. /orch:report 로 REPORT.html 작성 권유" "$archive_dir" || true
+"${LIB_DIR}/notify/notify-slack.sh" mp_done "$mp_id" "cascade shutdown 완료. /orch:report 로 REPORT.html 작성 권유" "$archive_dir" || true
 
 # 마지막: issue_id 윈도우(leader 자기 pane 포함) 통째로 kill — self-shutdown.
 # 동기 kill 이 자기 pane 을 즉시 죽이면 이 스크립트 종료 후 잔여 명령이 없어 안전.

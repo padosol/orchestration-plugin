@@ -7,8 +7,8 @@
 # - commands/issue-down.md: REPORT 는 leader phase 마지막 + orch 자동 호출 금지
 # - commands/report.md: 호출 주체 절 + errors_check / ai_ready_check 후보 송신 (자동 등록 X)
 # - commands/check-inbox.md: [follow-up-candidates] 라벨 처리 절차
-# - scripts/issue-up.sh first_msg: PR-4 종료 단계에 follow-up-candidates 송신 단계
-# - scripts/issue-down.sh: REPORT.html 존재/부재 분기 어휘 명확
+# - scripts/issues/issue-up.sh first_msg: PR-4 종료 단계에 follow-up-candidates 송신 단계
+# - scripts/issues/issue-down.sh: REPORT.html 존재/부재 분기 어휘 명확
 # - references/workflows/{feature,bug,refactor}.md: 마무리 phase 추가
 
 set -euo pipefail
@@ -17,8 +17,8 @@ up_md="$PLUGIN_ROOT/commands/issue-up.md"
 down_md="$PLUGIN_ROOT/commands/issue-down.md"
 report_md="$PLUGIN_ROOT/commands/report.md"
 inbox_md="$PLUGIN_ROOT/commands/check-inbox.md"
-up_sh="$PLUGIN_ROOT/scripts/issue-up.sh"
-down_sh="$PLUGIN_ROOT/scripts/issue-down.sh"
+up_sh="$PLUGIN_ROOT/scripts/issues/issue-up.sh"
+down_sh="$PLUGIN_ROOT/scripts/issues/issue-down.sh"
 wf_feature="$PLUGIN_ROOT/references/workflows/feature.md"
 wf_bug="$PLUGIN_ROOT/references/workflows/bug.md"
 wf_refactor="$PLUGIN_ROOT/references/workflows/refactor.md"
@@ -77,7 +77,7 @@ for token in 'follow-up-candidates' 'errors_check'; do
     fi
 done
 
-# 6. scripts/issue-down.sh — REPORT.html 존재/부재 분기 명확
+# 6. scripts/issues/issue-down.sh — REPORT.html 존재/부재 분기 명확
 if ! grep -qF 'REPORT.html 누락' "$down_sh"; then
     echo "FAIL: issue-down.sh 에 'REPORT.html 누락' 분기 안내 없음" >&2; exit 1
 fi

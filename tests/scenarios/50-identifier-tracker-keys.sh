@@ -6,7 +6,7 @@ set -euo pipefail
 
 cd "$SANDBOX"
 # shellcheck source=/dev/null
-source "$PLUGIN_ROOT/scripts/lib.sh"
+source "$PLUGIN_ROOT/scripts/core/lib.sh"
 
 assert_eq() {
     local label="$1" got="$2" want="$3"

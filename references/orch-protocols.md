@@ -6,18 +6,20 @@ leader / developer / PM / reviewer 의 4개 SKILL 이 공통으로 따르는 라
 
 ## 1. Hub-and-Spoke 라우팅
 
-orch ↔ leader ↔ worker 의 hub-and-spoke 모델. 모든 메시지는 hub 경유.
+leader ↔ worker 는 hub-and-spoke 모델. orch 는 이슈 생성 / 분배 / 후속 후보 관리만 맡고, 사용자 결정이 필요한 작업 진행 판단은 leader 가 사용자와 직접 소통한다.
 
 ```
-사용자 ─ orch ─ leader (<issue_id>) ─ worker (<issue_id>/<project>|pm|review-*)
+사용자 ─┬─ orch (issue manager / dispatcher)
+        └─ leader (<issue_id>) ─ worker (<issue_id>/<project>|pm|review-*)
 ```
 
 - **워커끼리 직접 통신 금지** — `send.sh` 가 가드. 다른 프로젝트 의존 생기면 leader 에 escalate → leader 가 라우팅 또는 orch escalate.
-- **사용자 ↔ leader 직접 접점 금지** — TUI (AskUserQuestion) 는 orch 단독. leader 가 직접 호출하면 허브 구조 위반.
+- **사용자 ↔ leader 직접 접점 허용 및 권장** — phase plan 승인 / 타입 결정 / PM direction-check 같은 진행 결정은 leader 가 직접 `AskUserQuestion` 으로 받는다. orch 에 사용자 응답 중계를 맡기지 않는다.
+- **orch 책임 범위** — `/orch:issue-up` 으로 leader spawn, `/orch:issue-down` 정리, follow-up 후보의 트래커 등록 여부 검토. leader 의 phase plan/type clarify/direction-check 응답 중계는 하지 않는다.
 - **모든 메시지는 `/orch:send <target> <msg>`** — target 은 `orch | <issue_id> | <issue_id>/<project>` 중 하나.
 - **따옴표·줄바꿈·백틱 메시지는 Bash heredoc 필수**:
   ```bash
-  bash -c "$ORCH_BIN_DIR/send.sh <target> <<'ORCH_MSG'
+  bash -c "$ORCH_BIN_DIR/messages/send.sh <target> <<'ORCH_MSG'
   본문
   ORCH_MSG"
   ```
@@ -44,13 +46,13 @@ qid="q-$(date +%s)-$RANDOM"
 ### 송신 + 블록 대기
 
 ```bash
-bash -c "$ORCH_BIN_DIR/send.sh <target> <<ORCH_MSG
+bash -c "$ORCH_BIN_DIR/messages/send.sh <target> <<ORCH_MSG
 [question:$qid]
 <질문 본문 + 옵션 후보 + 디폴트 추천>
 ORCH_MSG"
-bash $ORCH_BIN_DIR/wait-reply.sh $qid    # 차단. 답 본문 + msg_id 출력. exit 2 면 timeout.
+bash $ORCH_BIN_DIR/messages/wait-reply.sh $qid    # 차단. 답 본문 + msg_id 출력. exit 2 면 timeout.
 # 처리 후:
-bash $ORCH_BIN_DIR/inbox-archive.sh <msg_id>
+bash $ORCH_BIN_DIR/messages/inbox-archive.sh <msg_id>
 ```
 
 - **timeout 기본 1h** (`ORCH_WAIT_REPLY_TIMEOUT` 으로 조정). exit 2 → 재prompt 후 재대기.
@@ -59,7 +61,7 @@ bash $ORCH_BIN_DIR/inbox-archive.sh <msg_id>
 
 ### 차단 질문 응답 의무 (leader / orch)
 
-`[question:<qid>]` 마커가 박힌 메시지는 송신측이 wait-reply 로 막힌 상태. 답 미루지 말고 우선 처리. 사용자 차원 결정이면 orch 로 forward 한 뒤 사용자 답을 같은 `[reply:<qid>]` 로 송신측에 돌려준다.
+`[question:<qid>]` 마커가 박힌 메시지는 송신측이 wait-reply 로 막힌 상태. 답 미루지 말고 우선 처리. 사용자 차원 결정이면 leader 가 직접 사용자에게 묻고, 같은 `[reply:<qid>]` 로 송신측에 돌려준다.
 
 ---
 
@@ -113,7 +115,7 @@ worker first_msg 가 git_host (github/gitlab) 별로 `<pr_create_cmd>` / `<pr_ch
 ### 3. 머지 대기
 
 ```bash
-bash $ORCH_BIN_DIR/wait-merge.sh <pr-num>    # 30s 폴링.
+bash $ORCH_BIN_DIR/issues/wait-merge.sh <pr-num>    # 30s 폴링.
 ```
 
 - exit 0 (MERGED) → leader 에 'PR #N merged' 답신 → 4 진입.
@@ -122,7 +124,7 @@ bash $ORCH_BIN_DIR/wait-merge.sh <pr-num>    # 30s 폴링.
 ### 4. 자기 종료 (필수)
 
 ```bash
-bash $ORCH_BIN_DIR/worker-shutdown.sh
+bash $ORCH_BIN_DIR/issues/worker-shutdown.sh
 ```
 
 - registry 해제 + pane kill 한 번에. `exit` 키 입력 금지 (Claude Code 가 떠 있어 셸에 안 닿음).
@@ -144,7 +146,7 @@ bash $ORCH_BIN_DIR/worker-shutdown.sh
 - ✅ `[id=1778074602-9oovce] mp-7 issue-down 알림 처리. /orch:report mp-7 곧바로 트리거합니다.`
 - ❌ `mp-7 issue-down 알림 받았어요, report 작성 시작합니다.` (id 누락)
 
-처리한 메시지는 단건 archive: `bash -c "$ORCH_BIN_DIR/inbox-archive.sh <id>"`.
+처리한 메시지는 단건 archive: `bash -c "$ORCH_BIN_DIR/messages/inbox-archive.sh <id>"`.
 
 ---
 

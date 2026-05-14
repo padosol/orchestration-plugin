@@ -5,7 +5,7 @@ set -euo pipefail
 
 cd "$SANDBOX"
 # shellcheck source=/dev/null
-source "$PLUGIN_ROOT/scripts/lib.sh"
+source "$PLUGIN_ROOT/scripts/core/lib.sh"
 
 ok() {
     if ! orch_route_check "$1" "$2" 2>/dev/null; then

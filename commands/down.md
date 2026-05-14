@@ -1,12 +1,12 @@
 ---
 description: orch tmux 세션을 통째로 종료 (모든 leader/워커 강제 종료)
 argument-hint: [--force]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/down.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/session/down.sh:*)
 ---
 
 다음 명령으로 orch tmux 세션을 종료하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/down.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/session/down.sh $ARGUMENTS`
 
 **역할**:
 - `lol` tmux 세션을 통째로 kill — 안에 있던 orch / leader / 워커 pane 모두 강제 종료

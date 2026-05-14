@@ -1,12 +1,12 @@
 ---
 description: leader가 PR 리뷰 전용 워커를 깨끗한 컨텍스트로 띄움 (단발성, 답신 후 자동 종료)
 argument-hint: <project-alias> <pr-num>
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/review-spawn.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issues/review-spawn.sh:*)
 ---
 
 다음 명령으로 PR 리뷰 워커를 띄우세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/review-spawn.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/issues/review-spawn.sh $ARGUMENTS`
 
 **제약**:
 - **leader 전용 명령**. orch / 작업 워커 / reviewer 자신에서 호출하면 거부.

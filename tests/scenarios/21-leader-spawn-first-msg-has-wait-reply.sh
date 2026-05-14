@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-src="$PLUGIN_ROOT/scripts/leader-spawn.sh"
+src="$PLUGIN_ROOT/scripts/issues/leader-spawn.sh"
 [ -f "$src" ] || { echo "FAIL: $src not found"; exit 1; }
 
 content="$(cat "$src")"

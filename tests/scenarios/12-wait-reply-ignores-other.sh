@@ -31,7 +31,7 @@ EOF
 set +e
 ORCH_ROOT="$ws/.orch" ORCH_WORKER_ID=mp-99/test \
     ORCH_WAIT_REPLY_INTERVAL=1 ORCH_WAIT_REPLY_TIMEOUT=2 \
-    bash "$PLUGIN_ROOT/scripts/wait-reply.sh" Q1 > /tmp/wr-out 2>&1
+    bash "$PLUGIN_ROOT/scripts/messages/wait-reply.sh" Q1 > /tmp/wr-out 2>&1
 code=$?
 set -e
 [ "$code" -eq 2 ] || { echo "FAIL: 다른 마커는 무시해야 하는데 exit $code"; cat /tmp/wr-out; exit 1; }
@@ -52,7 +52,7 @@ EOF
 out=$(
     ORCH_ROOT="$ws/.orch" ORCH_WORKER_ID=mp-99/test \
         ORCH_WAIT_REPLY_INTERVAL=1 ORCH_WAIT_REPLY_TIMEOUT=3 \
-        bash "$PLUGIN_ROOT/scripts/wait-reply.sh" Q1 2>&1
+        bash "$PLUGIN_ROOT/scripts/messages/wait-reply.sh" Q1 2>&1
 )
 
 echo "$out"

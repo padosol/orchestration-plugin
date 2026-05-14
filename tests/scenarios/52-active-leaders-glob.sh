@@ -21,7 +21,7 @@ EOF
 
 ORCH_ROOT="$ws/.orch"
 # shellcheck source=/dev/null
-source "$PLUGIN_ROOT/scripts/lib.sh"
+source "$PLUGIN_ROOT/scripts/core/lib.sh"
 
 mapfile -t got < <(orch_active_leaders | sort)
 expected=("142" "MP-13" "PROJ-456" "gh-99" "issue42")

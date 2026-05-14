@@ -20,8 +20,8 @@ for t in feature bug refactor; do
     fi
 done
 
-src_up="$PLUGIN_ROOT/scripts/issue-up.sh"
-src_rev="$PLUGIN_ROOT/scripts/review-spawn.sh"
+src_up="$PLUGIN_ROOT/scripts/issues/issue-up.sh"
+src_rev="$PLUGIN_ROOT/scripts/issues/review-spawn.sh"
 skill_leader="$PLUGIN_ROOT/skills/orch-leader/SKILL.md"
 [ -f "$skill_leader" ] || { echo "FAIL: $skill_leader 없음" >&2; exit 1; }
 

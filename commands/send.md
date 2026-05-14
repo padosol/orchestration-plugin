@@ -1,12 +1,12 @@
 ---
 description: 다른 워커에게 메시지 전송 (2-tier hub-and-spoke)
 argument-hint: <orch|<issue_id>|<issue_id>/project> <message>
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/send.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/messages/send.sh:*)
 ---
 
 다음 명령으로 메시지를 보내세요. **단, 본문에 따옴표·줄바꿈·백틱이 있으면 슬래시 명령 대신 아래 "복잡한 메시지" 패턴을 쓸 것.**
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/send.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/messages/send.sh $ARGUMENTS`
 
 성공하면 메시지 ID + 보낸이→받는이 + **본문 byte 수**(`(N chars)`) 가 출력됩니다. 의도한 본문 길이와 차이가 크면 호출 측 따옴표·백틱·괄호로 인자가 잘렸을 가능성 — `--file` 또는 stdin 으로 재송신하세요. 차단/실패 시 에러 메시지를 사용자에게 그대로 알려주세요.
 
@@ -31,7 +31,7 @@ cat > /tmp/orch-msg.txt <<'ORCH_MSG'
 ORCH_MSG
 
 # 2. 파일 경로 전달
-${CLAUDE_PLUGIN_ROOT}/scripts/send.sh <target> --file /tmp/orch-msg.txt
+${CLAUDE_PLUGIN_ROOT}/scripts/messages/send.sh <target> --file /tmp/orch-msg.txt
 ```
 
 `<<'ORCH_MSG'` 의 작은따옴표가 핵심 — heredoc 내부에서 변수 치환·백틱 평가를 막아 본문이 그대로 파일에 들어갑니다. send.sh 호출은 `--file` 만 쓰니 어떤 본문이든 안전.

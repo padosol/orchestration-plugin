@@ -1,14 +1,14 @@
 ---
-description: 이슈 트래커(Linear/GitHub) 미완료 이슈를 루브릭 점수로 분석해 우선순위 Top N 추천
+description: 이슈 트래커(Linear/GitHub/GitLab) 미완료 이슈를 루브릭 점수로 분석해 우선순위 Top N 추천
 argument-hint: [--top N] [--team <name>] [--state <name>]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/lib.sh:*), Bash(bash:*), Agent
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/core/lib.sh:*), Bash(bash:*), Agent
 ---
 
 `prioritize-issues` 스킬을 호출하세요.
 
 스킬 절차 요약:
-1. `bash -c 'source ${CLAUDE_PLUGIN_ROOT}/scripts/lib.sh && orch_settings_issue_tracker'` 로 트래커 확인
-2. linear / github → `Agent(general-purpose)` 위임 — list/get 호출은 모두 서브에이전트가 처리 (메인 컨텍스트 효율)
+1. `bash -c 'source ${CLAUDE_PLUGIN_ROOT}/scripts/core/lib.sh && orch_settings_issue_tracker'` 로 트래커 확인
+2. linear / github / gitlab → `Agent(general-purpose)` 위임 — list/get 호출은 모두 서브에이전트가 처리 (메인 컨텍스트 효율)
 3. none → "트래커 미사용 — 대상 없음" 안내 후 종료
 4. 결과 (점수표 + Top N + 묶음 추천) 만 메인이 받아 사용자에게 표시
 

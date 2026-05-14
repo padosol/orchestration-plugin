@@ -1,13 +1,13 @@
 ---
 description: orch 프로젝트 메타데이터(.orch/settings.json) 자동 추론 + 작성
-argument-hint: [--update] [--issue-tracker linear|jira|github|gitlab|none] [--github-repo owner/repo] [--git-host github|gitlab|none] [--notify on|off]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-settings.sh:*), Read, Edit, AskUserQuestion, ToolSearch
+argument-hint: [--update] [--issue-tracker linear|github|gitlab|none] [--github-repo owner/repo] [--git-host github|gitlab|none] [--notify on|off]
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/setup.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/validate-settings.sh:*), Read, Edit, AskUserQuestion, ToolSearch
 ---
 
 **먼저 — 워크스페이스 메타데이터 3 종 결정**
 
 `$ARGUMENTS` 에 다음 3개 인자가 모두 들어있으면 그대로 setup.sh 호출하고 질문 단계 skip:
-- `--issue-tracker <linear|jira|github|gitlab|none>`
+- `--issue-tracker <linear|github|gitlab|none>`
 - `--git-host <github|gitlab|none>`
 - `--notify <on|off>`
 
@@ -29,8 +29,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLU
 - **Issue tracker** — 누락 시:
   - `Linear (Recommended)` — `mcp__linear-server__get_issue <key>` 로 자동 fetch (Linear MCP 필요)
   - `GitHub Issues` — `gh issue view N` 로 fetch. 추가로 어느 repo (owner/repo) 인지 묻기
-  - `Jira` — metadata 저장만. leader 가 spec 받을 때 사용자/orch 에게 직접 요청
-  - `GitLab` — metadata 저장만. leader 가 spec 받을 때 사용자/orch 에게 직접 요청
+  - `GitLab` — `glab issue view` 로 자동 fetch. 필요 시 `github_issue_repo` 를 group/project 로 사용
   - `없음` — 트래커 사용 안 함, leader 가 orch 에 spec 직접 요청
 - **Git host** — 누락 시:
   - `GitHub (Recommended)` — `gh` 기반 PR/CI/머지 자동화. wait-merge / review / post-merge 흐름.
@@ -44,7 +43,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLU
 
 다음 명령으로 settings.json 을 생성하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/config/setup.sh $ARGUMENTS`
 
 **역할**:
 - `base_dir/*` 디렉토리를 스캔해 프로젝트 후보를 찾는다 (ORCH_PROJECT_GLOB 으로 패턴 좁힘 가능)
@@ -55,7 +54,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLU
 **사용**:
 - `/orch:setup` — 처음 셋업. 이미 있으면 에러. 누락 메타데이터는 질문.
 - `/orch:setup --update` — 기존 값 보존하면서 새 프로젝트만 추가. 메타데이터 변경하려면 해당 인자 명시.
-- `/orch:setup --issue-tracker linear` / `--issue-tracker github --github-repo owner/repo` / `--issue-tracker jira` / `--issue-tracker gitlab` / `--issue-tracker none` — 트래커 직접 지정.
+- `/orch:setup --issue-tracker linear` / `--issue-tracker github --github-repo owner/repo` / `--issue-tracker gitlab` / `--issue-tracker none` — 트래커 직접 지정.
 - `/orch:setup --git-host github|gitlab|none` — git 호스트 지정.
 - `/orch:setup --notify on|off` — Slack 알림 master 토글.
 

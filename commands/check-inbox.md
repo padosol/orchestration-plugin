@@ -1,12 +1,12 @@
 ---
 description: 자기 inbox 확인 후 처리 — 인자 없으면 요약, <id> 주면 단건 본문
 argument-hint: [<msg-id>]
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox-archive.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/send.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/messages/inbox.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/messages/inbox-archive.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/messages/send.sh:*)
 ---
 
 다음 명령으로 inbox 를 확인하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh $ARGUMENTS`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/messages/inbox.sh $ARGUMENTS`
 
 **모드 두 가지**:
 
@@ -20,7 +20,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLU
 - 해당 메시지의 frontmatter + 본문이 출력됩니다.
 - 본문 지시대로 작업 수행. 답이 필요하면 `/orch:send <from> <답신>` 으로 회신 (본문에 `**[답신 불필요]**` 있으면 회신 X).
 - 처리 끝나면 그 한 건만 archive — Bash 도구로 다음 명령 실행:
-  `bash -c "$ORCH_BIN_DIR/inbox-archive.sh <id>"`
+  `bash -c "$ORCH_BIN_DIR/messages/inbox-archive.sh <id>"`
 - **archive 는 반드시 ID argument 지정** — 인자 없이 호출하면 거부됩니다. `--all` 은 운영 사고 복구용 escape hatch 라 평소 사용 금지.
 
 **왜 단건씩 강제?** — 요약만 보고 archive 일괄 처리하면 본문에 적힌 작업 지시가 묻혀 메시지가 사실상 처리되지 않은 채 사라집니다. 한 건 본문 확인 → 작업 → 답신 → 그 ID 만 archive 패턴이 의무.
@@ -29,7 +29,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLU
 1. `/orch:check-inbox` (요약) → INBOX_EMPTY 면 "받은 메시지 없음" 답하고 종료
 2. 출력의 "▶ 다음 단계" 가 가리키는 ID (= 가장 최신, 표 첫 줄) 로 `/orch:check-inbox <id>` 호출
 3. 본문 읽고 작업 수행 + (필요시) `/orch:send <from> <답신>` 으로 답신
-4. `bash -c "$ORCH_BIN_DIR/inbox-archive.sh <id>"` 로 그 건만 archive
+4. `bash -c "$ORCH_BIN_DIR/messages/inbox-archive.sh <id>"` 로 그 건만 archive
 5. 메시지가 더 있으면 1번부터 반복 (요약 다시 → 다음 ID), 없으면 종료
 
 **보고 형식 강제 — message_id 누락 금지**:
@@ -50,86 +50,13 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inbox.sh:*), Bash(${CLAUDE_PLU
 - ❌ **답신 필요 (`●`) 메시지가 미답 상태인데 다음 작업 단계 진행** — 본문 의도와 다른 방향으로 일이 진행되어 PR 비용 회수 불가능 사고로 이어집니다. `●` 메시지는 답신 보낸 후에야 다음 마디로 이동.
 
 **worker_id 별 책임 범위**:
-- `orch` (PM): 사용자와 대화 + leader 에 위임. 워커에 직접 송신 불가 → leader 경유.
-- `<issue_id>` (leader): 자기 이슈의 워커 spawn / 라우팅 / shutdown. 산하 워커가 다른 프로젝트 질문하면 leader 가 받아 그 프로젝트 워커에 전달.
+- `orch`: 이슈 관리 / leader spawn / 후속 후보 검토. phase plan/type clarify/direction-check 사용자 응답 중계는 하지 않음.
+- `<issue_id>` (leader): 자기 이슈의 사용자 확인 / 워커 spawn / 라우팅 / shutdown. 산하 워커가 다른 프로젝트 질문하면 leader 가 받아 그 프로젝트 워커에 전달.
 - `<issue_id>/<project>` (worker): worktree 안에서 작업. 외부 통신은 leader($scope) 경유만.
 
 **중요**:
 - 작업이 길어질 것 같으면 보낸이에게 짧은 "접수 확인" 답신 먼저 보내고 본 작업 시작
 - 자기 권한 밖 일이면 leader/orch 에 escalate (직접 처리 X)
-
----
-
-## 특수 라벨 처리 — `[phase-plan <issue_id>]` (orch 전용)
-
-leader 가 `/orch:send orch '[phase-plan <id>] ...'` 로 보낸 phase plan 메시지는 **사용자 컨펌 의무** 인 차단성 메시지다. leader 는 답이 올 때까지 phase 1 워커 spawn 을 막아둔 상태 — 빠른 처리가 곧 작업 진행.
-
-**처리 절차 (이 순서 그대로)**:
-
-1. 단건 모드로 본문 끝까지 읽기 (`/orch:check-inbox <id>`). phase plan 골격 파악: 작업 타입 / 몇 phase / 각 phase 산출물 / 의존 / 위험 포인트. 본문 전체를 그대로 사용자 화면에 표시 — 요약·생략 금지.
-2. **반드시 `AskUserQuestion` TUI** 로 사용자 컨펌 받기. plain text 로 "이대로 진행할까요?" 식 자유서술 질문 금지 — 답이 모호 (`응 ㅇㅋ`) 하면 leader 라우팅이 깨진다.
-
-   질문 1개, 3택:
-   - **GO** — 그대로 진행 (leader 가 phase 1 시작)
-   - **수정** — 변경 요구사항 있음 (사용자가 notes 로 적음)
-   - **취소** — 작업 중단 (leader cascade kill)
-
-3. 사용자 답을 받은 즉시 leader 에 forward — 본문 첫 줄에 명시 라벨:
-
-   | 사용자 답 | leader 에 송신할 본문 첫 줄 | 의미 |
-   |---|---|---|
-   | GO | `[plan-confirm] GO` | phase 1 진입하라 |
-   | 수정 | `[plan-revise] <사용자 notes>` | phases.md 갱신 후 재송신 (라운드 N+1) |
-   | 취소 | `[plan-cancel] <사유>` | `/orch:issue-down <id>` 로 정리하라 |
-
-   송신은 따옴표·줄바꿈 안전 위해 heredoc:
-   ```
-   bash -c "$ORCH_BIN_DIR/send.sh <leader_id> <<'ORCH_MSG'
-   [plan-confirm] GO
-   ORCH_MSG"
-   ```
-
-4. forward 송신 후 그 phase-plan 메시지 archive (`inbox-archive.sh <id>`).
-
-**왜 AskUserQuestion 강제?**
-- 자유서술 답 (`그래`, `좋아요`, `한 군데 빼고는 ok` 등) 은 GO 인지 수정인지 모호. 라우팅 잘못되면 leader 가 사용자 의도와 다른 방향으로 spawn → PR 비용 회수 불가.
-- TUI 의 미리정의 3택이 결정을 강제. 수정 사항은 notes 로 별도 받아 leader 에 그대로 forward.
-
-**금지**:
-- ❌ 사용자에게 묻지 않고 GO 자동 forward — leader 가 임의 방향 진행 위험.
-- ❌ phase plan 본문 요약·생략 — 사용자가 풀 본문 보고 결정해야 함. AskUserQuestion 호출 직전 본문 전체를 사용자 화면에 보여줄 것.
-- ❌ phase-plan 메시지를 일반 `●` 답신처럼 자유서술 회신 — 라벨 규약 깨짐.
-
----
-
-## 특수 라벨 처리 — `[type-clarify:<qid> <issue_id>]` (orch 전용)
-
-leader 가 작업 타입 (feature / bug / refactor) 을 라벨·title 만으로 판단 못 할 때 보내는 메시지. **leader 가 직접 AskUserQuestion 호출하면 허브 구조 위반** — 사용자와의 모든 TUI 접점은 orch 가 단독 처리한다. leader 는 회신 받기 전 phase plan 작성·워커 spawn 보류 중 (wait-reply.sh 로 차단 대기).
-
-**correlation id (qid)**: leader 가 매 송신마다 새로 생성한 `<qid>` (예: `q-1715432100-3f1a`) 가 `[type-clarify:<qid>]` 와 본문의 `[question:<qid>]` 두 곳에 박혀 도착한다. orch 가 회신할 때도 **반드시 같은 qid 를 다시 박아** 보내야 leader 의 wait-reply 가 그 라운드 답으로 인식한다. qid 가 누락되거나 다른 라운드의 qid 를 쓰면 leader 가 그 답을 무시하고 계속 대기 — 동시·재질문 시 답 섞임 차단 목적.
-
-**처리 절차**:
-
-1. 단건 모드로 본문 끝까지 읽기 — `[type-clarify:<qid> <issue_id>]` 헤더에서 qid 와 issue_id 를 분리해 추출. title / labels / 사유 파악.
-2. **반드시 `AskUserQuestion` TUI** 로 3택:
-   - **feature** — 새 기능 / 동작 추가
-   - **bug** — 결함 / 회귀 수정
-   - **refactor** — 동작 보존 + 구조·가독성 개선
-3. 사용자 답을 받은 즉시 leader 에 forward — 본문에 `[type-decision:<qid>] <feature|bug|refactor>` 와 `[reply:<qid>]` 두 마커:
-
-   ```
-   bash -c "$ORCH_BIN_DIR/send.sh <leader_id> <<'ORCH_MSG'
-   [type-decision:<qid>] feature
-   [reply:<qid>]
-   ORCH_MSG"
-   ```
-   `<qid>` 는 1번에서 추출한 값 그대로. 추측·생략·다른 라운드 qid 재사용 금지.
-4. forward 송신 후 type-clarify 메시지 archive.
-
-**금지**:
-- ❌ orch 가 추측으로 타입 결정해 답 forward — 라벨이 모호해서 leader 가 escalate 한 건데 다시 추측하면 같은 문제.
-- ❌ plain text 자유서술 답 — leader 가 `[type-decision:<qid>]` 라벨 못 찾으면 막힘 유지.
-- ❌ qid 누락 / 다른 qid 재사용 — leader wait-reply 가 `[reply:<qid>]` 매칭 못 해 영구 대기.
 
 ---
 

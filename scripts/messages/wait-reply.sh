@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# $ORCH_BIN_DIR/wait-reply.sh <q-id> [--timeout N]
+# $ORCH_BIN_DIR/messages/wait-reply.sh <q-id> [--timeout N]
 # 워커가 leader 에 [question:<q-id>] 메시지를 보낸 후 호출한다.
 # 자기 inbox 에서 본문에 [reply:<q-id>] 가 포함된 메시지가 도착할 때까지 폴링 (blocking).
 #
@@ -11,9 +11,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 usage() {
@@ -25,11 +27,11 @@ usage() {
 
 워커 사용 패턴:
     qid="q-\$(date +%s)-\$RANDOM"
-    bash -c "\$ORCH_BIN_DIR/send.sh \$LEADER <<ORCH_MSG
+    bash -c "\$ORCH_BIN_DIR/messages/send.sh \$LEADER <<ORCH_MSG
     [question:\$qid]
     <질문 본문>
     ORCH_MSG"
-    bash \$ORCH_BIN_DIR/wait-reply.sh \$qid     # ← 차단. 답 받을 때까지 다음 마디 진행 X.
+    bash \$ORCH_BIN_DIR/messages/wait-reply.sh \$qid     # ← 차단. 답 받을 때까지 다음 마디 진행 X.
 EOF
 }
 
@@ -107,7 +109,7 @@ PY
         echo "=== REPLY worker_id=$self qid=$qid msg_id=$match_id ==="
         "$parse" body "$inbox" "$match_id" || true
         echo "=== END ==="
-        echo "(처리 후 archive: bash \$ORCH_BIN_DIR/inbox-archive.sh $match_id)"
+        echo "(처리 후 archive: bash \$ORCH_BIN_DIR/messages/inbox-archive.sh $match_id)"
         exit 0
     fi
 

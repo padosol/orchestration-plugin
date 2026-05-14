@@ -1,12 +1,12 @@
 ---
 description: .orch/settings.json 의 description / tech_stack 이 실제 프로젝트 파일과 어긋나는지 검증
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-settings.sh:*), Read, Edit
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/validate-settings.sh:*), Read, Edit
 ---
 
 `validate-settings` 스킬을 호출해 `.orch/settings.json` 의 정확성을 검증하세요.
 
 스킬 절차 요약:
-1. `${CLAUDE_PLUGIN_ROOT}/scripts/validate-settings.sh` 실행 → JSON 신호 추출
+1. `${CLAUDE_PLUGIN_ROOT}/scripts/config/validate-settings.sh` 실행 → JSON 신호 추출
 2. 각 프로젝트의 declared description/tech_stack/kind 를 actual 과 대조
 3. drift 가 있으면 표로 보고 → 사용자 동의 받고 `Edit` 으로 settings.json patch
 

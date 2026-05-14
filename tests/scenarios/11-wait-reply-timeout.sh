@@ -13,7 +13,7 @@ out=$(
     ORCH_WORKER_ID=mp-99/test \
     ORCH_WAIT_REPLY_INTERVAL=1 \
     ORCH_WAIT_REPLY_TIMEOUT=2 \
-    bash "$PLUGIN_ROOT/scripts/wait-reply.sh" Q1 2>&1
+    bash "$PLUGIN_ROOT/scripts/messages/wait-reply.sh" Q1 2>&1
 )
 code=$?
 set -e

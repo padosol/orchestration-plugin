@@ -1,11 +1,11 @@
 ---
 description: 현재 pane을 orch(PM)로 등록 — 첫 진입 시 1회 실행
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/up.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/session/up.sh:*)
 ---
 
 다음 명령으로 현재 pane을 orch worker(PM)로 등록하세요.
 
-!`${CLAUDE_PLUGIN_ROOT}/scripts/up.sh`
+!`${CLAUDE_PLUGIN_ROOT}/scripts/session/up.sh`
 
 **역할**:
 - 현재 tmux pane을 `orch` 라는 worker_id로 `.orch/workers/orch.json`에 등록

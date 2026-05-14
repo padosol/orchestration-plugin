@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Regression guard: git_host 추상화 헬퍼 (orch_require_git_host_cli / orch_pr_state /
-# orch_pr_merged_by_branch) 가 lib.sh 에 존재하고, github + gitlab 두 case 분기를
-# 가지는지 + 호출처 (wait-merge.sh / orch_branch_merged) 가 직접 gh/glab 안 부르고
-# 헬퍼만 호출하는지 정적 검증.
+# orch_pr_merged_by_branch) 가 lib.sh 에 존재하고, github + gitlab provider 로 위임하는지
+# + 호출처 (wait-merge.sh / orch_branch_merged) 가 직접 gh/glab 안 부르고 헬퍼만 호출하는지
+# 정적 검증.
 
 set -euo pipefail
 
-lib="$PLUGIN_ROOT/scripts/lib.sh"
-wait_merge="$PLUGIN_ROOT/scripts/wait-merge.sh"
+lib="$PLUGIN_ROOT/scripts/core/lib.sh"
+wait_merge="$PLUGIN_ROOT/scripts/issues/wait-merge.sh"
+github_provider="$PLUGIN_ROOT/scripts/providers/git-host/github.sh"
+gitlab_provider="$PLUGIN_ROOT/scripts/providers/git-host/gitlab.sh"
 
 [ -f "$lib" ]        || { echo "FAIL: $lib 없음" >&2; exit 1; }
 [ -f "$wait_merge" ] || { echo "FAIL: $wait_merge 없음" >&2; exit 1; }
+[ -f "$github_provider" ] || { echo "FAIL: $github_provider 없음" >&2; exit 1; }
+[ -f "$gitlab_provider" ] || { echo "FAIL: $gitlab_provider 없음" >&2; exit 1; }
 
 # 1. 헬퍼 함수 3종 정의 존재
 for fn in orch_require_git_host_cli orch_pr_state orch_pr_merged_by_branch; do
@@ -20,8 +24,18 @@ for fn in orch_require_git_host_cli orch_pr_state orch_pr_merged_by_branch; do
     fi
 done
 
-# 2. 각 헬퍼 함수 본문에 github + gitlab 두 분기가 있어야 한다.
-#    함수 본문 = 함수 시작 라인 ~ 다음 토픽 함수 시작 직전. awk 로 한 함수만 추출.
+# 2. lib.sh 는 provider allowlist 로 github/gitlab 파일을 source 해야 한다.
+if ! grep -q 'providers/git-host/github.sh' "$lib"; then
+    echo "FAIL: lib.sh git-host provider loader 에 github.sh 누락" >&2; exit 1
+fi
+if ! grep -q 'providers/git-host/gitlab.sh' "$lib"; then
+    echo "FAIL: lib.sh git-host provider loader 에 gitlab.sh 누락" >&2; exit 1
+fi
+if ! grep -q 'orch_load_git_host_provider' "$lib"; then
+    echo "FAIL: lib.sh 에 orch_load_git_host_provider 누락" >&2; exit 1
+fi
+
+# 함수 본문 = 함수 시작 라인 ~ 다음 토픽 함수 시작 직전. awk 로 한 함수만 추출.
 extract_fn() {
     local file="$1" fn="$2"
     awk -v fn="$fn" '
@@ -36,11 +50,8 @@ for fn in orch_require_git_host_cli orch_pr_state orch_pr_merged_by_branch; do
     if [ -z "$body" ]; then
         echo "FAIL: ${fn} 본문 추출 실패" >&2; exit 1
     fi
-    if ! grep -qE '^\s*github\)' <<<"$body"; then
-        echo "FAIL: ${fn} 본문에 github) case 분기 누락" >&2; exit 1
-    fi
-    if ! grep -qE '^\s*gitlab\)' <<<"$body"; then
-        echo "FAIL: ${fn} 본문에 gitlab) case 분기 누락" >&2; exit 1
+    if ! grep -q 'orch_.*provider' <<<"$body"; then
+        echo "FAIL: ${fn} 이 provider helper 로 위임하지 않음" >&2; exit 1
     fi
 done
 
@@ -53,10 +64,10 @@ for raw in merged closed open opened; do
     fi
 done
 
-# 4. orch_pr_merged_by_branch: github 분기 `--head <branch>`, gitlab 분기 glab api REST
+# 4. provider: github 는 `--head <branch>`, gitlab 은 glab api REST
 #    (glab mr list 는 --state / --output json 옵션 없음 → glab api projects/:fullpath/
 #    merge_requests?state=merged&source_branch=... 우회 필수)
-merged_body="$(extract_fn "$lib" "orch_pr_merged_by_branch")"
+merged_body="$(cat "$github_provider" "$gitlab_provider")"
 if ! grep -q -- '--head' <<<"$merged_body"; then
     echo "FAIL: orch_pr_merged_by_branch 의 github 분기에 '--head' 인자 누락" >&2; exit 1
 fi
@@ -87,9 +98,8 @@ if command -v jq >/dev/null 2>&1; then
     esac
 fi
 
-# 4b. orch_pr_state: gitlab 분기도 glab api 사용 (glab mr view 는 --output json 옵션 없음)
-state_gitlab_block="$(awk '/^\s*gitlab\)/,/;;/' <<<"$state_body")"
-if ! grep -q 'glab api' <<<"$state_gitlab_block"; then
+# 4b. orch_pr_state: gitlab provider 도 glab api 사용 (glab mr view 는 --output json 옵션 없음)
+if ! grep -q 'glab api' "$gitlab_provider"; then
     echo "FAIL: orch_pr_state 의 gitlab 분기에 'glab api' 호출 누락 (glab mr view 는 --output json 미지원)" >&2
     exit 1
 fi

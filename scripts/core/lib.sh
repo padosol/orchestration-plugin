@@ -2,10 +2,10 @@
 # orch v2 — 2-tier hub-and-spoke 공통 함수 라이브러리.
 #
 # 식별자(worker_id) 형태:
-#   orch                  → PM (사용자와 대화). 예약 식별자.
+#   orch                  → issue manager / dispatcher. 예약 식별자.
 #   <issue_id>            → <issue_id> 팀리더. <issue_id> 는 사용자가 /orch:issue-up 에 넘긴 값 그대로
 #                            sanitize 만 거친 형태 ([A-Za-z0-9_-]+, 대소문자 보존). 트래커별 예:
-#                            Linear MP-13, Jira PROJ-456, GitHub 142, 자유 issue42.
+#                            Linear MP-13, GitHub 142, GitLab my-issue#42, 자유 issue42.
 #   <issue_id>/<project>  → 산하 프로젝트 워커.
 #
 # 0.13.0 이전: leader_id 가 `mp-NN` 으로 강제 변환됐다 (Linear 시절 잔재). 이제 트래커 무관.
@@ -31,6 +31,10 @@
 #
 # **inbox 빈 파일 = 처리할 메시지 없음 (정상 상태).** inbox-archive.sh 가 처리된 메시지
 # 를 archive/ 로 옮긴 뒤 inbox/<role>.md 를 truncate 한다. 처리 흔적은 archive 쪽 확인.
+
+ORCH_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(dirname "$ORCH_CORE_DIR")"
+ORCH_PLUGIN_ROOT="$(dirname "$ORCH_SCRIPTS_ROOT")"
 
 # ─── ORCH_ROOT 추론 ───────────────────────────────────────────────────
 # 우선순위:
@@ -180,7 +184,7 @@ orch_detect_self() {
 # 이슈 ID 정규화 — 사용자 입력을 leader_id 로 sanitize.
 # 정책: orch_id_safe 통과한 입력은 그대로 통과 (대소문자 보존). 트래커별 예:
 #   Linear: MP-13       → MP-13
-#   Jira:   PROJ-456    → PROJ-456
+#   GitLab: my-issue#42 → my-issue#42
 #   GitHub: 142         → 142
 #   GitLab: my-issue#42 → my-issue#42   (# 등 자연 키 허용)
 #   기타:   issue_42-rc → issue_42-rc
@@ -345,7 +349,7 @@ orch_settings_global() {
     jq -r --arg f "$field" '.[$f] // ""' "$ORCH_SETTINGS"
 }
 
-# 이슈 트래커 — linear | jira | github | gitlab | none.
+# 이슈 트래커 — linear | github | gitlab | none.
 # 필드 누락 시 'linear' (legacy 0.3.x 이하 워크스페이스 backwards-compat — 그때는 항상 Linear).
 # 잘못된 값도 'linear' 로 폴백 (안전한 기본).
 orch_settings_issue_tracker() {
@@ -353,7 +357,7 @@ orch_settings_issue_tracker() {
     local v
     v="$(jq -r '.issue_tracker // "linear"' "$ORCH_SETTINGS")"
     case "$v" in
-        linear|jira|github|gitlab|none) printf '%s' "$v" ;;
+        linear|github|gitlab|none) printf '%s' "$v" ;;
         *) printf 'linear' ;;
     esac
 }
@@ -376,39 +380,53 @@ orch_settings_github_issue_repo() {
     jq -r '.github_issue_repo // ""' "$ORCH_SETTINGS"
 }
 
+# ─── Provider loader ─────────────────────────────────────────────────
+# settings.json 은 provider kind 만 지정한다. 실제 source 대상은 내장 allowlist 로만 선택해
+# settings 에서 임의 shell path 를 주입할 수 없게 한다.
+
+orch_load_git_host_provider() {
+    case "$(orch_settings_git_host)" in
+        github) # shellcheck source=/dev/null
+            source "$ORCH_SCRIPTS_ROOT/providers/git-host/github.sh" ;;
+        gitlab) # shellcheck source=/dev/null
+            source "$ORCH_SCRIPTS_ROOT/providers/git-host/gitlab.sh" ;;
+        *) echo "ERROR: settings.json 의 git_host 가 github|gitlab 이어야 함" >&2; return 2 ;;
+    esac
+}
+
+orch_load_issue_tracker_provider() {
+    local tracker="$1"
+    case "$tracker" in
+        linear) # shellcheck source=/dev/null
+            source "$ORCH_SCRIPTS_ROOT/providers/issue-tracker/linear.sh" ;;
+        github) # shellcheck source=/dev/null
+            source "$ORCH_SCRIPTS_ROOT/providers/issue-tracker/github.sh" ;;
+        gitlab) # shellcheck source=/dev/null
+            source "$ORCH_SCRIPTS_ROOT/providers/issue-tracker/gitlab.sh" ;;
+        *) return 2 ;;
+    esac
+}
+
 # ─── Git host CLI 추상화 ──────────────────────────────────────────────
-# git_host (github | gitlab) 에 따라 gh / glab CLI 명령을 분기. 호출자 (script / SKILL)
-# 는 host 신경 안 쓰고 본 절의 헬퍼만 호출. 새 host 추가 시 본 절만 보강.
+# git_host provider (github | gitlab) 에 따라 gh / glab CLI 명령을 선택한다. 호출자
+# (script / SKILL) 는 host 신경 안 쓰고 본 절의 헬퍼만 호출한다. 새 host 추가 시
+# scripts/providers/git-host/<kind>.sh 와 loader allowlist 를 보강한다.
 
 # host 별 필수 CLI 가용성 검증. github→gh / gitlab→glab. host 누락이면 실패.
 # 호출 예: orch_require_git_host_cli || exit 2
 orch_require_git_host_cli() {
-    case "$(orch_settings_git_host)" in
-        github) command -v gh   >/dev/null 2>&1 || { echo "ERROR: gh CLI 필요"   >&2; return 2; } ;;
-        gitlab) command -v glab >/dev/null 2>&1 || { echo "ERROR: glab CLI 필요" >&2; return 2; } ;;
-        *)      echo "ERROR: settings.json 의 git_host 가 github|gitlab 이어야 함" >&2; return 2 ;;
-    esac
+    orch_load_git_host_provider || return 2
+    orch_git_host_provider_require_cli
 }
 
 # PR (github) / MR (gitlab) state 조회 후 정규화. 출력:
 #   merged | closed | open | unknown | '' (조회 실패 또는 state 비어 있음).
 # 사용 예: state="$(orch_pr_state "$pr" [project_path])"
 orch_pr_state() {
-    local pr="$1" project_path="${2:-.}" host raw
+    local pr="$1" project_path="${2:-.}" raw
     [ -n "$pr" ] || return 2
-    host="$(orch_settings_git_host)"
-    case "$host" in
-        github)
-            command -v gh >/dev/null 2>&1 || return 2
-            raw="$(cd "$project_path" 2>/dev/null && gh pr view "$pr" --json state -q .state 2>/dev/null || true)"
-            ;;
-        gitlab)
-            command -v glab >/dev/null 2>&1 || return 2
-            # glab mr view 는 --output json 옵션이 없음 (glab 1.36+). REST API 직접 호출.
-            raw="$(cd "$project_path" 2>/dev/null && glab api "projects/:fullpath/merge_requests/$pr" 2>/dev/null | jq -r '.state // ""' 2>/dev/null || true)"
-            ;;
-        *) return 2 ;;
-    esac
+    orch_load_git_host_provider || return 2
+    raw="$(orch_git_host_provider_pr_state_raw "$pr" "$project_path")" || return 2
     case "$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')" in
         merged)        printf 'merged' ;;
         closed|locked) printf 'closed' ;;
@@ -421,27 +439,10 @@ orch_pr_state() {
 # 브랜치 이름으로 merged PR/MR 존재 여부. 0=merged, 1=not, 2=CLI 부재 또는 host 모름.
 # 사용 예: orch_pr_merged_by_branch "$branch" "$project_path"
 orch_pr_merged_by_branch() {
-    local branch="$1" project_path="${2:-.}" host count
+    local branch="$1" project_path="${2:-.}"
     [ -n "$branch" ] || return 2
-    host="$(orch_settings_git_host)"
-    case "$host" in
-        github)
-            command -v gh >/dev/null 2>&1 || return 2
-            count="$(cd "$project_path" 2>/dev/null && gh pr list --state merged --head "$branch" --limit 1 --json number --jq 'length' 2>/dev/null || true)"
-            ;;
-        gitlab)
-            command -v glab >/dev/null 2>&1 || return 2
-            # glab mr list 는 --state / --output json 옵션이 없음 (glab 1.36+). REST API 직접 호출.
-            # branch 에 #, +, @, . 등 자연 키가 포함될 수 있으므로 URL-encode 필수
-            # (issue-id sanitize 가 이런 문자를 허용해 leader-spawn 의 branch_name 에 들어감).
-            # jq @uri 로 인코딩, jq 부재 시 raw fallback (host CLI 자체가 jq 의존).
-            local encoded_branch
-            encoded_branch="$(printf '%s' "$branch" | jq -sRr @uri 2>/dev/null || printf '%s' "$branch")"
-            count="$(cd "$project_path" 2>/dev/null && glab api "projects/:fullpath/merge_requests?state=merged&source_branch=$encoded_branch&per_page=1" 2>/dev/null | jq 'length' 2>/dev/null || true)"
-            ;;
-        *) return 2 ;;
-    esac
-    [ "${count:-0}" -gt 0 ]
+    orch_load_git_host_provider || return 2
+    orch_git_host_provider_pr_merged_by_branch "$branch" "$project_path"
 }
 
 # ─── Git host PR/MR 명령 fragment 헬퍼 ────────────────────────────────
@@ -460,11 +461,8 @@ orch_pr_merged_by_branch() {
 
 # PR/MR 생성. 워커가 'base / title / body' 변수 미리 채워두고 호출.
 orch_pr_create_cmd() {
-    case "$(orch_settings_git_host)" in
-        github) printf 'gh pr create --base "$base" --title "$title" --body "$body"' ;;
-        gitlab) printf 'glab mr create --target-branch "$base" --title "$title" --description "$body"' ;;
-        *)      return 2 ;;
-    esac
+    orch_load_git_host_provider || return 2
+    orch_git_host_provider_pr_create_cmd
 }
 
 # PR/MR 본문 + 메타 fetch (JSON). 워커가 '$pr' 변수 미리 채우고 호출. 출력 JSON 의
@@ -472,30 +470,21 @@ orch_pr_create_cmd() {
 # (files 키는 host 마다 별도 endpoint 필요 — reviewer 는 <pr_diff_cmd> 로 변경분 직접 확인)
 # gitlab: glab mr view 는 --output json 미지원 → glab api REST 우회 (`projects/:fullpath/...`).
 orch_pr_view_json_cmd() {
-    case "$(orch_settings_git_host)" in
-        github) printf 'gh pr view "$pr" --json title,body,headRefName,baseRefName' ;;
-        gitlab) printf 'glab api "projects/:fullpath/merge_requests/$pr" | jq "{title, body: .description, headRefName: .source_branch, baseRefName: .target_branch}"' ;;
-        *)      return 2 ;;
-    esac
+    orch_load_git_host_provider || return 2
+    orch_git_host_provider_pr_view_json_cmd
 }
 
 # PR/MR diff. 워커가 '$pr' 미리 채우고 호출.
 orch_pr_diff_cmd() {
-    case "$(orch_settings_git_host)" in
-        github) printf 'gh pr diff "$pr"' ;;
-        gitlab) printf 'glab mr diff "$pr"' ;;
-        *)      return 2 ;;
-    esac
+    orch_load_git_host_provider || return 2
+    orch_git_host_provider_pr_diff_cmd
 }
 
 # PR/MR 코멘트 — body 를 file 로 받음. 워커가 '$pr' / '$body_file' 미리 준비 후 호출.
 # stdin heredoc 패턴이 두 host 에서 달라서 file 인터페이스로 통일.
 orch_pr_comment_from_file_cmd() {
-    case "$(orch_settings_git_host)" in
-        github) printf 'gh pr comment "$pr" --body-file "$body_file"' ;;
-        gitlab) printf 'glab mr note "$pr" --message "$(cat "$body_file")"' ;;
-        *)      return 2 ;;
-    esac
+    orch_load_git_host_provider || return 2
+    orch_git_host_provider_pr_comment_from_file_cmd
 }
 
 # CI 체크 watch (블록). 워커가 '$pr' 미리 채우고 호출.
@@ -503,21 +492,47 @@ orch_pr_comment_from_file_cmd() {
 # gitlab: 'glab ci status --live' (---wait 미지원, --live 가 pipeline ends 까지 real-time 출력).
 #         현재 cwd 의 git remote 의 latest pipeline 기준. '$pr' 인자 사용 안 함.
 orch_pr_checks_watch_cmd() {
-    case "$(orch_settings_git_host)" in
-        github) printf 'gh pr checks "$pr" --watch --required' ;;
-        gitlab) printf 'glab ci status --live' ;;
-        *)      return 2 ;;
-    esac
+    orch_load_git_host_provider || return 2
+    orch_git_host_provider_pr_checks_watch_cmd
 }
 
 # CI 실패 로그 head 200줄. 워커가 github 은 '$run_id', gitlab 은 '$pipeline_id' 미리 준비.
 # gitlab: 'glab ci view' 는 TUI interactive — automation 불가. REST API 로 jobs + trace 받기.
 #         (Job iid 별 trace 가 큰 응답이라 head -200 으로 잘라야 안전.)
 orch_pr_run_log_failed_cmd() {
-    case "$(orch_settings_git_host)" in
-        github) printf 'gh run view "$run_id" --log-failed | head -200' ;;
-        gitlab) printf 'glab api "projects/:fullpath/pipelines/$pipeline_id/jobs?scope[]=failed" | jq -r ".[] | .id" | head -1 | xargs -I{} glab api "projects/:fullpath/jobs/{}/trace" | head -200' ;;
-        *)      return 2 ;;
+    orch_load_git_host_provider || return 2
+    orch_git_host_provider_pr_run_log_failed_cmd
+}
+
+# ─── Issue tracker prompt fragment helpers ───────────────────────────
+# leader/reviewer first_msg 에 들어갈 트래커별 fetch / lookup 문구를 provider 로 분리한다.
+
+orch_issue_fetch_step() {
+    local tracker="$1" issue_display="$2" gh_repo="${3:-}" workspace_tracker="${4:-$tracker}" no_issue="${5:-0}" tracker_note
+    case "$tracker" in
+        linear|github|gitlab)
+            orch_load_issue_tracker_provider "$tracker" || return 2
+            orch_issue_tracker_provider_fetch_step "$issue_display" "$gh_repo"
+            ;;
+        none|*)
+            if [ "$no_issue" -eq 1 ] && [ "$workspace_tracker" != "none" ]; then
+                tracker_note="(이번 호출만 --no-issue — 워크스페이스 트래커 설정 ${workspace_tracker} 는 다음 호출부터 그대로 적용)"
+            else
+                tracker_note="(트래커 미사용 모드)"
+            fi
+            printf "1. 이슈 컨텍스트 없음 %s. 본인 inbox 의 spec 메시지 또는 orch 의 첫 지시 확인. spec 부재 시 \`bash \$ORCH_BIN_DIR/messages/send.sh orch <<'ORCH_MSG'\\\\n%s spec 부탁 — 작업 범위·acceptance·관련 repo 알려달라.\\\\nORCH_MSG\` 로 요청." "$tracker_note" "$issue_display"
+            ;;
+    esac
+}
+
+orch_issue_lookup_line() {
+    local tracker="$1" issue_display="$2" gh_repo="${3:-}"
+    case "$tracker" in
+        linear|github|gitlab)
+            orch_load_issue_tracker_provider "$tracker" || return 2
+            orch_issue_tracker_provider_lookup_line "$issue_display" "$gh_repo"
+            ;;
+        none|*) printf -- '- 이슈 컨텍스트: 트래커 없음 — PR description / leader 가 보낸 spec 으로만 판단' ;;
     esac
 }
 
@@ -1191,9 +1206,8 @@ orch_log_error() {
 
     # Slack 알림 — 에러 발생 시. notify-slack.sh 자체가 무한루프 방지를 위해
     # ORCH_NOTIFY_ENABLED=0 또는 webhook 미설정 시 조용히 종료한다.
-    local notify_dir notify_script
-    notify_dir="$(dirname "${BASH_SOURCE[0]}")"
-    notify_script="${notify_dir}/notify-slack.sh"
+    local notify_script
+    notify_script="${ORCH_SCRIPTS_ROOT}/notify/notify-slack.sh"
     if [ -x "$notify_script" ]; then
         local first_err scope
         first_err="$(printf '%s' "$stderr_text" | head -n1 | cut -c1-120)"

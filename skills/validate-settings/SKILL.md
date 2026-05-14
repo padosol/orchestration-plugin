@@ -9,7 +9,7 @@ description: orch 의 .orch/settings.json 에 적힌 description / tech_stack / 
 
 `.orch/settings.json` 의 `projects.<alias>.description` 과 `tech_stack` 이 실제 프로젝트 파일과 맞는지 확인한다. 검증 자체는 LLM 의 판단이 들어가기 때문에(예: "Next.js 14 App Router" 라는 문구의 "14" 는 버전이지만 "App Router" 는 아니다) 결정적 신호 추출과 텍스트 비교를 분리한다.
 
-- **결정적 신호**: `scripts/validate-settings.sh` 가 각 프로젝트의 `package.json` / `build.gradle*` / `pom.xml` 에서 프레임워크 버전, JDK, 빌드 파일 종류를 뽑아 JSON 으로 출력
+- **결정적 신호**: `scripts/config/validate-settings.sh` 가 각 프로젝트의 `package.json` / `build.gradle*` / `pom.xml` 에서 프레임워크 버전, JDK, 빌드 파일 종류를 뽑아 JSON 으로 출력
 - **판단·제안**: 너(Claude)가 declared description/tech_stack 을 actual 과 대조해 drift 를 찾고, 사용자에게 표로 보고 + 수정 제안
 
 핵심 원칙: **description 이 leader 의 위임 판단 근거**이므로, 버전 숫자·프레임워크 이름·언어 버전이 틀리면 반드시 짚고 넘어간다. 책임/도메인 설명 같은 비-기계적 부분은 건드리지 않는다(추측은 오히려 노이즈).
@@ -19,7 +19,7 @@ description: orch 의 .orch/settings.json 에 적힌 description / tech_stack / 
 ### 1. 신호 추출
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/validate-settings.sh
+${CLAUDE_PLUGIN_ROOT}/scripts/config/validate-settings.sh
 ```
 
 출력은 JSON. `.orch/settings.json` 이 없으면 exit 2 + 안내. 있으면 stdout 에 다음 구조:

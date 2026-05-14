@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-review_spawn_sh="$PLUGIN_ROOT/scripts/review-spawn.sh"
+review_spawn_sh="$PLUGIN_ROOT/scripts/issues/review-spawn.sh"
 review_spawn_md="$PLUGIN_ROOT/commands/review-spawn.md"
 issue_down_md="$PLUGIN_ROOT/commands/issue-down.md"
 
@@ -13,7 +13,7 @@ for f in "$review_spawn_sh" "$review_spawn_md" "$issue_down_md"; do
     [ -f "$f" ] || { echo "FAIL: $f 없음" >&2; exit 1; }
 done
 
-# 1. scripts/review-spawn.sh 헤더 주석 (line 1~10) 에 stale 'gh pr diff/view ... GitHub PR
+# 1. scripts/issues/review-spawn.sh 헤더 주석 (line 1~10) 에 stale 'gh pr diff/view ... GitHub PR
 #    코멘트' 직결 단독 표기 잔존 금지. <pr_*_cmd> 변수 또는 host-neutral 표현 사용.
 header_sh="$(head -10 "$review_spawn_sh")"
 if grep -qE 'gh pr (diff|view).*GitHub PR' <<<"$header_sh"; then

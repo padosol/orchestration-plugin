@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-LIB="$PLUGIN_ROOT/scripts/lib.sh"
+LIB="$PLUGIN_ROOT/scripts/core/lib.sh"
 [ -f "$LIB" ] || { echo "FAIL: $LIB 없음" >&2; exit 1; }
 
 cd "$SANDBOX"
@@ -26,8 +26,8 @@ mkdir -p "$ORCH_RUNS_DIR/MP-99/workers"
 
 # orch_worker_register 가 새 시그니처 (6번째 인자 project_alias) 를 가지는지
 # 정적 검사 — leader-spawn / review-spawn 양쪽이 project 를 넘기는지.
-src_lead="$PLUGIN_ROOT/scripts/leader-spawn.sh"
-src_rev="$PLUGIN_ROOT/scripts/review-spawn.sh"
+src_lead="$PLUGIN_ROOT/scripts/issues/leader-spawn.sh"
+src_rev="$PLUGIN_ROOT/scripts/issues/review-spawn.sh"
 for caller in "$src_lead" "$src_rev"; do
     if ! grep -qE 'orch_worker_register .* "\$project"' "$caller"; then
         echo "FAIL: $caller 가 orch_worker_register 6번째 인자로 project alias 안 넘김" >&2

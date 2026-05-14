@@ -3,9 +3,11 @@
 
 set -euo pipefail
 
-LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/lib.sh
-source "${LIB_DIR}/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_DIR="$ORCH_SCRIPTS_ROOT"
+# shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
+source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
 orch_install_error_trap "$0"
 
 if [ "$#" -lt 1 ]; then
@@ -92,11 +94,11 @@ if [ "$from" != "orch" ]; then
     if printf '%s' "$body" | grep -qiE 'PR #[0-9]+ ready for review'; then
         pr_url="$(printf '%s' "$body" | grep -oE 'https://github\.com/[^ ]+/pull/[0-9]+' | head -n1 || true)"
         pr_num="$(printf '%s' "$body" | grep -oE 'PR #[0-9]+' | head -n1 || true)"
-        "${LIB_DIR}/notify-slack.sh" pr_open "$scope" "${pr_num} ready for review (from ${from})" "$pr_url" || true
+        "${LIB_DIR}/notify/notify-slack.sh" pr_open "$scope" "${pr_num} ready for review (from ${from})" "$pr_url" || true
     elif [ "$target" = "orch" ]; then
         # 짧은 본문 미리보기 (한 줄, 80자) — Slack 메시지가 너무 길어지지 않게.
         preview="$(printf '%s' "$body" | tr '\n' ' ' | cut -c1-80)"
-        "${LIB_DIR}/notify-slack.sh" worker_question "$scope" "${from}: ${preview}" || true
+        "${LIB_DIR}/notify/notify-slack.sh" worker_question "$scope" "${from}: ${preview}" || true
     fi
 fi
 
