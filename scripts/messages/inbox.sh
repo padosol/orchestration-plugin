@@ -49,9 +49,9 @@ else
         else
             count="$(printf '%s\n' "$summary" | grep -c .)"
             reply_needed="$(python3 "${LIB_DIR}/inbox-parse.py" reply-needed "$inbox" 2>/dev/null || echo 0)"
-            # summary 는 reverse 정렬돼 있음 (최신 위) — 첫 줄이 가장 최신 ID.
+            # summary 는 도착 순 (FIFO) — 첫 줄이 가장 오래된 = 다음 처리 대상 ID.
             first_id="$(printf '%s\n' "$summary" | head -1 | cut -f1)"
-            echo "=== INBOX worker_id=$self count=$count reply_needed=$reply_needed (최신 위) ==="
+            echo "=== INBOX worker_id=$self count=$count reply_needed=$reply_needed (도착 순) ==="
             printf 'id\treply\tfrom\tts\tfirst-50\n'
             printf '%s\n' "$summary"
             echo "=== END ==="

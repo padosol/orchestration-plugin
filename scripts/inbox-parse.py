@@ -69,11 +69,11 @@ def parse(text):
 
 
 def cmd_summary(text):
-    # 표시 순서는 최신이 위(reverse). 파일 저장 순서는 append 그대로 보존 — parse 가
-    # 순차 스캔이라 파일을 뒤집으면 깨진다.
+    # 표시 순서 = 도착 순 (FIFO). 파일 append 순서를 그대로 보존 —
+    # poll-inbox / check-inbox 모두 head -1 = 가장 오래된 메시지를 다음 처리 대상으로 가리킨다.
     # reply 컬럼: ● = 답신 필요 (default), ○ = [답신 불필요] 마커 본문에 있음.
     msgs, _ = parse(text)
-    for m in reversed(msgs):
+    for m in msgs:
         first = m['body'].split('\n', 1)[0][:50]
         reply = '○' if NO_REPLY_MARKER in m['body'] else '●'
         print(f"{m['id']}\t{reply}\t{m['from']}\t{m['ts']}\t{first}")

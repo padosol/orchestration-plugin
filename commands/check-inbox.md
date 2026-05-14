@@ -13,7 +13,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/messages/inbox.sh:*), Bash(${C
 **모드 두 가지**:
 
 ### 1. 인자 없음 (`/orch:check-inbox`) → 요약 표
-- `id`, **`reply`** (`●` 답신 필요 / `○` 답신 불필요), `from`, `ts`, `첫 50자` 컬럼의 표 (최신 위 정렬).
+- `id`, **`reply`** (`●` 답신 필요 / `○` 답신 불필요), `from`, `ts`, `첫 50자` 컬럼의 표 (도착 순 정렬 — 가장 오래된 메시지가 위, FIFO).
 - 헤더 라인의 `reply_needed=N` 이 답신 필요 (`●`) 메시지 수.
 - **요약만 보고 종료/답신/archive 절대 금지** — 본문을 모르고 처리하면 메시지 의미를 놓칩니다.
 - 출력 끝의 "▶ 다음 단계" 가 가리키는 ID 로 단건 모드 호출하세요.
@@ -29,7 +29,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/messages/inbox.sh:*), Bash(${C
 
 **처리 절차 (이 순서 그대로)**:
 1. `/orch:check-inbox` (요약) → INBOX_EMPTY 면 "받은 메시지 없음" 답하고 종료
-2. 출력의 "▶ 다음 단계" 가 가리키는 ID (= 가장 최신, 표 첫 줄) 로 `/orch:check-inbox <id>` 호출
+2. 출력의 "▶ 다음 단계" 가 가리키는 ID (= 가장 오래된, 표 첫 줄 — FIFO) 로 `/orch:check-inbox <id>` 호출
 3. 본문 읽고 작업 수행 + (필요시) `/orch:send <from> <답신>` 으로 답신
 4. `bash -c "$ORCH_BIN_DIR/messages/inbox-archive.sh <id>"` 로 그 건만 archive
 5. 메시지가 더 있으면 1번부터 반복 (요약 다시 → 다음 ID), 없으면 종료
