@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Regression guard: issue-up.sh / review-spawn.sh 가 숫자 없는 자유 식별자
-# (예: feature-x, MP-onboarding) 를 leader_id 로 받아도 set -euo pipefail 아래에서
-# id 파싱 단계에서 죽지 않아야 한다.
-#
-# 0.13.0~ 자유 식별자 정책: [A-Za-z0-9_-]+ 대소문자 보존.
-# GitHub Issues 분기만 전체 숫자 검증을 통과해야 — issue-up.sh 가 명시 에러로 차단.
-# GitLab fallback / Linear / Jira / none 분기는 자유 id 그대로 통과.
+# Regression guard: issue-up.sh / review-spawn.sh 의 자유 식별자 (예: feature-x,
+# MP-onboarding) 처리. sanitize 정책 변경 (positive regex 폐지, deny-list 만) 이후:
+# - issue-up.sh 가 사전 차단을 하지 않음 (트래커별 형식 검증은 leader fuzzy fallback 에 위임).
+# - GitLab fallback 의 첫 숫자 추출은 set -euo pipefail 아래에서 '|| true' 안전 패턴 유지.
+# - review-spawn.sh 의 github 분기는 자유 id 일 때 PR description 으로 판단하는 fallback 안내.
 
 set -euo pipefail
 
@@ -35,39 +33,17 @@ case "$out_empty" in
     *) echo "FAIL: 자유 식별자에서 빈 issue_num 안전 추출 실패 — got: $out_empty" >&2; exit 1 ;;
 esac
 
-# 3. GitHub 전체 숫자 검증 — bash regex 로 부분 매칭이 아닌 ^[0-9]+$ 전체 매칭
-out_full="$(
-    set -euo pipefail
-    test_id() {
-        local mp_id="$1"
-        if [[ "$mp_id" =~ ^[0-9]+$ ]]; then
-            printf 'ok '
-        else
-            printf 'reject '
-        fi
-    }
-    test_id "142"
-    test_id "feature-2026"
-    test_id "MP-13"
-    test_id "0"
-    test_id ""
-)"
-# 142=ok / feature-2026=reject (전체 숫자 아님) / MP-13=reject / 0=ok / 빈=reject
-case "$out_full" in
-    "ok reject reject ok reject ") : ;;
-    *) echo "FAIL: github 전체 숫자 정규식 동작 불일치 — got: '$out_full'" >&2; exit 1 ;;
-esac
-
-# 4. issue-up.sh 가 github + 비숫자 id 에 대해 명시 에러로 차단하는 문구를 가지는지
-if ! grep -q '전체 숫자 issue 번호가 아님' "$src_up"; then
-    echo "FAIL: issue-up.sh 에 github + 비숫자 id 명시 에러 분기 없음" >&2
+# 3. issue-up.sh 는 GitHub 사전 차단을 하지 않음 (sanitize 만 통과하면 spawn) —
+#    트래커 형식 검증 / fetch 실패는 leader fuzzy fallback 에 위임.
+if grep -q '전체 숫자 issue 번호가 아님' "$src_up"; then
+    echo "FAIL: issue-up.sh 에 stale 한 GitHub 사전 차단 메시지 잔존 (fuzzy fallback 정책과 충돌)" >&2
     exit 1
 fi
 
-# 5. review-spawn.sh 의 github 분기가 비숫자 id 일 때 lookup 생략 fallback 안내를
-#    제공해야 (깨진 'gh issue view ' 호출 차단)
+# 4. review-spawn.sh 의 github 분기가 자유 id 일 때 PR description 으로 판단하는
+#    fallback 메시지 유지 (PR 리뷰 컨텍스트라 fuzzy 가 아닌 description 기반 판단).
 if ! grep -q "전체 숫자 id 가 아님" "$src_rev"; then
-    echo "FAIL: review-spawn.sh github + 비숫자 id fallback 안내 누락" >&2
+    echo "FAIL: review-spawn.sh github + 자유 id fallback 안내 누락" >&2
     exit 1
 fi
 

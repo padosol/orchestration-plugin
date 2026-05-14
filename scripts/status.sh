@@ -136,7 +136,7 @@ for d in "$ORCH_ROOT"/*/; do
 done
 for d in "${candidates[@]}"; do
     scope="$(basename "${d%/}")"
-    [[ "$scope" =~ $ORCH_LEADER_PATTERN ]] || continue
+    orch_id_safe "$scope" || continue
     [ "$scope" = "orch" ] && continue
     if ! orch_worker_exists "$scope"; then
         # 이 scope에 leader 없음. 산하 워커가 있다면 orphan

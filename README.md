@@ -10,7 +10,7 @@
                                     └─ issue-42/repo-b   → PR #166
 ```
 
-각 leader / worker 는 자기 worktree + 자기 Claude 세션을 가진다. leader 식별자(`<issue_id>`)는 사용자가 `/orch:issue-up` 에 넘긴 이슈 키 그대로 — 트래커 무관 (`[A-Za-z0-9_-]+`, 대소문자 보존). 모든 메시지는 hub-and-spoke — 워커끼리 직접 통신 차단, 항상 leader 경유.
+각 leader / worker 는 자기 worktree + 자기 Claude 세션을 가진다. leader 식별자(`<issue_id>`)는 사용자가 `/orch:issue-up` 에 넘긴 이슈 키 그대로 — 트래커 무관 (대소문자 보존, shell-위험 문자·`/`·`..` 만 차단). 모든 메시지는 hub-and-spoke — 워커끼리 직접 통신 차단, 항상 leader 경유.
 
 ---
 
@@ -117,15 +117,18 @@ tmux attach -t <session-name>
 
 ### worker_id 표기
 
-issue_id 는 사용자가 `/orch:issue-up` 에 넘긴 키 그대로 (`[A-Za-z0-9_-]+`, 대소문자 보존, `orch` 는 reserved):
+issue_id 는 사용자가 `/orch:issue-up` 에 넘긴 키 그대로 (대소문자 보존, `orch` 는 reserved). sanitize 는 deny-list: 공백·제어문자 / shell metacharacters (`;|&$\` \\`) / redirect·quoting·grouping (`<>!(){}[]"'`) / path traversal (`..`) / slash 차단. 자연 키 (`#`, `.`, `+`, `@`, `~`, `-`, `_`, alnum) 통과.
 
 ```
 orch                  ← PM
 MP-13                 ← leader (Linear 키)
 PROJ-456              ← leader (Jira 키)
 142                   ← leader (GitHub Issue 번호)
+my-issue#42           ← leader (GitLab 자연 키)
 MP-13/repo-a          ← MP-13 산하 repo-a 워커
 ```
+
+트래커에 해당 이슈가 없으면 leader 가 search 로 후보 N 건 → orch 경유 사용자 질문 (fuzzy fallback, SKILL `orch-leader §1.1`).
 
 ### PR 라이프사이클 (4 단계)
 
