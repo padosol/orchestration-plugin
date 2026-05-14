@@ -23,10 +23,7 @@ case "$pr" in
     ''|*[!0-9]*) echo "ERROR: pr-num은 숫자여야 함 ('$pr')" >&2; exit 2 ;;
 esac
 
-if ! command -v gh >/dev/null 2>&1; then
-    echo "ERROR: gh CLI 가 필요합니다" >&2
-    exit 2
-fi
+orch_require_git_host_cli || exit 2
 
 interval="${ORCH_WAIT_MERGE_INTERVAL:-30}"
 max_seconds="${ORCH_WAIT_MERGE_TIMEOUT:-86400}"   # 24h
@@ -35,15 +32,15 @@ start_ts="$(date +%s)"
 echo "[wait-merge] PR #$pr 머지 대기 시작 (간격 ${interval}s, timeout ${max_seconds}s)" >&2
 
 while :; do
-    state="$(gh pr view "$pr" --json state -q .state 2>/dev/null || true)"
+    state="$(orch_pr_state "$pr")"
     case "$state" in
-        MERGED)
+        merged)
             echo "[wait-merge] PR #$pr MERGED 감지" >&2
             exit 0 ;;
-        CLOSED)
+        closed)
             echo "pr_closed_without_merge: PR #$pr" >&2
             exit 1 ;;
-        OPEN|"")
+        open|"")
             : ;;
         *)
             echo "[wait-merge] 알 수 없는 state='$state' — 계속 폴링" >&2 ;;
