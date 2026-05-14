@@ -15,8 +15,9 @@ fi
 required=(
     "reviewer"
     "읽기 전용"
-    "gh pr diff"
-    "gh pr comment"
+    "<pr_view_json_cmd>"
+    "<pr_diff_cmd>"
+    "<pr_comment_from_file_cmd>"
     "leader"
     "두 채널"
     "[review PR #"

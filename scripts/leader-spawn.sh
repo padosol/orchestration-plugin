@@ -165,6 +165,18 @@ plugin_root_ls="$(dirname "$LIB_DIR")"
 guidelines_path="${plugin_root_ls}/references/coding-guidelines.md"
 protocols_path="${plugin_root_ls}/references/orch-protocols.md"
 
+# host-aware PR 명령 fragment. git_host (github/gitlab) 미설정이면 빈 문자열.
+pr_create_cmd="$(orch_pr_create_cmd 2>/dev/null || true)"
+pr_checks_watch_cmd="$(orch_pr_checks_watch_cmd 2>/dev/null || true)"
+pr_run_log_failed_cmd="$(orch_pr_run_log_failed_cmd 2>/dev/null || true)"
+if [ -n "$pr_create_cmd" ]; then
+    pr_host_block="- pr_create_cmd:       $pr_create_cmd
+- pr_checks_watch_cmd: $pr_checks_watch_cmd
+- pr_run_log_failed_cmd: $pr_run_log_failed_cmd"
+else
+    pr_host_block="- (git_host 미설정 — PR workflow 진입 전 settings.json 의 git_host 를 github|gitlab 으로 채우거나 leader 에 escalate)"
+fi
+
 if [ "$role" = "pm" ]; then
     first_msg="너는 ${worker_id} 워커 (PM 역할) 다. ${mp_id} 의 분석·시스템 아키텍처·기술 문서·API 스펙·데이터 모델 **설계** 책임. 코드 직접 구현은 developer 워커 담당, **phase 계획·실행 순서는 leader (${mp_id}) 가 소유**.
 
@@ -173,6 +185,7 @@ if [ "$role" = "pm" ]; then
 - worktree: $worktree_path (현재 cwd) / branch: $branch_name (base: origin/$base_branch)
 - tech: $stack / 설명: $desc
 - leader: ${mp_id}
+${pr_host_block}
 
 [필수 — 첫 마디로 Skill 로딩]
 1) Skill 도구 invoke: **orch-pm**. 페르소나·책임·direction-check 차단·산출물 PR 4단계·종료 절차 전체가 본 SKILL 에 담겨 있다.
@@ -197,6 +210,7 @@ else
 - tech: $stack / 설명: $desc
 - leader: ${mp_id}
 - 브랜치 type: $type (feat | fix | refactor | chore | docs | test 중 하나)
+${pr_host_block}
 
 [필수 — 첫 마디로 Skill 로딩]
 1) Skill 도구 invoke: **orch-developer-worker**. 페르소나·HOLD 체크포인트·차단 질문·PR 4단계·worker-shutdown 절차 전체가 본 SKILL 에 담겨 있다.

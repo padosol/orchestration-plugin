@@ -90,13 +90,17 @@ design-first task graph (`references/workflows/task-graph-contract.md` §9.1 dev
 
 ### 1. CI
 
+worker first_msg 가 git_host (github/gitlab) 별로 `<pr_create_cmd>` / `<pr_checks_watch_cmd>` / `<pr_run_log_failed_cmd>` 를 주입한다. SKILL 본문은 그 변수만 참조 — gh / glab 분기 직접 안 함.
+
 ```bash
 # commit + push 후
-gh pr create --base <base_branch> --title '...' --body '...'
-gh pr checks <pr> --watch --required
+<pr_create_cmd>          # gh pr create --base "$base" --title "$title" --body "$body"
+                         # 또는 glab mr create --target-branch "$base" --title "$title" --description "$body"
+<pr_checks_watch_cmd>    # gh pr checks "$pr" --watch --required
+                         # 또는 glab ci status --wait
 ```
 
-- 실패: `gh run view <run-id> --log-failed | head -200` 로 진단. 자기 영역이면 직접 fix → 재push → 재watch. 다른 워커 영역이면 leader 에 escalate.
+- 실패: `<pr_run_log_failed_cmd>` (gh: `gh run view "$run_id" --log-failed | head -200` / glab: `glab ci view "$pipeline_id" --trace | head -200`) 로 진단. 자기 영역이면 직접 fix → 재push → 재watch. 다른 워커 영역이면 leader 에 escalate.
 - 통과: leader 에 `PR #N ready for review + URL` 답신.
 
 ### 2. 리뷰

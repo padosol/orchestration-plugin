@@ -37,8 +37,8 @@ Design-first Task Graph 의 `developer_pr_v1` workflow template (계약 `referen
 | 6 | `test` | developer | yes | §5 테스트 — 변경분 한정 |
 | 7 | `commit` | developer | yes | §1 작업 패턴 (safe-commit / 표준 git commit) |
 | 8 | `hold_before_push` | developer | yes | §2 HOLD 마디 2 |
-| 9 | `push_and_pr` | developer | yes | §6 PR 4단계 → 1. CI (push + `gh pr create`) |
-| 10 | `ci` | developer | yes | §6 PR 4단계 → 1. CI (`gh pr checks --watch --required`) |
+| 9 | `push_and_pr` | developer | yes | §6 PR 4단계 → 1. CI (push + `<pr_create_cmd>`) |
+| 10 | `ci` | developer | yes | §6 PR 4단계 → 1. CI (`<pr_checks_watch_cmd>`) |
 | 11 | `ready_for_review` | developer | yes | §6 PR 4단계 → 2. 리뷰 (leader 에 'ready' 답신) |
 | 12 | `review` | reviewer | yes | §6 PR 4단계 → 2. 리뷰 (reviewer 답신 처리) |
 | 13 | `wait_merge` | developer | yes | §6 PR 4단계 → 3. 머지 대기 (`wait-merge.sh`) |
@@ -165,7 +165,7 @@ bash $ORCH_BIN_DIR/inbox-archive.sh <msg_id>
 
 `references/orch-protocols.md` 4절의 PR 4단계를 그대로 따른다. `developer_pr_v1` workflow step 9~14 와 대응 (§0.5 참고).
 
-1. **CI (step 9 `push_and_pr` + step 10 `ci`)** — 커밋 push + `gh pr create` (step 9) 후 `gh pr checks <pr> --watch --required` 블록 대기 (step 10). 실패면 `gh run view <run-id> --log-failed | head -200`. 자기 영역이면 직접 수정 push.
+1. **CI (step 9 `push_and_pr` + step 10 `ci`)** — 커밋 push + `<pr_create_cmd>` (step 9) 후 `<pr_checks_watch_cmd>` 블록 대기 (step 10). 실패면 `<pr_run_log_failed_cmd>`. 자기 영역이면 직접 수정 push. 명령은 first_msg 에 git_host (github/gitlab) 별로 주입 — gh / glab 양쪽 호환.
 2. **리뷰 (step 11 `ready_for_review` + step 12 `review`)** — CI 통과 후 leader 에 'PR #N ready for review + URL' 답신 (step 11). 이후 reviewer 답신 (step 12) 처리:
    - 받은 메시지에 `needs-changes` → step 5 `implement` 로 돌아가 수정 → step 6 `test` → step 7 `commit` → step 8 `hold_before_push` → step 9 `push_and_pr` (수정 push) → step 10 `ci` → step 11 `ready_for_review` ('re-review please' 답신) → step 12 `review` 라운드 N+1. test / hold_before_push / ci 건너뛰기 금지 — 수정분도 invariant 적용 대상.
    - 받은 메시지에 `LGTM` → 즉시 3 진입 (leader 추가 지시 기다리지 말 것).
