@@ -90,7 +90,7 @@ tmux attach -t <session-name>
 | `/orch:down` | 사용자 | tmux 세션 통째 종료 |
 | `/orch:issue-up <id>` | orch | `<id>` leader 띄움 |
 | `/orch:issue-down <id>` | orch / leader | cascade shutdown + 정리 + REPORT |
-| `/orch:leader-spawn <project> [type]` | leader | 산하 프로젝트 워커 spawn |
+| `/orch:leader-spawn <project> [type] [--role pm\|dev]` | leader | 산하 프로젝트 워커 spawn (`--role pm` 으로 PM 워커, 미지정 시 developer) |
 | `/orch:review-spawn <project> <pr>` | leader | PR 리뷰 전용 워커 (단발성) |
 | `/orch:send <target> <msg>` | 누구나 | hub-and-spoke 메시지 |
 | `/orch:check-inbox [id]` | 누구나 | 자기 인박스 처리 |
@@ -199,9 +199,13 @@ leader / developer worker / PM / reviewer 의 페르소나·절차는 `skills/or
 
 작업 타입 가이드 (`references/workflows/{feature,bug,refactor}.md`) 와 4원칙 (`references/coding-guidelines.md`) 도 그대로 단일 source — SKILL 은 언제 읽고 어떻게 적용할지만 지시.
 
+복잡 이슈용 design-first 흐름은 [Design-first Task Graph](#design-first-task-graph-멀티-repo--복잡-이슈) 절 참고. PM 페르소나 (`skills/orch-pm/SKILL.md`) 와 task graph 계약 (`references/workflows/task-graph-contract.md`) / schema / template 가 그 흐름의 단일 source.
+
 ---
 
-## Phase Plan — 순차 실행 강제
+## Phase Plan — 순차 실행 강제 (단순 이슈)
+
+단순 이슈 (단일 repo / 명확 AC / 작은 fix·refactor) 의 기본 흐름. 멀티 repo / API·DB·migration 변경 / 비기능 리스크가 있는 복잡 이슈는 아래 [Design-first Task Graph](#design-first-task-graph-멀티-repo--복잡-이슈) 로 분기.
 
 비-blocking 으로 여러 워커가 동시 진행되면 산출물 의존이 있는데도 순서가 꼬인다. **leader 가 phase plan 을 사용자 컨펌 받고 phase 단위 순차 실행**.
 
@@ -220,6 +224,46 @@ leader / developer worker / PM / reviewer 의 페르소나·절차는 `skills/or
 | 취소 | `[plan-cancel] <사유>` | `/orch:issue-down` cascade kill |
 
 자유서술 답 (`응 ㅇㅋ`, `한 군데만 빼고`) 은 라벨이 모호해져 leader 라우팅이 깨지므로 orch 는 **반드시 AskUserQuestion** 사용.
+
+---
+
+## Design-first Task Graph (멀티 repo / 복잡 이슈)
+
+phase 직렬 흐름은 멀티 repo 병렬 개발에서 답답하고, API contract / DB migration / 권한 변경 같은 설계가 앞서야 하는 이슈는 phase plan 단계에서 의존이 충분히 드러나지 않는다. 이런 이슈는 **PM 설계 산출물 → leader 가 task graph 로 승인 → depends_on 기반 병렬 실행** 흐름을 쓴다.
+
+### 단계
+
+- **Phase 0 — Design**: PM (또는 leader lightweight design) 이 6 종 artifact (`problem_frame` / `architecture_decision` / `implementation_brief` / `risk_register` / `open_decisions` / `proposed_task_graph`) 작성. 사용자 **Round 1 GO** 로 PM spawn → 산출물 PR → 사용자 **Round 2 GO** 로 `approved_task_graph` 확정.
+- **Phase 1 — Execution**: leader 가 `approved_task_graph` 의 ready task (의존성 만족) 를 병렬 spawn. 각 task 는 `workflow_template` (예: `developer_pr_v1` 14 step) step 순서 강제.
+- **Phase 2 — Report / Cleanup**: task 결과 수집 → REPORT → `issue-down`.
+
+### 적용 분기
+
+사용자 가독용 요약. 실행 canonical 은 `skills/orch-leader/SKILL.md` §3.5.1.
+
+| 신호 | 분류 | PM session |
+|---|---|---|
+| project ≥ 2 개 (멀티 repo) | 복잡 | **필수** |
+| API contract / DB model / migration / auth / 권한 / 외부 연동 변경 | 복잡 | **권장** |
+| 비기능 리스크 (성능 / 보안 / 호환성) 또는 acceptance criteria 모호 | 복잡 | **권장** |
+| 위 조건 모두 해당 안 됨 | 단순 | **생략 — leader lightweight design** (위 Phase Plan 절) |
+
+### Step 순서 invariant
+
+해당 step 이 있는 workflow 기준 (developer 등 PR 구현 workflow). reviewer 처럼 단발성 workflow 는 자기 template 기준 (respond → shutdown).
+
+- `ci` done 전 `ready_for_review` 금지
+- `review` LGTM 전 `wait_merge` 금지
+- `wait_merge` done 전 `shutdown` 금지
+
+워커 보고가 invariant 위반이면 leader 즉시 HOLD.
+
+### 계약 / 스키마 / 템플릿 단일 source
+
+- `references/workflows/design-first-task-graph.md` — 전체 흐름 / 예시 (단순 / 멀티 repo)
+- `references/workflows/task-graph-contract.md` — Task / TaskGraph / WorkflowTemplate 계약
+- `references/schemas/task-graph.schema.json` + `task-template.schema.json` — Draft 2020-12 strict
+- `references/workflows/task-templates/*.json` — `developer_pr_v1` / `pm_design_v1` / `reviewer_pr_v1` 는 stable, `integration_check_v1` 은 placeholder (stable 화 전 spawn 금지)
 
 ---
 
