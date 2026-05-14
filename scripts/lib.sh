@@ -468,11 +468,13 @@ orch_pr_create_cmd() {
 }
 
 # PR/MR 본문 + 메타 fetch (JSON). 워커가 '$pr' 변수 미리 채우고 호출. 출력 JSON 의
-# top-level 키를 host 간 통일 — title / body / files / headRefName / baseRefName.
+# top-level 키를 host 간 통일 — title / body / headRefName / baseRefName.
+# (files 키는 host 마다 별도 endpoint 필요 — reviewer 는 <pr_diff_cmd> 로 변경분 직접 확인)
+# gitlab: glab mr view 는 --output json 미지원 → glab api REST 우회 (`projects/:fullpath/...`).
 orch_pr_view_json_cmd() {
     case "$(orch_settings_git_host)" in
-        github) printf 'gh pr view "$pr" --json title,body,files,headRefName,baseRefName' ;;
-        gitlab) printf 'glab mr view "$pr" --output json | jq "{title, body: .description, files: .changes, headRefName: .source_branch, baseRefName: .target_branch}"' ;;
+        github) printf 'gh pr view "$pr" --json title,body,headRefName,baseRefName' ;;
+        gitlab) printf 'glab api "projects/:fullpath/merge_requests/$pr" | jq "{title, body: .description, headRefName: .source_branch, baseRefName: .target_branch}"' ;;
         *)      return 2 ;;
     esac
 }
@@ -497,20 +499,24 @@ orch_pr_comment_from_file_cmd() {
 }
 
 # CI 체크 watch (블록). 워커가 '$pr' 미리 채우고 호출.
-# gitlab 의 'glab ci status --wait' 는 MR 의 latest pipeline 을 wait — '$pr' 인자 사용 안 함.
+# github: 'gh pr checks --watch --required' 가 PR 의 필수 체크 끝까지 block.
+# gitlab: 'glab ci status --live' (---wait 미지원, --live 가 pipeline ends 까지 real-time 출력).
+#         현재 cwd 의 git remote 의 latest pipeline 기준. '$pr' 인자 사용 안 함.
 orch_pr_checks_watch_cmd() {
     case "$(orch_settings_git_host)" in
         github) printf 'gh pr checks "$pr" --watch --required' ;;
-        gitlab) printf 'glab ci status --wait' ;;
+        gitlab) printf 'glab ci status --live' ;;
         *)      return 2 ;;
     esac
 }
 
 # CI 실패 로그 head 200줄. 워커가 github 은 '$run_id', gitlab 은 '$pipeline_id' 미리 준비.
+# gitlab: 'glab ci view' 는 TUI interactive — automation 불가. REST API 로 jobs + trace 받기.
+#         (Job iid 별 trace 가 큰 응답이라 head -200 으로 잘라야 안전.)
 orch_pr_run_log_failed_cmd() {
     case "$(orch_settings_git_host)" in
         github) printf 'gh run view "$run_id" --log-failed | head -200' ;;
-        gitlab) printf 'glab ci view "$pipeline_id" --trace | head -200' ;;
+        gitlab) printf 'glab api "projects/:fullpath/pipelines/$pipeline_id/jobs?scope[]=failed" | jq -r ".[] | .id" | head -1 | xargs -I{} glab api "projects/:fullpath/jobs/{}/trace" | head -200' ;;
         *)      return 2 ;;
     esac
 }

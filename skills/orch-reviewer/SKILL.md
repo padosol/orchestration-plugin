@@ -77,8 +77,8 @@ leader 가 `.orch/runs/<issue_id>/type` 에 작업 타입 (feature|bug|refactor)
 first_msg 가 git_host (github/gitlab) 별로 다음 명령을 주입한다 — reviewer 는 그대로 실행 (gh ↔ glab 분기 안 해도 됨, JSON 키는 host 간 통일):
 
 ```bash
-<pr_view_json_cmd>   # title / body / files / headRefName / baseRefName (정규화 키)
-<pr_diff_cmd>        # PR/MR diff text
+<pr_view_json_cmd>   # title / body / headRefName / baseRefName (정규화 키)
+<pr_diff_cmd>        # PR/MR diff text — 변경된 파일·라인은 여기서 직접 확인
 ```
 
 base 탐색은 `<project_path>` 안에서 grep / Read. 이슈 컨텍스트는 first_msg 의 `<issue_lookup_line>` 이 트래커별로 알려준다 (linear / github / gitlab / jira / none 또는 GitHub 자유 id 의 lookup 생략).

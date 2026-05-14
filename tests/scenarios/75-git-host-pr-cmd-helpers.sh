@@ -41,15 +41,43 @@ for fn in orch_pr_create_cmd orch_pr_view_json_cmd orch_pr_diff_cmd orch_pr_comm
     fi
 done
 
-# 2. orch_pr_view_json_cmd 가 host 간 정규화 키 (title/body/files/headRefName/baseRefName)
-#    모두 cover. gitlab 분기는 jq 로 description→body / changes→files / source_branch→headRefName /
+# 2. orch_pr_view_json_cmd 가 host 간 정규화 키 (title/body/headRefName/baseRefName) cover.
+#    gitlab 분기는 glab api REST 우회 + jq 로 description→body / source_branch→headRefName /
 #    target_branch→baseRefName 매핑.
+#    (files 키는 제거 — reviewer 는 별도 <pr_diff_cmd> 로 변경분 확인. glab mr view 의
+#    --output json 미지원 + changes 키는 별도 endpoint 라 단순화.)
 view_body="$(extract_fn "$lib" "orch_pr_view_json_cmd")"
-for token in title body files headRefName baseRefName description changes source_branch target_branch; do
+for token in title body headRefName baseRefName description source_branch target_branch; do
     if ! grep -qF "$token" <<<"$view_body"; then
         echo "FAIL: orch_pr_view_json_cmd 가 host 정규화 키워드 '${token}' 누락" >&2; exit 1
     fi
 done
+if ! grep -q 'glab api' <<<"$view_body"; then
+    echo "FAIL: orch_pr_view_json_cmd 의 gitlab 분기에 'glab api' 호출 누락 (glab mr view 는 --output json 미지원)" >&2
+    exit 1
+fi
+
+# 2b. orch_pr_checks_watch_cmd 의 gitlab 분기는 --live (glab 1.36+ 에서 --wait 미지원).
+watch_body="$(extract_fn "$lib" "orch_pr_checks_watch_cmd")"
+watch_gitlab="$(awk '/^\s*gitlab\)/,/;;/' <<<"$watch_body")"
+if grep -q -- '--wait' <<<"$watch_gitlab"; then
+    echo "FAIL: orch_pr_checks_watch_cmd gitlab 분기에 stale '--wait' 잔존 (glab 1.36+ 는 '--live')" >&2
+    exit 1
+fi
+if ! grep -q -- '--live' <<<"$watch_gitlab"; then
+    echo "FAIL: orch_pr_checks_watch_cmd gitlab 분기에 '--live' 옵션 누락" >&2; exit 1
+fi
+
+# 2c. orch_pr_run_log_failed_cmd 의 gitlab 분기는 glab api (glab ci view 는 TUI 라 automation 불가).
+log_body="$(extract_fn "$lib" "orch_pr_run_log_failed_cmd")"
+log_gitlab="$(awk '/^\s*gitlab\)/,/;;/' <<<"$log_body")"
+if grep -qE 'glab ci view.*--trace' <<<"$log_gitlab"; then
+    echo "FAIL: orch_pr_run_log_failed_cmd gitlab 분기에 stale 'glab ci view --trace' 잔존 (TUI / 미지원 flag)" >&2
+    exit 1
+fi
+if ! grep -q 'glab api' <<<"$log_gitlab"; then
+    echo "FAIL: orch_pr_run_log_failed_cmd gitlab 분기에 'glab api' REST 호출 누락" >&2; exit 1
+fi
 
 # 3. leader-spawn.sh / review-spawn.sh 가 host 헬퍼 호출 + pr_host_block 변수 주입
 if ! grep -q 'orch_pr_create_cmd' "$leader_spawn"; then
