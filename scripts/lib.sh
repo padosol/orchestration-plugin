@@ -65,10 +65,11 @@ ORCH_SETTINGS="${ORCH_ROOT}/settings.json"
 ORCH_ERRORS_LOG="${ORCH_ROOT}/errors.jsonl"  # legacy compat — 신규 코드는 orch_errors_log_path 사용
 ORCH_RUNS_DIR="${ORCH_ROOT}/runs"
 
-# issue_id 와 role 모두 [A-Za-z0-9_-]+ — 'orch' 만 reserved. worker pattern 매치가 우선
-# (slash 가 있으면 worker), 없으면 leader 후보.
-ORCH_LEADER_PATTERN='^[A-Za-z0-9_-]+$'
-ORCH_WORKER_PATTERN='^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$'
+# issue_id / worker role: positive regex 폐지, deny-list sanitize 로 전환.
+# 단일 segment 안전성은 `orch_id_safe` 가 판정 — 공백/제어문자, shell metacharacters
+# (;|&$`\), redirect/grouping/quoting (<>!(){}[]\"\'), path traversal (..), slash 차단,
+# 'orch' reserved, 빈 입력 거부. worker_id 는 '<issue>/<role>' 로 정확히 1회 split 후
+# 양쪽 모두 orch_id_safe. 트래커 자연 키 (#, ., +, @, ~, 등) 는 모두 통과.
 
 # tmux 세션 — 호출자가 살아있는 세션을 따라간다.
 # fallback 우선순위: env ORCH_TMUX_SESSION > current tmux > base_dir basename > "orch"
@@ -87,13 +88,40 @@ fi
 
 # ─── Worker ID 파싱 ───────────────────────────────────────────────────
 
+# 단일 ID 세그먼트 안전 판정 (issue_id, worker role 한쪽씩).
+# 거부 사유: 빈, 'orch' reserved, 공백/제어문자, shell metacharacters, redirect/grouping/quoting,
+# path traversal('..'), slash. 자연 키 (#, ., +, @, ~, alnum, -, _) 는 통과.
+orch_id_safe() {
+    local v="$1"
+    [ -n "$v" ] || return 1
+    [ "$v" = "orch" ] && return 1
+    case "$v" in *..*) return 1 ;; esac
+    [[ "$v" =~ [[:cntrl:][:space:]] ]] && return 1
+    case "$v" in
+        */*) return 1 ;;
+        *\;*|*\|*|*\&*|*\$*|*\`*|*\\*) return 1 ;;
+        *\<*|*\>*) return 1 ;;
+        *\!*|*\(*|*\)*|*\{*|*\}*|*\[*|*\]*) return 1 ;;
+        *\"*|*\'*) return 1 ;;
+    esac
+    return 0
+}
+
 # 출력: orch | leader | worker | invalid (항상 exit 0 — 호출자가 case로 분기)
 orch_wid_kind() {
     local w="$1"
-    if [ "$w" = "orch" ]; then printf 'orch'
-    elif [[ "$w" =~ $ORCH_LEADER_PATTERN ]]; then printf 'leader'
-    elif [[ "$w" =~ $ORCH_WORKER_PATTERN ]]; then printf 'worker'
-    else printf 'invalid'
+    if [ "$w" = "orch" ]; then printf 'orch'; return 0; fi
+    local rest="${w#*/}"
+    if [ "$rest" = "$w" ]; then
+        if orch_id_safe "$w"; then printf 'leader'; else printf 'invalid'; fi
+        return 0
+    fi
+    local issue="${w%%/*}" role="${w#*/}"
+    case "$role" in */*) printf 'invalid'; return 0 ;; esac
+    if orch_id_safe "$issue" && orch_id_safe "$role"; then
+        printf 'worker'
+    else
+        printf 'invalid'
     fi
 }
 
@@ -145,17 +173,18 @@ orch_detect_self() {
 }
 
 # 이슈 ID 정규화 — 사용자 입력을 leader_id 로 sanitize.
-# 정책 (0.13.0~): 대소문자 보존, [A-Za-z0-9_-] 만 허용. 트래커별 예:
+# 정책: orch_id_safe 통과한 입력은 그대로 통과 (대소문자 보존). 트래커별 예:
 #   Linear: MP-13       → MP-13
 #   Jira:   PROJ-456    → PROJ-456
 #   GitHub: 142         → 142
+#   GitLab: my-issue#42 → my-issue#42   (# 등 자연 키 허용)
 #   기타:   issue_42-rc → issue_42-rc
-# 'orch' 는 reserved (leader 식별자로 사용 금지). 빈 입력 / 잘못된 문자 → exit 1.
+# 거부: 'orch' reserved / 빈 / 공백·제어문자 / shell metacharacters /
+#       redirect·grouping·quoting / path traversal / slash (worker_id delimiter).
+# fetch 실패 (트래커에 해당 이슈 없음) 는 여기서 막지 않음 — leader 가 fuzzy fallback 처리.
 orch_normalize_issue_id() {
     local v="$1"
-    [ -n "$v" ] || return 1
-    [ "$v" = "orch" ] && return 1
-    [[ "$v" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+    orch_id_safe "$v" || return 1
     printf '%s' "$v"
 }
 
@@ -241,7 +270,7 @@ orch_worker_path() {
 orch_scope_dir() {
     local s="$1"
     [ "$s" = "orch" ] && return 1
-    [[ "$s" =~ $ORCH_LEADER_PATTERN ]] || return 1
+    orch_id_safe "$s" || return 1
     local new_path="$ORCH_RUNS_DIR/$s"
     if [ -d "$new_path" ]; then
         printf '%s' "$new_path"; return 0

@@ -13,8 +13,10 @@ orch_install_error_trap "$0"
 if [ "$#" -lt 1 ]; then
     cat >&2 <<EOF
 사용법: /orch:issue-up <issue-id> [--force] [--no-issue]
-  issue-id: 트래커의 키 그대로 ([A-Za-z0-9_-]+, 대소문자 보존).
-            예: MP-13 (Linear) / PROJ-456 (Jira) / 142 (GitHub) / issue42 (자유)
+  issue-id: 트래커의 키 그대로 (대소문자 보존). 거부 문자: 공백 / 제어문자 /
+            shell metacharacters (;|&\$\`\\) / redirect·quoting·grouping (<>!(){}[]"') /
+            path traversal (..) / slash (worker_id delimiter). 'orch' 는 reserved.
+            예: MP-13 (Linear) / PROJ-456 (Jira) / 142 (GitHub) / my-issue#42 (GitLab) / issue42 (자유)
   --force: 이미 떠 있는 leader가 있어도 cascade kill 후 재생성
   --no-issue: 트래커 설정 무시 (이번 한 번만). leader 가 orch 에 spec 직접 요청.
               사용 케이스: 이슈 만들기 번거로운 작은 작업 / 이슈 없이 try-out
@@ -37,7 +39,9 @@ done
 
 issue_id="$(orch_normalize_issue_id "$raw_id" || true)"
 if [ -z "$issue_id" ]; then
-    echo "ERROR: issue-id '$raw_id' 정규화 실패. [A-Za-z0-9_-]+ 만 허용 ('orch' 는 reserved)." >&2
+    echo "ERROR: issue-id '$raw_id' sanitize 실패." >&2
+    echo "  거부 문자: 공백 / 제어문자 / shell meta(;|&\$\`\\) / redirect·quoting·grouping(<>!(){}[]\"') / .. / / ." >&2
+    echo "  'orch' 는 reserved. GitLab cross-project ref(group/project#NN) 는 settings.json 의 github_issue_repo 에 project 박고 단일 키로 호출." >&2
     exit 2
 fi
 # 코드 호환을 위해 옛 변수명 mp_id 유지 (값은 issue_id 와 동일).
@@ -52,22 +56,14 @@ if [ "$caller" != "orch" ]; then
     exit 2
 fi
 
-# 트래커 조기 검증 — side effects (--force kill / scope dir / leader pane spawn / claude 실행)
-# 이전에 차단해야 실패 시 잔재 (.orch/runs/<id>, registry, tmux pane) 가 남지 않는다.
-# GitHub Issues 는 issue id 전체가 숫자여야 함 — 'feature-2026' 같은 자유 id 의 첫 숫자
-# 시퀀스를 GitHub issue #2026 으로 오인하면 잘못된 이슈 컨텍스트로 leader 가 작업.
+# 트래커 결정 — fetch 자체는 leader 가 first_msg 의 issue_fetch_step 으로 수행.
+# 트래커에 해당 이슈가 없으면 leader 가 search 로 후보 N 건을 가져와 orch 경유로
+# 사용자 질문 → 답 받고 진행 (fuzzy fallback). 사전 차단은 sanitize 만, 트래커별
+# id 형식 검증 (예: GitHub 전체 숫자) 은 leader fallback 에 위임.
 tracker="$(orch_settings_issue_tracker)"
 effective_tracker="$tracker"
 if [ "$no_issue" -eq 1 ]; then
     effective_tracker="none"
-fi
-if [ "$effective_tracker" = "github" ]; then
-    if [[ ! "$mp_id" =~ ^[0-9]+$ ]]; then
-        echo "ERROR: issue-tracker=github 인데 '$mp_id' 가 전체 숫자 issue 번호가 아님." >&2
-        echo "  GitHub Issues 는 숫자 키만 받음 (예: 142). 자유 식별자 (feature-x, MP-onboarding, feature-2026 등) 는" >&2
-        echo "  --no-issue 로 이번 호출만 spec 요청 모드로 띄우거나, settings.json 의 issue_tracker 를 다른 값으로 바꿔서 호출." >&2
-        exit 2
-    fi
 fi
 
 if orch_worker_exists "$mp_id"; then
@@ -111,43 +107,43 @@ sleep 4
 
 projects_blob="$(orch_settings_projects | tr '\n' ' ')"
 # 표시·트래커 호출용 키:
-#   issue_display = 사용자 입력 그대로 (예: MP-13, PROJ-456, 142, issue42)
-#   issue_num     = 트래커 fetch 에 넘기는 숫자 — GitHub 은 위에서 전체 숫자 검증을 통과했으므로
-#                   $mp_id 가 그대로 곧 issue_num. GitLab fallback (reference 안 받는 환경) 용도로
-#                   gitlab 분기에서만 첫 [0-9]+ 시퀀스 추출이 의미 있음 — pipefail 안전 || true.
+#   issue_display = 사용자 입력 그대로 (sanitize 만 통과 — 예: MP-13, PROJ-456, 142, my-issue#42)
+#   issue_num     = GitHub 분기에서 fetch 인자로 그대로 넘김 (사용자 입력 그대로 — fetch 실패는
+#                   leader 의 fuzzy fallback 으로 처리). GitLab fallback 은 첫 [0-9]+ 시퀀스 추출
+#                   (reference 안 받는 환경 대비) — pipefail 안전 || true.
 issue_display="$mp_id"
 gh_repo="$(orch_settings_github_issue_repo 2>/dev/null || true)"
 plugin_root="$(dirname "$LIB_DIR")"
 workflows_dir="${plugin_root}/references/workflows"
 
+# 각 분기의 issue_fetch_step 은 (1) primary fetch 명령 + (2) fetch 실패 시 fuzzy fallback
+# 진입 안내 한 줄로 구성. 상세 fuzzy 프로토콜 (search 명령 / orch 경유 사용자 질문 / wait-reply)
+# 은 SKILL §1 "이슈 컨텍스트 fetch — fetch 실패 fallback" 절에 기록.
 case "$effective_tracker" in
     linear)
-        issue_fetch_step="1. mcp__linear-server__get_issue ${issue_display} (description / acceptance criteria)"
+        issue_fetch_step="1. mcp__linear-server__get_issue ${issue_display} (description / acceptance criteria). 실패(이슈 없음) 시 SKILL §1 fuzzy fallback — list_issues 로 후보 search → orch 경유 사용자 질문."
         ;;
     github)
-        # 조기 검증 (orch_settings_require 직후) 에서 전체 숫자만 통과 — 여기 도달했다면 안전.
         issue_num="$mp_id"
         if [ -n "$gh_repo" ]; then
-            issue_fetch_step="1. \`gh issue view ${issue_num} --repo ${gh_repo} --json title,body,labels,milestone\` (description / acceptance criteria)"
+            issue_fetch_step="1. \`gh issue view ${issue_num} --repo ${gh_repo} --json title,body,labels,milestone\` (description / acceptance criteria). 실패(이슈 없음 / 숫자 키 아님) 시 SKILL §1 fuzzy fallback — \`gh issue list --repo ${gh_repo} --search ${issue_display}\` 로 후보 → orch 경유 사용자 질문."
         else
-            issue_fetch_step="1. \`gh issue view ${issue_num} --json title,body,labels,milestone\` (현재 cwd 의 repo 기준 — settings.json 의 github_issue_repo 미설정이라 해당 repo 인지 확인 필요)"
+            issue_fetch_step="1. \`gh issue view ${issue_num} --json title,body,labels,milestone\` (현재 cwd 의 repo 기준 — settings.json 의 github_issue_repo 미설정). 실패 시 SKILL §1 fuzzy fallback — \`gh issue list --search ${issue_display}\` 로 후보 → orch 경유 사용자 질문."
         fi
         ;;
     gitlab)
-        # GitLab Issues 자동 fetch — glab CLI 경유. id 가 'PROJ-12' 같은 reference 면
-        # glab 가 직접 받지만, 일부 환경/그룹에서는 숫자만 받음 — fallback 용 첫 숫자 시퀀스 추출.
+        # glab 가 PROJ-12 같은 reference 를 직접 받기도 하고, 환경에 따라 숫자만 받기도 함 —
+        # fallback 용 첫 숫자 시퀀스 추출.
         gl_issue_num="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1 || true)"
         if [ -n "$gh_repo" ]; then
             # github_issue_repo 가 gitlab 환경에서는 group/project 로 재해석됨
-            issue_fetch_step="1. \`glab issue view ${gl_issue_num:-$issue_display} --repo ${gh_repo} --output json\` (description / labels / milestone). glab 미설치/미인증 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — GitLab 이슈 본문/AC 붙여줘.\\nORCH_MSG\` 로 fallback."
+            issue_fetch_step="1. \`glab issue view ${gl_issue_num:-$issue_display} --repo ${gh_repo} --output json\` (description / labels / milestone). 실패(이슈 없음 / 미인증) 시 SKILL §1 fuzzy fallback — \`glab issue list --repo ${gh_repo} --search ${issue_display}\` 로 후보 → orch 경유 사용자 질문. glab 미설치 시 send.sh orch 로 spec 요청 fallback."
         else
-            issue_fetch_step="1. \`glab issue view ${gl_issue_num:-$issue_display} --output json\` (현재 cwd 의 project 기준 — settings.json 의 github_issue_repo 미설정이라 해당 project 인지 확인 필요). glab 미설치/미인증 시 send.sh orch 로 spec 요청 fallback."
+            issue_fetch_step="1. \`glab issue view ${gl_issue_num:-$issue_display} --output json\` (현재 cwd 의 project 기준 — settings.json 의 github_issue_repo 미설정). 실패 시 SKILL §1 fuzzy fallback — \`glab issue list --search ${issue_display}\` 로 후보 → orch 경유 사용자 질문. glab 미설치 시 send.sh orch 로 spec 요청 fallback."
         fi
         ;;
     jira)
-        # Jira 자동 fetch — jira-cli (ankitpokhrel/jira-cli) 경유. 사이트 URL/토큰은
-        # ~/.config/.jira/.config.yml 에 사전 등록되어 있어야 함.
-        issue_fetch_step="1. \`jira issue view ${issue_display} --plain\` (description / acceptance criteria). jira-cli 미설치/미인증 시 \`bash \$ORCH_BIN_DIR/send.sh orch <<'ORCH_MSG'\\n${issue_display} spec 부탁 — Jira 이슈 본문/AC 붙여줘.\\nORCH_MSG\` 로 fallback."
+        issue_fetch_step="1. \`jira issue view ${issue_display} --plain\` (description / acceptance criteria). 실패(이슈 없음 / 미인증) 시 SKILL §1 fuzzy fallback — \`jira issue list --jql \"text ~ \\\"${issue_display}\\\"\"\` 로 후보 → orch 경유 사용자 질문. jira-cli 미설치 시 send.sh orch 로 spec 요청 fallback."
         ;;
     none|*)
         if [ "$no_issue" -eq 1 ] && [ "$tracker" != "none" ]; then
