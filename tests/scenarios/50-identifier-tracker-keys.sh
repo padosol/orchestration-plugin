@@ -16,7 +16,7 @@ assert_eq() {
     fi
 }
 
-# normalize: 트래커별 키 + 자연 문자 (# . + @ ~) 모두 통과
+# normalize: 트래커별 키 + 자연 문자 (# . + @) 통과 (* ? ~ 는 deny)
 assert_eq "norm MP-13"        "$(orch_normalize_issue_id MP-13)"        "MP-13"
 assert_eq "norm mp-13"        "$(orch_normalize_issue_id mp-13)"        "mp-13"
 assert_eq "norm PROJ-456"     "$(orch_normalize_issue_id PROJ-456)"     "PROJ-456"
@@ -29,7 +29,8 @@ assert_eq "norm feature+rc"   "$(orch_normalize_issue_id 'feature+rc')" "feature
 assert_eq "norm user@home"    "$(orch_normalize_issue_id 'user@home')"  "user@home"
 assert_eq "norm feature-2026" "$(orch_normalize_issue_id feature-2026)" "feature-2026"
 
-# normalize reject: orch reserved / 빈 / slash / shell meta / quoting / grouping / control / ..
+# normalize reject: orch reserved / 빈 / slash / shell meta / quoting / grouping / control /
+# .. / glob (*?) / tilde (~)
 reject_cases=(
     "orch"
     ""
@@ -52,6 +53,11 @@ reject_cases=(
     ".."
     "a..b"
     "../etc"
+    "a*b"
+    "a?b"
+    "MP-13*"
+    "~home"
+    "feat~rc"
 )
 for bad in "${reject_cases[@]}"; do
     if orch_normalize_issue_id "$bad" >/dev/null 2>&1; then

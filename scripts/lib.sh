@@ -67,9 +67,11 @@ ORCH_RUNS_DIR="${ORCH_ROOT}/runs"
 
 # issue_id / worker role: positive regex 폐지, deny-list sanitize 로 전환.
 # 단일 segment 안전성은 `orch_id_safe` 가 판정 — 공백/제어문자, shell metacharacters
-# (;|&$`\), redirect/grouping/quoting (<>!(){}[]\"\'), path traversal (..), slash 차단,
-# 'orch' reserved, 빈 입력 거부. worker_id 는 '<issue>/<role>' 로 정확히 1회 split 후
-# 양쪽 모두 orch_id_safe. 트래커 자연 키 (#, ., +, @, ~, 등) 는 모두 통과.
+# (;|&$`\), redirect/grouping/quoting (<>!(){}[]\"\'), glob (*?), tilde expansion (~),
+# path traversal (..), slash 차단, 'orch' reserved, 빈 입력 거부. worker_id 는
+# '<issue>/<role>' 로 정확히 1회 split 후 양쪽 모두 orch_id_safe. 트래커 자연 키
+# (#, ., +, @, 등) 는 모두 통과 — leading # 은 generated shell command 안에서 항상
+# single-quote 로 감싸야 shell comment 위험 회피.
 
 # tmux 세션 — 호출자가 살아있는 세션을 따라간다.
 # fallback 우선순위: env ORCH_TMUX_SESSION > current tmux > base_dir basename > "orch"
@@ -90,7 +92,9 @@ fi
 
 # 단일 ID 세그먼트 안전 판정 (issue_id, worker role 한쪽씩).
 # 거부 사유: 빈, 'orch' reserved, 공백/제어문자, shell metacharacters, redirect/grouping/quoting,
-# path traversal('..'), slash. 자연 키 (#, ., +, @, ~, alnum, -, _) 는 통과.
+# glob (*, ?), tilde expansion (~), path traversal('..'), slash.
+# 자연 키 (#, ., +, @, alnum, -, _) 는 통과 — 단 호출자는 generated shell command 에서 항상
+# single-quote 로 감싸야 함 (#  은 leading 시 shell comment 위험).
 orch_id_safe() {
     local v="$1"
     [ -n "$v" ] || return 1
@@ -103,6 +107,7 @@ orch_id_safe() {
         *\<*|*\>*) return 1 ;;
         *\!*|*\(*|*\)*|*\{*|*\}*|*\[*|*\]*) return 1 ;;
         *\"*|*\'*) return 1 ;;
+        *\**|*\?*|*~*) return 1 ;;
     esac
     return 0
 }

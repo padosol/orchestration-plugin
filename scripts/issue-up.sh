@@ -119,6 +119,9 @@ workflows_dir="${plugin_root}/references/workflows"
 # 각 분기의 issue_fetch_step 은 (1) primary fetch 명령 + (2) fetch 실패 시 fuzzy fallback
 # 진입 안내 한 줄로 구성. 상세 fuzzy 프로토콜 (search 명령 / orch 경유 사용자 질문 / wait-reply)
 # 은 SKILL §1 "이슈 컨텍스트 fetch — fetch 실패 fallback" 절에 기록.
+# sanitize 통과한 issue_display 도 leading '#' 같은 자연 키가 들어 있을 수 있으므로
+# generated shell command 안에서는 항상 single-quote 로 감싼다 ('${issue_display}').
+# orch_id_safe 가 ' 와 \\ 를 차단하므로 quote escape 위험은 없음.
 case "$effective_tracker" in
     linear)
         issue_fetch_step="1. mcp__linear-server__get_issue ${issue_display} (description / acceptance criteria). 실패(이슈 없음) 시 SKILL §1 fuzzy fallback — list_issues 로 후보 search → orch 경유 사용자 질문."
@@ -126,24 +129,24 @@ case "$effective_tracker" in
     github)
         issue_num="$mp_id"
         if [ -n "$gh_repo" ]; then
-            issue_fetch_step="1. \`gh issue view ${issue_num} --repo ${gh_repo} --json title,body,labels,milestone\` (description / acceptance criteria). 실패(이슈 없음 / 숫자 키 아님) 시 SKILL §1 fuzzy fallback — \`gh issue list --repo ${gh_repo} --search ${issue_display}\` 로 후보 → orch 경유 사용자 질문."
+            issue_fetch_step="1. \`gh issue view '${issue_num}' --repo '${gh_repo}' --json title,body,labels,milestone\` (description / acceptance criteria). 실패(이슈 없음 / 숫자 키 아님) 시 SKILL §1 fuzzy fallback — \`gh issue list --repo '${gh_repo}' --search '${issue_display}'\` 로 후보 → orch 경유 사용자 질문."
         else
-            issue_fetch_step="1. \`gh issue view ${issue_num} --json title,body,labels,milestone\` (현재 cwd 의 repo 기준 — settings.json 의 github_issue_repo 미설정). 실패 시 SKILL §1 fuzzy fallback — \`gh issue list --search ${issue_display}\` 로 후보 → orch 경유 사용자 질문."
+            issue_fetch_step="1. \`gh issue view '${issue_num}' --json title,body,labels,milestone\` (현재 cwd 의 repo 기준 — settings.json 의 github_issue_repo 미설정). 실패 시 SKILL §1 fuzzy fallback — \`gh issue list --search '${issue_display}'\` 로 후보 → orch 경유 사용자 질문."
         fi
         ;;
     gitlab)
         # glab 가 PROJ-12 같은 reference 를 직접 받기도 하고, 환경에 따라 숫자만 받기도 함 —
-        # fallback 용 첫 숫자 시퀀스 추출.
+        # fallback 용 첫 숫자 시퀀스 추출. glab CLI 1.36+ 는 --output 옵션 없음 — text 출력만.
         gl_issue_num="$(printf '%s' "$mp_id" | grep -Eo '[0-9]+' | head -1 || true)"
         if [ -n "$gh_repo" ]; then
             # github_issue_repo 가 gitlab 환경에서는 group/project 로 재해석됨
-            issue_fetch_step="1. \`glab issue view ${gl_issue_num:-$issue_display} --repo ${gh_repo} --output json\` (description / labels / milestone). 실패(이슈 없음 / 미인증) 시 SKILL §1 fuzzy fallback — \`glab issue list --repo ${gh_repo} --search ${issue_display}\` 로 후보 → orch 경유 사용자 질문. glab 미설치 시 send.sh orch 로 spec 요청 fallback."
+            issue_fetch_step="1. \`glab issue view '${gl_issue_num:-$issue_display}' --repo '${gh_repo}'\` (text — title / labels / milestone). 실패(이슈 없음 / 미인증) 시 SKILL §1 fuzzy fallback — \`glab issue list --repo '${gh_repo}' --search '${issue_display}'\` 로 후보 → orch 경유 사용자 질문. glab 미설치 시 send.sh orch 로 spec 요청 fallback."
         else
-            issue_fetch_step="1. \`glab issue view ${gl_issue_num:-$issue_display} --output json\` (현재 cwd 의 project 기준 — settings.json 의 github_issue_repo 미설정). 실패 시 SKILL §1 fuzzy fallback — \`glab issue list --search ${issue_display}\` 로 후보 → orch 경유 사용자 질문. glab 미설치 시 send.sh orch 로 spec 요청 fallback."
+            issue_fetch_step="1. \`glab issue view '${gl_issue_num:-$issue_display}'\` (현재 cwd 의 project 기준 — settings.json 의 github_issue_repo 미설정). 실패 시 SKILL §1 fuzzy fallback — \`glab issue list --search '${issue_display}'\` 로 후보 → orch 경유 사용자 질문. glab 미설치 시 send.sh orch 로 spec 요청 fallback."
         fi
         ;;
     jira)
-        issue_fetch_step="1. \`jira issue view ${issue_display} --plain\` (description / acceptance criteria). 실패(이슈 없음 / 미인증) 시 SKILL §1 fuzzy fallback — \`jira issue list --jql \"text ~ \\\"${issue_display}\\\"\"\` 로 후보 → orch 경유 사용자 질문. jira-cli 미설치 시 send.sh orch 로 spec 요청 fallback."
+        issue_fetch_step="1. \`jira issue view '${issue_display}' --plain\` (description / acceptance criteria). 실패(이슈 없음 / 미인증) 시 SKILL §1 fuzzy fallback — \`jira issue list --jql 'text ~ \"${issue_display}\"'\` 로 후보 → orch 경유 사용자 질문. jira-cli 미설치 시 send.sh orch 로 spec 요청 fallback."
         ;;
     none|*)
         if [ "$no_issue" -eq 1 ] && [ "$tracker" != "none" ]; then
