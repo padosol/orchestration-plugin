@@ -33,9 +33,9 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*), Bash(${CLAUDE_PLU
   - `GitLab` — metadata 저장만. leader 가 spec 받을 때 사용자/orch 에게 직접 요청
   - `없음` — 트래커 사용 안 함, leader 가 orch 에 spec 직접 요청
 - **Git host** — 누락 시:
-  - `GitHub (Recommended)` — `gh` PR 자동화 (현재 await-merge / post-review 가 지원하는 유일한 호스트)
-  - `GitLab` — metadata 저장만. PR/MR 자동화는 후속 작업
-  - `없음` — git 호스트 미사용 (로컬 전용 또는 self-hosted)
+  - `GitHub (Recommended)` — `gh` 기반 PR/CI/머지 자동화. wait-merge / review / post-merge 흐름.
+  - `GitLab` — `glab` 기반 MR/CI/머지 자동화 (gh 동일 흐름). glab CLI 설치 + 인증 필요.
+  - `없음` — git 호스트 미사용 (로컬 전용 또는 self-hosted). PR/MR 자동화 미적용.
 - **Notify (Slack 알림)** — 누락 시:
   - `Off (Recommended)` — 셋업 안 한 환경에서 소음 없음. webhook URL 따로 안 채우면 어차피 silent
   - `On` — `.notify.slack_enabled=true`. 추가로 `ORCH_SLACK_WEBHOOK` 환경변수나 `.orch/notify.local.json` 셋업 필요
