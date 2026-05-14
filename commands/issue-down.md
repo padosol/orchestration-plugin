@@ -18,7 +18,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh:*)
 - **base 머지 검사 정확도 + 사용자 수동 pull 면제**: project 마다 1회
   - main working tree 가 이미 base 체크아웃 중 → `git pull --ff-only origin <base>`
   - 다른 브랜치에 있음 → `git fetch origin <base>:<base>` 로 working tree 안 건드리고 local <base> ref 만 ff
-- 머지 확인: lib.sh `orch_pr_merged_by_branch` 헬퍼가 settings.json 의 `git_host` 별로 분기 (github: `gh pr list --state merged --head <branch>` / gitlab: `glab api projects/:fullpath/merge_requests?state=merged&source_branch=<branch>` REST) → fallback: `git branch -r --merged origin/<base>`
+- 머지 확인: lib.sh `orch_pr_merged_by_branch` 헬퍼가 settings.json 의 `git_host` 별로 분기 (github: `gh pr list --state merged --head <branch>` / gitlab: `glab api projects/:fullpath/merge_requests?state=merged&source_branch=<urlenc(branch)>` REST — helper 가 `jq @uri` 로 자동 URL-encode 처리, branch 에 `#`/`+`/`@` 같은 자연 키 포함 가능) → fallback: `git branch -r --merged origin/<base>`
 - 머지됨 → `git worktree remove --force` + `git branch -d <branch>` (squash-merge 인식 거부 시 `-D` 폴백)
 - 미머지 / 검출 실패 → 보존, 위치 출력
 - 루프 종료 후 방문한 project 마다 `git worktree prune` 1회 — dangling 메타 보강

@@ -65,5 +65,11 @@ if grep -qE 'glab mr list --state merged' "$issue_down_md"; then
     echo "FAIL: commands/issue-down.md 에 stale 한 'glab mr list --state merged' 표기 잔존 (glab 1.36+ 미지원 flag — glab api REST 사용)" >&2
     exit 1
 fi
+# source_branch= 안내가 raw <branch> 면 fail — URL-encode 명시 의무 (urlenc / jq @uri).
+# branch 에 #/+/@ 같은 자연 키 (sanitize 통과) 포함 가능 → 인코딩 누락 시 URL parse 깨짐.
+if grep -qE 'source_branch=<branch>([&\)\s]|$)' "$issue_down_md"; then
+    echo "FAIL: commands/issue-down.md 의 source_branch sample 에 raw '<branch>' 표기 — URL-encode 명시 필요 (자연 키 #/+/@ 포함 가능)" >&2
+    exit 1
+fi
 
 echo "OK host-neutral-docs"
