@@ -47,17 +47,22 @@ if ! grep -q 'glab mr' <<<"$review_md_action_block"; then
     exit 1
 fi
 
-# 3. commands/issue-down.md 의 머지 확인 / fallback / 안전장치 절에 host 양 표기 또는
-#    orch_pr_merged_by_branch 헬퍼 언급
+# 3. commands/issue-down.md 의 머지 확인 / fallback / 안전장치 절에 orch_pr_merged_by_branch
+#    헬퍼 언급 (helper 이름 + validated command 한 줄이 양 표기보다 유지보수 안전).
 issue_down_content="$(cat "$issue_down_md")"
-# 머지 확인 라인 — gh pr list + glab mr list 둘 다 또는 헬퍼 추상화
-if ! grep -qE 'gh pr list.*glab mr list|glab mr list.*gh pr list|orch_pr_merged_by_branch' <<<"$issue_down_content"; then
-    echo "FAIL: commands/issue-down.md 의 머지 확인 안내에 'gh + glab 양 표기' 또는 'orch_pr_merged_by_branch' 헬퍼 누락" >&2
+# 머지 확인 라인 — orch_pr_merged_by_branch 헬퍼 언급 필수
+if ! grep -q 'orch_pr_merged_by_branch' "$issue_down_md"; then
+    echo "FAIL: commands/issue-down.md 의 머지 확인 안내에 'orch_pr_merged_by_branch' 헬퍼 누락" >&2
     exit 1
 fi
 # stale 'gh / git 양쪽' 표현 잔존 금지 (호스트 CLI 가 gh|glab 둘 다 가능)
 if grep -qE '^\s*-\s*gh / git 양쪽' "$issue_down_md"; then
     echo "FAIL: commands/issue-down.md 에 stale 한 'gh / git 양쪽' 표기 잔존 (호스트 CLI 표기로 수정 필요)" >&2
+    exit 1
+fi
+# stale 'glab mr list --state merged' 잔존 금지 (glab 1.36+ 미지원 flag)
+if grep -qE 'glab mr list --state merged' "$issue_down_md"; then
+    echo "FAIL: commands/issue-down.md 에 stale 한 'glab mr list --state merged' 표기 잔존 (glab 1.36+ 미지원 flag — glab api REST 사용)" >&2
     exit 1
 fi
 
