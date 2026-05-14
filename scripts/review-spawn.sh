@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # /orch:review-spawn <project-alias> <pr-num>
 # leader (<issue_id>) 가 호출. PR 리뷰 전용 워커를 깨끗한 컨텍스트로 띄운다.
-# reviewer 는 코드 수정 권한 없음 — gh pr diff/view 로 변경분 검토 후 GitHub PR 코멘트 + leader 답신, 자기 종료.
+# reviewer 는 코드 수정 권한 없음 — first_msg 의 <pr_view_json_cmd>/<pr_diff_cmd> 로 변경분 검토 후 호스트 PR/MR 코멘트 (<pr_comment_from_file_cmd>) + leader 답신, 자기 종료. gh/glab 호환은 first_msg 변수가 spawn 시점에 결정.
 
 set -euo pipefail
 

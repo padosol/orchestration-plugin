@@ -18,7 +18,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/review-spawn.sh:*)
 1. worker_id = `${mp_id}/review-${project}` 등록
 2. 같은 leader (`<issue_id>`) 윈도우에 새 pane 추가 (cwd = project base path, **worktree 가 아님**)
 3. claude 실행 + 첫 메시지 주입 — 동적 컨텍스트 (PR 번호 / 이슈 / 가이드 경로) + Skill 도구 트리거 (`orch-reviewer`) + hard guard. 페르소나·체크리스트·답신 형식 본문은 `skills/orch-reviewer/SKILL.md` 와 `references/orch-protocols.md` 단일 source 에서 로드.
-4. reviewer 가 `gh pr diff/view` 로 PR 검토 후 두 채널 (GitHub PR + leader inbox) 같은 본문 답신, 직후 `worker-shutdown.sh` 로 registry 해제 + pane kill
+4. reviewer 가 호스트 PR/MR diff/view (github: `gh pr diff/view` / gitlab: `glab mr diff/view`, first_msg 가 host 별 명령 주입) 로 검토 후 두 채널 (호스트 PR/MR 코멘트 + leader inbox) 같은 본문 답신, 직후 `worker-shutdown.sh` 로 registry 해제 + pane kill
 
 **리뷰 라운드**:
 - 한 reviewer 는 1회 검토만. 추가 라운드가 필요하면 leader 가 새로 `/orch:review-spawn` 호출.
