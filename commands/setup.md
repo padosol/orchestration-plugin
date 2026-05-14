@@ -1,17 +1,21 @@
 ---
 description: orch 프로젝트 메타데이터(.orch/settings.json) 자동 추론 + 작성
-argument-hint: [--update] [--issue-tracker linear|github|gitlab|none] [--github-repo owner/repo] [--git-host github|gitlab|none] [--notify on|off]
+argument-hint: [--update] [--issue-tracker linear|github|gitlab|none] [--github-repo owner/repo|group/project] [--git-host github|gitlab|none] [--notify on|off]
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/setup.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/validate-settings.sh:*), Read, Edit, AskUserQuestion, ToolSearch
 ---
 
-**먼저 — 워크스페이스 메타데이터 3 종 결정**
+**먼저 — update 모드 분기**
+
+`$ARGUMENTS` 에 `--update` 가 있으면 누락된 `--issue-tracker` / `--git-host` / `--notify` 값을 묻지 말고 바로 setup.sh 를 호출한다. update 모드에서 생략한 값은 기존 `.orch/settings.json` 값이 보존된다. 기존 settings.json 이 없으면 setup.sh 가 실패한다.
+
+**fresh setup — 워크스페이스 메타데이터 3 종 결정**
 
 `$ARGUMENTS` 에 다음 3개 인자가 모두 들어있으면 그대로 setup.sh 호출하고 질문 단계 skip:
 - `--issue-tracker <linear|github|gitlab|none>`
 - `--git-host <github|gitlab|none>`
 - `--notify <on|off>`
 
-하나라도 없으면 **`AskUserQuestion` (TUI) 로 누락분만 묻는다**. `--update` 모드에서 기존 값 유지하려는 경우는 해당 인자 생략 가능 — 기존 값 보존됨.
+하나라도 없으면 **`AskUserQuestion` (TUI) 로 누락분만 묻는다**.
 
 **🔧 `AskUserQuestion` 호출 절차 (필수 — 단축 금지)**:
 
@@ -29,7 +33,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/setup.sh:*), Bash(${CLA
 - **Issue tracker** — 누락 시:
   - `Linear (Recommended)` — `mcp__linear-server__get_issue <key>` 로 자동 fetch (Linear MCP 필요)
   - `GitHub Issues` — `gh issue view N` 로 fetch. 추가로 어느 repo (owner/repo) 인지 묻기
-  - `GitLab` — `glab issue view` 로 자동 fetch. 필요 시 `github_issue_repo` 를 group/project 로 사용
+  - `GitLab` — `glab issue view` 로 자동 fetch. group/project 를 알 수 있으면 `--github-repo <group/project>` 로 함께 저장
   - `없음` — 트래커 사용 안 함, leader 가 orch 에 spec 직접 요청
 - **Git host** — 누락 시:
   - `GitHub (Recommended)` — `gh` 기반 PR/CI/머지 자동화. wait-merge / review / post-merge 흐름.
@@ -39,7 +43,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/setup.sh:*), Bash(${CLA
   - `Off (Recommended)` — 셋업 안 한 환경에서 소음 없음. webhook URL 따로 안 채우면 어차피 silent
   - `On` — `.notify.slack_enabled=true`. 추가로 `ORCH_SLACK_WEBHOOK` 환경변수나 `.orch/notify.local.json` 셋업 필요
 
-선택 결과를 인자로 조립해 setup.sh 호출. `Issue tracker = GitHub Issues` 면 `--github-repo <owner/repo>` 도 추가 질문 후 함께.
+선택 결과를 인자로 조립해 setup.sh 호출. `Issue tracker = GitHub Issues` 면 `--github-repo <owner/repo>` 도 추가 질문 후 함께. `Issue tracker = GitLab` 이고 group/project 를 알 수 있으면 `--github-repo <group/project>` 도 함께 넣는다.
 
 다음 명령으로 settings.json 을 생성하세요.
 
@@ -54,7 +58,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/config/setup.sh:*), Bash(${CLA
 **사용**:
 - `/orch:setup` — 처음 셋업. 이미 있으면 에러. 누락 메타데이터는 질문.
 - `/orch:setup --update` — 기존 값 보존하면서 새 프로젝트만 추가. 메타데이터 변경하려면 해당 인자 명시.
-- `/orch:setup --issue-tracker linear` / `--issue-tracker github --github-repo owner/repo` / `--issue-tracker gitlab` / `--issue-tracker none` — 트래커 직접 지정.
+- `/orch:setup --issue-tracker linear` / `--issue-tracker github --github-repo owner/repo` / `--issue-tracker gitlab --github-repo group/project` / `--issue-tracker none` — 트래커 직접 지정.
 - `/orch:setup --git-host github|gitlab|none` — git 호스트 지정.
 - `/orch:setup --notify on|off` — Slack 알림 master 토글.
 

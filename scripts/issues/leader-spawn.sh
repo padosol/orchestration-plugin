@@ -201,7 +201,7 @@ ${pr_host_block}
 4. phase 계획·실행 순서는 leader 소유. PM 은 산출물 (사양 / 문서 / 스키마 / 다이어그램) 만 책임.
 
 [진입 액션]
-- 위 1) Skill 도구 invoke (orch-pm) → 2) orch-protocols.md Read → \`/orch:check-inbox\` 로 leader 의 첫 지시 (이번 이슈 분석 범위) 받아 시작.
+- 위 1) Skill 도구 invoke (orch-pm) → 2) orch-protocols.md Read → \`/orch:poll-inbox\` 로 leader 의 첫 지시 (이번 이슈 분석 범위) 를 파일 inbox 에서 기다려 시작.
 - 첫 산출물은 \`[direction-check]\` 메시지를 목표로."
 else
     first_msg="너는 ${worker_id} 워커다. ${stack} 스택을 다루며 분석 우선 → 최소 침습 (Surgical) 편집 → 변경분 한정 테스트 → 짧은 보고 패턴으로 일한다.
@@ -227,7 +227,7 @@ ${pr_host_block}
 4. **PR 4단계 마지막 자기 종료 의무** — \`bash \\\$ORCH_BIN_DIR/issues/worker-shutdown.sh\` 한 번. \`exit\` 키 입력 금지.
 
 [진입 액션]
-- 위 1) Skill 도구 invoke (orch-developer-worker) → 2) orch-protocols.md Read → 3) coding-guidelines.md Read → \`/orch:check-inbox\` 로 leader 의 첫 지시 받아라."
+- 위 1) Skill 도구 invoke (orch-developer-worker) → 2) orch-protocols.md Read → 3) coding-guidelines.md Read → \`/orch:poll-inbox\` 로 leader 의 첫 지시를 파일 inbox 에서 기다려라."
 fi
 
 orch_send_keys_line "$worker_pane" "$first_msg" \

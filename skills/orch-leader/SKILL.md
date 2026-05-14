@@ -185,7 +185,7 @@ execution 진입 후 leader 는 다음 규칙으로 ready task 를 식별·spawn
 3. **review LGTM 전 wait_merge 금지** — `workflow[].id="review"` 가 `status="done"` (reviewer 가 LGTM 답신) 이 되기 전에 `wait_merge` 진입 금지.
 4. **wait_merge done 전 shutdown 금지** — `workflow[].id="wait_merge"` 가 `status="done"` (PR merged 확인) 이 되기 전에 worker-shutdown.sh 호출 금지.
 
-`references/orch-protocols.md` 4절 PR 4단계 본문이 워커 공통 단일 source. 본 절은 그 위에서 leader 의 task graph 단계 강제 책임만 추가.
+`references/orch-protocols.md` 5절 PR 4단계 본문이 워커 공통 단일 source. 본 절은 그 위에서 leader 의 task graph 단계 강제 책임만 추가.
 
 ---
 
@@ -228,7 +228,7 @@ PM 으로부터 `[direction-check]` + `[question:<qid>]` 메시지 받으면:
 
 ## 6. PR 4단계 — leader 측 라우팅 책임
 
-`references/orch-protocols.md` 4절의 PR 4단계 위에 leader 특화 라우팅:
+`references/orch-protocols.md` 5절의 PR 4단계 위에 leader 특화 라우팅:
 
 1. **CI** — 워커가 자기 책임. leader 는 'PR #N ready for review + URL' 답신을 기다린다.
 2. **리뷰** — ready 받으면 즉시 `/orch:review-spawn <project> <pr>`. reviewer 답신 (`[review PR #N] LGTM` / `needs-changes` + 코멘트):

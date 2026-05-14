@@ -85,7 +85,17 @@ if ! orch_route_check "$from" "$target"; then
 fi
 
 msg_id="$(orch_append_message "$from" "$target" "$body")"
-orch_notify "$target" "$msg_id"
+
+# leader ↔ worker 통신은 파일 inbox 를 canonical delivery 로 사용한다.
+# tmux send-keys 알림은 입력 버퍼를 깨뜨리거나 추적을 어렵게 만들 수 있어 orch 경유
+# 운영 메시지에만 기본 유지한다. 필요 시 ORCH_TMUX_NOTIFY=1 로 강제 알림 가능.
+from_kind="$(orch_wid_kind "$from")"
+target_kind="$(orch_wid_kind "$target")"
+if [ "${ORCH_TMUX_NOTIFY:-0}" = "1" ] || [ "$from_kind" = "orch" ] || [ "$target_kind" = "orch" ]; then
+    orch_notify "$target" "$msg_id"
+else
+    echo "INFO: file-queued delivery only — ${target} should poll inbox (msg_id=${msg_id})" >&2
+fi
 
 # Slack 알림 — worker → orch 메시지는 사용자가 봐야 할 신호.
 # 본문에 "PR # ... ready for review" 패턴 있으면 pr_open 이 더 구체적이라 그쪽 우선.

@@ -13,7 +13,6 @@ ORCH_SCRIPTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LIB_DIR="$ORCH_SCRIPTS_ROOT"
 # shellcheck source=/home/padosol/.claude-marketplaces/local/plugins/orch/scripts/core/lib.sh
 source "${ORCH_SCRIPTS_ROOT}/core/lib.sh"
-orch_install_error_trap "$0"
 
 UPDATE_MODE=0
 ISSUE_TRACKER=""
@@ -22,7 +21,7 @@ GIT_HOST=""
 NOTIFY=""
 USAGE='사용법: /orch:setup [--update]
                   [--issue-tracker linear|github|gitlab|none]
-                  [--github-repo owner/repo]
+                  [--github-repo owner/repo|group/project]
                   [--git-host github|gitlab|none]
                   [--notify on|off]'
 while [ "$#" -gt 0 ]; do
@@ -89,12 +88,23 @@ if [ "$ISSUE_TRACKER" = "github" ] && [ -z "$GITHUB_ISSUE_REPO" ]; then
     echo "ERROR: --issue-tracker github 는 --github-repo owner/repo 도 함께 필요" >&2
     exit 2
 fi
-if [ "$ISSUE_TRACKER" != "github" ] && [ -n "$GITHUB_ISSUE_REPO" ]; then
-    echo "WARN: --github-repo 는 --issue-tracker github 일 때만 의미 있음 — 무시" >&2
+if [ -n "$ISSUE_TRACKER" ] && [ "$ISSUE_TRACKER" != "github" ] && [ "$ISSUE_TRACKER" != "gitlab" ] && [ -n "$GITHUB_ISSUE_REPO" ]; then
+    echo "WARN: --github-repo 는 --issue-tracker github|gitlab 일 때만 의미 있음 — 무시" >&2
+    GITHUB_ISSUE_REPO=""
+fi
+if [ "$UPDATE_MODE" -eq 0 ] && [ -z "$ISSUE_TRACKER" ] && [ -n "$GITHUB_ISSUE_REPO" ]; then
+    echo "WARN: --github-repo 는 --issue-tracker github|gitlab 과 함께 지정해야 의미 있음 — 무시" >&2
     GITHUB_ISSUE_REPO=""
 fi
 
 BASE_DIR="$(dirname "$ORCH_ROOT")"
+
+if [ "$UPDATE_MODE" -eq 1 ] && ! orch_settings_exists; then
+    echo "ERROR: $ORCH_SETTINGS 없음 — /orch:setup --update 는 기존 settings.json 이 있을 때만 사용합니다." >&2
+    echo "  - 처음 셋업: /orch:setup" >&2
+    echo "  - 다른 위치에서 실행 중이면 ORCH_ROOT=/abs/workspace/.orch 지정 후 재실행" >&2
+    exit 2
+fi
 
 mkdir -p "$ORCH_ROOT" "$ORCH_INBOX" "$ORCH_ARCHIVE" "$ORCH_WORKERS" "$ORCH_RUNS_DIR"
 
@@ -104,6 +114,8 @@ if orch_settings_exists && [ "$UPDATE_MODE" -eq 0 ]; then
     echo "  - 완전히 재생성: 파일 삭제 후 다시 실행" >&2
     exit 2
 fi
+
+orch_install_error_trap "$0"
 
 infer_project() {
     local dir="$1" alias="$2"
@@ -298,7 +310,8 @@ if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
           # legacy file 에 issue_tracker 없으면 "linear" 로 명시 백필 (0.3.x 이하 = 항상 Linear).
           # 사용자가 fresh 셋업으로 '"'"'none'"'"' 을 명시적으로 골랐던 경우는 $old 에 그 값이 남아있음.
           else ($old.issue_tracker // "linear") end ) as $final_tracker |
-        ( if $tracker == "github" or ($tracker == "" and $final_tracker == "github")
+        ( if $tracker == "github" or $tracker == "gitlab"
+              or ($tracker == "" and ($final_tracker == "github" or $final_tracker == "gitlab"))
           then ( if $gh_repo != "" then $gh_repo
                  else ($old.github_issue_repo // "") end )
           else "" end ) as $final_gh_repo |
@@ -341,15 +354,16 @@ if [ "$UPDATE_MODE" -eq 1 ] && orch_settings_exists; then
            | select(([.key] | inside($taken_aliases)) | not)
          ]) as $orphan_olds |
 
-        {
+        ($old + {
           version: ($old.version // $new.version),
           base_dir: ($old.base_dir // $new.base_dir),
           issue_tracker: $final_tracker,
           git_host: $final_git_host,
           notify: ( ($old.notify // {}) + { slack_enabled: $final_notify_enabled } ),
           projects: (($merged_new + $orphan_olds) | from_entries)
-        }
-        | if $final_gh_repo != "" then .github_issue_repo = $final_gh_repo else . end
+        })
+        | del(.default_base_branch)
+        | if $final_gh_repo != "" then .github_issue_repo = $final_gh_repo else del(.github_issue_repo) end
     ' <<<"$new_settings")"
 fi
 
@@ -367,6 +381,7 @@ echo "  3. /orch:up 으로 orch pane 등록"
 case "$final_tracker" in
     linear) echo "  4. /orch:issue-up <issue-id> (Linear 이슈 키 / 예: MP-13) 로 첫 leader 띄우기" ;;
     github) echo "  4. /orch:issue-up <issue-num> (GitHub Issue 번호) 로 첫 leader 띄우기" ;;
+    gitlab) echo "  4. /orch:issue-up <issue-iid> (GitLab Issue IID) 로 첫 leader 띄우기" ;;
     *)      echo "  4. /orch:issue-up <num> 로 첫 leader 띄움 — leader 가 orch 에 spec 요청 (트래커 없음)" ;;
 esac
 echo

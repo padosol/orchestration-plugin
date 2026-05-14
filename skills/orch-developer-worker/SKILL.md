@@ -29,7 +29,7 @@ Design-first Task Graph 의 `developer_pr_v1` workflow template (계약 `referen
 
 | 순서 | step id | owner | blocking | 본 SKILL 절 매핑 |
 | --- | --- | --- | --- | --- |
-| 1 | `receive_instruction` | leader | yes | §8 진입 액션 (`/orch:check-inbox` 1회) |
+| 1 | `receive_instruction` | leader | yes | §8 진입 액션 (`/orch:poll-inbox` 로 첫 지시 대기) |
 | 2 | `analyze` | developer | yes | §1 작업 패턴 (분석 우선) + §3 차단 질문 (spec 모호 시) |
 | 3 | `hold_before_edit` | developer | yes | §2 HOLD 마디 1 |
 | 4 | `brief_validation` | developer | **no** | §2 편집 전 brief-validation Non-blocking FYI |
@@ -46,7 +46,7 @@ Design-first Task Graph 의 `developer_pr_v1` workflow template (계약 `referen
 
 ### 순서 invariant — 워커 자체 검증 (3건)
 
-`references/orch-protocols.md` §4 의 "순서 invariant" 와 동일. 위반 시 leader 가 HOLD 로 차단.
+`references/orch-protocols.md` §5 의 "순서 invariant" 와 동일. 위반 시 leader 가 HOLD 로 차단.
 
 - step 10 `ci` 가 `done` 이 되기 전 step 11 `ready_for_review` 진입 금지.
 - step 12 `review` 가 `done` (verdict=LGTM) 이 되기 전 step 13 `wait_merge` 진입 금지.
@@ -61,7 +61,7 @@ Design-first Task Graph 의 `developer_pr_v1` workflow template (계약 `referen
 
 ## 1. 작업 패턴
 
-1. leader (`<issue_id>`) 가 inbox 에 작업 지시 → `/orch:check-inbox` 1회 (요약 → 단건) 로 받아 처리.
+1. leader (`<issue_id>`) 가 inbox 에 작업 지시 → `/orch:poll-inbox` 로 첫 지시를 파일 기반 폴링으로 받아 처리. 이미 받은 뒤 추가 메시지를 확인할 때는 `/orch:check-inbox` (요약 → 단건) 사용.
 2. 코드 수정은 worktree (`<worktree_path>`) 안에서만. `cd` 로 다른 project 진입 금지 — 다른 프로젝트 참조가 필요하면 leader 에 escalate.
 3. 커밋은 `safe-commit` 스킬 사용 (있는 경우). 없으면 표준 `git commit` — secrets / 대형 바이너리 / `.env` 류 commit 금지.
 
@@ -75,7 +75,7 @@ Design-first Task Graph 의 `developer_pr_v1` workflow template (계약 `referen
 
 ## 2. HOLD 체크포인트
 
-`references/orch-protocols.md` 3절의 HOLD 체크포인트를 그대로 따른다. developer 의 두 마디 — `developer_pr_v1` workflow step 3 / 8 과 대응 (§0.5 참고):
+`references/orch-protocols.md` 4절의 HOLD 체크포인트를 그대로 따른다. developer 의 두 마디 — `developer_pr_v1` workflow step 3 / 8 과 대응 (§0.5 참고):
 
 1. **분석 → 편집 전환 직전 (step 3 `hold_before_edit`)** — 코드 수정 시작 전. spec 재검토 + HOLD 도착 여부 확인.
 2. **push 직전 (step 8 `hold_before_push`)** — 로컬 커밋 끝났지만 origin push 전. push/PR 비용 발생 전 마지막 차단점.
@@ -163,7 +163,7 @@ bash $ORCH_BIN_DIR/messages/inbox-archive.sh <msg_id>
 
 ## 6. PR 4단계
 
-`references/orch-protocols.md` 4절의 PR 4단계를 그대로 따른다. `developer_pr_v1` workflow step 9~14 와 대응 (§0.5 참고).
+`references/orch-protocols.md` 5절의 PR 4단계를 그대로 따른다. `developer_pr_v1` workflow step 9~14 와 대응 (§0.5 참고).
 
 1. **CI (step 9 `push_and_pr` + step 10 `ci`)** — 커밋 push + `<pr_create_cmd>` (step 9) 후 `<pr_checks_watch_cmd>` 블록 대기 (step 10). 실패면 `<pr_run_log_failed_cmd>`. 자기 영역이면 직접 수정 push. 명령은 first_msg 에 git_host (github/gitlab) 별로 주입 — gh / glab 양쪽 호환.
 2. **리뷰 (step 11 `ready_for_review` + step 12 `review`)** — CI 통과 후 leader 에 'PR #N ready for review + URL' 답신 (step 11). 이후 reviewer 답신 (step 12) 처리:
@@ -176,7 +176,7 @@ bash $ORCH_BIN_DIR/messages/inbox-archive.sh <msg_id>
 
 ### 순서 invariant — 워커 자체 검증
 
-`references/orch-protocols.md` §4 와 §0.5 의 invariant 3건 재요약. 위반 시 leader 가 HOLD 로 차단.
+`references/orch-protocols.md` §5 와 §0.5 의 invariant 3건 재요약. 위반 시 leader 가 HOLD 로 차단.
 
 - **step 10 `ci` done 전 step 11 `ready_for_review` 금지** — CI 실패 / 진행 중에 reviewer 시간 낭비 차단.
 - **step 12 `review` done (verdict=LGTM) 전 step 13 `wait_merge` 금지** — needs-changes 받기 전 merge 의도 신호 차단.
@@ -192,4 +192,4 @@ bash $ORCH_BIN_DIR/messages/inbox-archive.sh <msg_id>
 
 ## 8. 진입 액션
 
-준비되면 `/orch:check-inbox` 1회 호출 (요약 → 단건) — `developer_pr_v1` step 1 `receive_instruction`. leader 의 첫 지시 받으면 step 2 `analyze` 진입. 이후 §0.5 표의 14 step 시퀀스를 따른다 (HOLD 마디 2건 + brief_validation FYI + PR 4단계 = 시퀀스의 전체).
+준비되면 `/orch:poll-inbox` 호출 — `developer_pr_v1` step 1 `receive_instruction`. leader 의 첫 지시를 파일 inbox 에서 기다려 받은 뒤 step 2 `analyze` 진입. 이후 §0.5 표의 14 step 시퀀스를 따른다 (HOLD 마디 2건 + brief_validation FYI + PR 4단계 = 시퀀스의 전체).

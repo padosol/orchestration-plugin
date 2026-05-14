@@ -413,7 +413,7 @@ Workflow step status:
   - 단순 이슈와 복잡 이슈 분기 (project ≥ 2 / API · DB · migration · auth 시그널)
   - Phase 0 design 승인 후 execution task graph 확정
   - ready task spawn 규칙 (depends_on ∈ {merged, done}, worker report 트리거)
-  - step 순서 invariant 4건 (SKILL §3.5.5 + orch-protocols.md 4절)
+  - step 순서 invariant 4건 (SKILL §3.5.5 + orch-protocols.md 5절)
 
 - [x] 5. PM SKILL 개정 → [orch-pm §1·§2·§2.1](../../skills/orch-pm/SKILL.md)
   - direction-check 6 섹션 확장 (`## Proposed Task Graph` 추가)

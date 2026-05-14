@@ -840,7 +840,9 @@ orch_route_check() {
     esac
 }
 
-# 타겟 worker pane에 /orch:check-inbox <msg_id> 알림 (단건 본문 모드 직진입)
+# 타겟 worker pane에 /orch:check-inbox <msg_id> 알림 (단건 본문 모드 직진입).
+# leader ↔ worker 기본 전달 경로는 파일 inbox polling 이며, 이 함수는 orch 경유 운영
+# 메시지나 ORCH_TMUX_NOTIFY=1 escape hatch 에서만 호출된다.
 # 인자: to=worker_id, msg_id=방금 append 된 메시지 id (옵셔널 — 없으면 요약 모드 fallback)
 orch_notify() {
     local to="$1"

@@ -15,6 +15,8 @@ required=(
     "[reply:"
     "hub-and-spoke"
     "/orch:send"
+    "/orch:poll-inbox"
+    "파일 inbox"
     "PR 4단계"
     "wait-merge.sh"
     "worker-shutdown.sh"

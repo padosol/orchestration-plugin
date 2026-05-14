@@ -20,6 +20,9 @@ jq -n \
       base_dir: $base,
       default_base_branch: "develop",
       issue_tracker: "linear",
+      team: "Core",
+      custom_flag: true,
+      providers: { issue_tracker: { custom: "keep" } },
       projects: {
         "repo-a": {
           path: $repo_path,
@@ -42,6 +45,9 @@ assert data["projects"]["repo-a"].get("description") == "legacy entry", "descrip
 assert data.get("git_host") == "none", data
 assert data.get("notify", {}).get("slack_enabled") is False, data
 assert data.get("issue_tracker") == "linear", data
+assert data.get("team") == "Core", data
+assert data.get("custom_flag") is True, data
+assert data.get("providers", {}).get("issue_tracker", {}).get("custom") == "keep", data
 PY
 
 echo "OK setup-update-drops-root-base"

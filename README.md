@@ -95,6 +95,7 @@ tmux attach -t <session-name>
 | `/orch:review-spawn <project> <pr>` | leader | PR 리뷰 전용 워커 (단발성) |
 | `/orch:send <target> <msg>` | 누구나 | hub-and-spoke 메시지 |
 | `/orch:check-inbox [id]` | 누구나 | 자기 인박스 처리 |
+| `/orch:poll-inbox [...]` | leader / worker | 파일 inbox 에 메시지가 올 때까지 폴링 |
 | `/orch:status` | 누구나 | 전체 위계 + inbox 상태 |
 | `/orch:peek <wid>` | 사용자 | 워커 pane 마지막 30줄 — 응답 없는 워커 진단 |
 | `/orch:errors [...]` | 사용자 | 통합 에러 로그 |
@@ -114,7 +115,7 @@ tmux attach -t <session-name>
 - **leader (`<issue_id>`)** — 한 이슈의 책임자. 사용자와 직접 소통하고 산하 프로젝트 워커들을 spawn / 라우팅 / shutdown.
 - **worker (`<issue_id>/<project>`)** — 한 repo 의 작업자. 자기 worktree + 자기 PR 라이프사이클 책임.
 
-워커끼리 직접 통신 안 됨. `/orch:send` 가 라우팅 가드로 막는다. 다른 프로젝트와 의존 생기면 leader 가 라우팅하거나 orch 로 escalate.
+워커끼리 직접 통신 안 됨. `/orch:send` 가 라우팅 가드로 막는다. 다른 프로젝트와 의존 생기면 leader 가 라우팅하거나 orch 로 escalate. leader ↔ worker 메시지는 파일 inbox 에 기록되고 수신자가 `/orch:poll-inbox` 또는 `/orch:check-inbox` 로 읽는다. tmux `send-keys` 는 세션 spawn / peek / shutdown 쪽에 남고, 메시지 전달의 기본 경로가 아니다.
 
 ### worker_id 표기
 
@@ -198,7 +199,7 @@ leader / developer worker / PM / reviewer 의 페르소나·절차는 `skills/or
 - `skills/orch-pm/SKILL.md` — PM direction-check + wait-reply / 산출물 PR / 사용자 컨펌 의무
 - `skills/orch-reviewer/SKILL.md` — read-only 검토 / 두 채널 답신 / verdict 형식
 
-공통 운영 규약 (leader-worker hub-and-spoke / 사용자 직접 확인 / wait-reply qid / HOLD 체크포인트 / PR 4단계 / shutdown) 은 `references/orch-protocols.md` 단일 source. SKILL 4종이 이 문서를 가리키기만 하므로 규약 갱신은 한 곳에서.
+공통 운영 규약 (leader-worker hub-and-spoke / 파일 inbox 폴링 / 사용자 직접 확인 / wait-reply qid / HOLD 체크포인트 / PR 4단계 / shutdown) 은 `references/orch-protocols.md` 단일 source. SKILL 4종이 이 문서를 가리키기만 하므로 규약 갱신은 한 곳에서.
 
 작업 타입 가이드 (`references/workflows/{feature,bug,refactor}.md`) 와 4원칙 (`references/coding-guidelines.md`) 도 그대로 단일 source — SKILL 은 언제 읽고 어떻게 적용할지만 지시.
 
@@ -436,13 +437,14 @@ orch 가 사용자에게 보여주고 등록 여부 검토. 결정된 항목만 
 }
 ```
 
+- `github_issue_repo` 는 기존 호환 이름이다. `issue_tracker=github` 에서는 `owner/repo`, `issue_tracker=gitlab` 에서는 `group/project` 를 저장한다.
 - `default_base_branch` 는 **프로젝트별 키**. 누락 시 `/orch:setup` 의 후속 절차가 AskUserQuestion 으로 채움. 비어 있으면 `develop` 폴백.
 - `/orch:setup` 이 `git symbolic-ref refs/remotes/origin/HEAD` 로 자동 감지.
 - `/orch:validate-settings` 로 description / tech_stack 이 실제 repo 와 어긋나는지 점검.
 
 ### 이슈 트래커 / git 호스트 / 알림 선택
 
-`/orch:setup` 시 3 종을 한 번에 묻는다 (`AskUserQuestion` TUI). 변경: `/orch:setup --update --issue-tracker <new>` / `--git-host <new>` / `--notify on|off`.
+`/orch:setup` 시 3 종을 한 번에 묻는다 (`AskUserQuestion` TUI). 변경: `/orch:setup --update --issue-tracker <new>` / `--git-host <new>` / `--notify on|off`. `--update` 에서 생략한 값은 기존 settings.json 값이 보존된다.
 
 **Issue tracker (`issue_tracker`)**:
 
@@ -450,7 +452,7 @@ orch 가 사용자에게 보여주고 등록 여부 검토. 결정된 항목만 
 |---|---|---|
 | `linear` | `mcp__linear-server__get_issue <id>` 로 컨텍스트 fetch. issue-down 시 orch 가 Done 업데이트. follow-up 후보는 orch 검토 후 `save_issue` 로 sub-issue 등록. | Linear MCP 서버 등록 (`~/.claude.json` 의 mcpServers). |
 | `github` | `gh issue view N --repo <github_issue_repo>` 로 fetch. issue-down 시 `gh issue close`. follow-up 은 orch 검토 후 `gh issue create`. | `github_issue_repo` 필수. `gh auth login`. |
-| `gitlab` | `glab issue view <id> --repo <github_issue_repo>` 로 fetch (gitlab 환경에선 group/project alias 로 재해석). glab 미설치/미인증 시 leader 가 orch 에 spec 요청으로 fallback. | `glab auth login` 권장. `github_issue_repo` 선택. |
+| `gitlab` | `glab issue view <id> --repo <github_issue_repo>` 로 fetch (`github_issue_repo` 에 group/project 저장). glab 미설치/미인증 시 leader 가 orch 에 spec 요청으로 fallback. | `glab auth login` 권장. `/orch:setup --issue-tracker gitlab --github-repo group/project`. |
 | `none` | 트래커 호출 없음. leader 가 orch 에 spec 직접 요청. follow-up 후보는 REPORT.html 에만 기록 (트래커 등록 SKIP). | 없음. 가장 가벼움. |
 
 **한 번만 이슈 없이 띄우기**: `--no-issue` 플래그. 워크스페이스가 `linear` / `github` 모드여도 이번 호출만 fetch 스킵.

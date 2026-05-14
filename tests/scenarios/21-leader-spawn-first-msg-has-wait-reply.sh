@@ -19,12 +19,16 @@ required_phrases=(
     "direction-check"
     # PM hard guard — finalize/commit/push 금지 (사용자 컨펌 없이)
     "사용자 컨펌 없이"
+    # PM first instruction — 파일 inbox polling
+    "/orch:poll-inbox"
 
     # developer role — skill trigger + fallback path
     "orch-developer-worker"
     "skills/orch-developer-worker/SKILL.md"
     # developer hard guard — 추측 진행 금지 / leader escalate
     "추측 진행"
+    # developer first instruction — 파일 inbox polling
+    "파일 inbox"
 )
 
 missing=()

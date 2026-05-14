@@ -19,6 +19,7 @@ required=(
     "Simplicity"
     "leader"
     "/orch:check-inbox"
+    "/orch:poll-inbox"
     "wait-reply.sh"
     "[question:"
     "worker-shutdown.sh"

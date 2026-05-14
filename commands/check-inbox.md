@@ -8,6 +8,8 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/messages/inbox.sh:*), Bash(${C
 
 !`${CLAUDE_PLUGIN_ROOT}/scripts/messages/inbox.sh $ARGUMENTS`
 
+메시지를 기다려야 하는 상황이면 `/orch:poll-inbox` 를 사용하세요. `/orch:check-inbox` 는 이미 도착한 메시지를 요약/단건 처리하는 명령입니다.
+
 **모드 두 가지**:
 
 ### 1. 인자 없음 (`/orch:check-inbox`) → 요약 표

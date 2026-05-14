@@ -10,8 +10,10 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/messages/send.sh:*)
 
 성공하면 메시지 ID + 보낸이→받는이 + **본문 byte 수**(`(N chars)`) 가 출력됩니다. 의도한 본문 길이와 차이가 크면 호출 측 따옴표·백틱·괄호로 인자가 잘렸을 가능성 — `--file` 또는 stdin 으로 재송신하세요. 차단/실패 시 에러 메시지를 사용자에게 그대로 알려주세요.
 
+leader ↔ worker 메시지는 파일 inbox 에만 queue 되고 tmux 알림을 기본 사용하지 않습니다. 수신자는 `/orch:poll-inbox` 또는 `/orch:check-inbox` 로 읽습니다. orch 가 포함된 운영 메시지는 기존처럼 실시간 tmux 알림을 시도합니다.
+
 **worker_id 형식** (issue_id = `[A-Za-z0-9_-]+`, 대소문자 보존, 사용자가 `/orch:issue-up` 에 넘긴 값 그대로):
-- `orch` — PM
+- `orch` — issue manager / dispatcher
 - `<issue_id>` — 이슈의 팀리더 (예: `MP-13`, `PROJ-456`, `142`)
 - `<issue_id>/<project>` — 이슈 산하 워커 (예: `MP-13/server`, `PROJ-456/ui`, `142/api`)
 
