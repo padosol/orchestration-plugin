@@ -233,7 +233,9 @@ phase 직렬 흐름은 멀티 repo 병렬 개발에서 답답하고, API contrac
 
 ### 단계
 
-- **Phase 0 — Design**: PM (또는 leader lightweight design) 이 6 종 artifact (`problem_frame` / `architecture_decision` / `implementation_brief` / `risk_register` / `open_decisions` / `proposed_task_graph`) 작성. 사용자 **Round 1 GO** 로 PM spawn → 산출물 PR → 사용자 **Round 2 GO** 로 `approved_task_graph` 확정.
+- **Phase 0 — Design**: 6 종 artifact (`problem_frame` / `architecture_decision` / `implementation_brief` / `risk_register` / `open_decisions` / `proposed_task_graph`) 작성. 분기:
+  - **복잡 이슈**: 사용자 **Round 1 GO** → PM 워커 spawn → 산출물 PR → 사용자 **Round 2 GO** → `approved_task_graph` 확정.
+  - **단순 이슈**: leader 가 lightweight design 으로 직접 작성 (risk_register / open_decisions 는 빈 배열 허용) → 1 라운드 GO 가 곧 `approved_task_graph` 승인.
 - **Phase 1 — Execution**: leader 가 `approved_task_graph` 의 ready task (의존성 만족) 를 병렬 spawn. 각 task 는 `workflow_template` (예: `developer_pr_v1` 14 step) step 순서 강제.
 - **Phase 2 — Report / Cleanup**: task 결과 수집 → REPORT → `issue-down`.
 
