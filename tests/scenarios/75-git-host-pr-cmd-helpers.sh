@@ -136,4 +136,16 @@ for var in '<pr_create_cmd>' '<pr_checks_watch_cmd>' '<pr_run_log_failed_cmd>'; 
     fi
 done
 
+# orch-protocols.md 의 stale invalid GitLab 명령 잔존 금지 (glab 1.36+ 미지원 flag).
+# helper 본문은 이미 --live / glab api 로 갱신됐는데 shared protocol 문서가 invalid command 를
+# 가르치면 워커가 stale 명령 그대로 실행 → fail.
+if grep -qE 'glab ci status[^A-Za-z]+--wait' "$protocols"; then
+    echo "FAIL: orch-protocols.md 에 stale 한 'glab ci status --wait' 잔존 (glab 1.36+ 미지원, --live 사용)" >&2
+    exit 1
+fi
+if grep -qE 'glab ci view [^|]*--trace' "$protocols"; then
+    echo "FAIL: orch-protocols.md 에 stale 한 'glab ci view ... --trace' 잔존 (TUI / 미지원, glab api .../trace 사용)" >&2
+    exit 1
+fi
+
 echo "OK git-host-pr-cmd-helpers"

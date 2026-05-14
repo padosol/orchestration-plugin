@@ -97,10 +97,10 @@ worker first_msg 가 git_host (github/gitlab) 별로 `<pr_create_cmd>` / `<pr_ch
 <pr_create_cmd>          # gh pr create --base "$base" --title "$title" --body "$body"
                          # 또는 glab mr create --target-branch "$base" --title "$title" --description "$body"
 <pr_checks_watch_cmd>    # gh pr checks "$pr" --watch --required
-                         # 또는 glab ci status --wait
+                         # 또는 glab ci status --live   (glab 1.36+ 는 --wait 미지원; --live 가 pipeline ends 까지 block)
 ```
 
-- 실패: `<pr_run_log_failed_cmd>` (gh: `gh run view "$run_id" --log-failed | head -200` / glab: `glab ci view "$pipeline_id" --trace | head -200`) 로 진단. 자기 영역이면 직접 fix → 재push → 재watch. 다른 워커 영역이면 leader 에 escalate.
+- 실패: `<pr_run_log_failed_cmd>` (gh: `gh run view "$run_id" --log-failed | head -200` / glab: `glab api projects/:fullpath/pipelines/$pipeline_id/jobs?scope[]=failed` 의 첫 실패 job 의 `/trace` endpoint head -200 — glab CLI 의 `ci view` 는 TUI interactive 라 automation 불가, REST API 우회) 로 진단. 자기 영역이면 직접 fix → 재push → 재watch. 다른 워커 영역이면 leader 에 escalate.
 - 통과: leader 에 `PR #N ready for review + URL` 답신.
 
 ### 2. 리뷰
