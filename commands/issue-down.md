@@ -18,7 +18,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh:*)
 - **base 머지 검사 정확도 + 사용자 수동 pull 면제**: project 마다 1회
   - main working tree 가 이미 base 체크아웃 중 → `git pull --ff-only origin <base>`
   - 다른 브랜치에 있음 → `git fetch origin <base>:<base>` 로 working tree 안 건드리고 local <base> ref 만 ff
-- 머지 확인: `gh pr list --state merged --head <branch>` (squash/rebase merge 까지) → fallback: `git branch -r --merged origin/<base>`
+- 머지 확인: 호스트 PR/MR (github: `gh pr list --state merged --head <branch>` / gitlab: `glab mr list --state merged --source-branch <branch>`, lib.sh `orch_pr_merged_by_branch` 가 settings.json 의 `git_host` 보고 분기) → fallback: `git branch -r --merged origin/<base>`
 - 머지됨 → `git worktree remove --force` + `git branch -d <branch>` (squash-merge 인식 거부 시 `-D` 폴백)
 - 미머지 / 검출 실패 → 보존, 위치 출력
 - 루프 종료 후 방문한 project 마다 `git worktree prune` 1회 — dangling 메타 보강
@@ -41,10 +41,10 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/issue-down.sh:*)
 - `--no-report` — REPORT-data.md 덤프를 건너뜀.
 
 **안전장치**:
-- 머지 확인된 경우만 `branch -D` 폴백 — `gh pr list --state merged` 통과 못 한 브랜치는 절대 force 삭제 안 함
+- 머지 확인된 경우만 `branch -D` 폴백 — 호스트 PR/MR (`gh pr list --state merged` / `glab mr list --state merged`) 또는 `git branch -r --merged` 통과 못 한 브랜치는 절대 force 삭제 안 함
 - worktree 에 미커밋·미추적 변경: 머지 확인 시 `--force` 로 정리 (PR 이미 머지됐으니 untracked 는 빌드 산출물), 미확인 시 보존
 - fallback 경로의 orphan 브랜치 후보는 출력만 — 사용자 직접 실행
-- gh / git 양쪽 모두 머지 확인 못 하면 보존
+- 호스트 CLI (gh/glab) / git 양쪽 모두 머지 확인 못 하면 보존
 
 출력에 안내 메시지가 있으면 그대로 사용자에게 보여주세요.
 
