@@ -67,6 +67,25 @@ fi
 if ! grep -q 'source_branch=' <<<"$merged_body"; then
     echo "FAIL: orch_pr_merged_by_branch 의 gitlab 분기에 'source_branch=' (REST query) 누락" >&2; exit 1
 fi
+# 4a. URL-encode: branch 에 자연 키 (#, +, @ 등) 가능 → source_branch 값은 인코딩 된 변수 사용 의무.
+#     raw $branch 그대로면 URL fragment / query parse 깨짐.
+if grep -qE 'source_branch=\$branch[&"]' <<<"$merged_body"; then
+    echo "FAIL: orch_pr_merged_by_branch gitlab 분기가 raw '\$branch' 를 URL query 에 박음 — jq @uri 인코딩 필요" >&2
+    exit 1
+fi
+if ! grep -q 'jq.*@uri\|encoded_branch' <<<"$merged_body"; then
+    echo "FAIL: orch_pr_merged_by_branch gitlab 분기에 URL-encode (jq @uri 또는 encoded_branch) 누락" >&2
+    exit 1
+fi
+
+# 4c. 동적: jq @uri 가 자연 키를 정상 인코딩 (sanity)
+if command -v jq >/dev/null 2>&1; then
+    enc="$(printf '%s' 'feat/my-issue#42' | jq -sRr @uri)"
+    case "$enc" in
+        *%2F*%23*) : ;;
+        *) echo "FAIL: jq @uri 가 'feat/my-issue#42' 의 '/' '#' 모두 인코딩 못 함 (got: $enc)" >&2; exit 1 ;;
+    esac
+fi
 
 # 4b. orch_pr_state: gitlab 분기도 glab api 사용 (glab mr view 는 --output json 옵션 없음)
 state_gitlab_block="$(awk '/^\s*gitlab\)/,/;;/' <<<"$state_body")"

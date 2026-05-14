@@ -398,7 +398,12 @@ orch_pr_merged_by_branch() {
         gitlab)
             command -v glab >/dev/null 2>&1 || return 2
             # glab mr list 는 --state / --output json 옵션이 없음 (glab 1.36+). REST API 직접 호출.
-            count="$(cd "$project_path" 2>/dev/null && glab api "projects/:fullpath/merge_requests?state=merged&source_branch=$branch&per_page=1" 2>/dev/null | jq 'length' 2>/dev/null || true)"
+            # branch 에 #, +, @, . 등 자연 키가 포함될 수 있으므로 URL-encode 필수
+            # (issue-id sanitize 가 이런 문자를 허용해 leader-spawn 의 branch_name 에 들어감).
+            # jq @uri 로 인코딩, jq 부재 시 raw fallback (host CLI 자체가 jq 의존).
+            local encoded_branch
+            encoded_branch="$(printf '%s' "$branch" | jq -sRr @uri 2>/dev/null || printf '%s' "$branch")"
+            count="$(cd "$project_path" 2>/dev/null && glab api "projects/:fullpath/merge_requests?state=merged&source_branch=$encoded_branch&per_page=1" 2>/dev/null | jq 'length' 2>/dev/null || true)"
             ;;
         *) return 2 ;;
     esac
