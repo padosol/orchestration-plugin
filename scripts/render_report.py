@@ -50,6 +50,9 @@ JSON 스키마 (필수: mp_id, scope_dir / 나머지 optional, 누락 시 섹션
     ],
     "total_cost_usd": 414.23,
     "tool_distribution": [{"tool": "Read", "count": 234}],
+    "skill_distribution": [{"skill": "orch:setup", "count": 3}],
+    "command_distribution": [{"command": "/orch:report", "count": 1}],
+    "subagent_distribution": [{"subagent": "Explore", "count": 5}],
     "large_tool_results_top5": [{"target": "src/foo.go", "size": 32000, "note": "..."}],
     "observations": ["Read 가 같은 파일 반복", "..."]
   },
@@ -371,6 +374,34 @@ def render_token_analysis(d: dict | None) -> str:
             count_cell = f'<div class="bar-cell">{fmt_int(t.get("count"))}{bar_inline(ratio)}</div>'
             rows.append(
                 f'<tr><td><code>{esc(t.get("tool"))}</code></td><td class="num">{count_cell}</td></tr>'
+            )
+        parts.append(head + "".join(rows) + "</tbody></table>")
+
+    # 세분화 분포 — 동일한 표 골격을 (제목, JSON key, row label key) 만 바꿔 재사용.
+    for heading, list_key, item_key, col_label in (
+        ("스킬 호출 분포", "skill_distribution", "skill", "Skill"),
+        ("Slash 명령 호출 분포", "command_distribution", "command", "Command"),
+        ("Subagent 호출 분포", "subagent_distribution", "subagent", "Subagent"),
+    ):
+        items = d.get(list_key) or []
+        if not items:
+            continue
+        parts.append(f"<h3>{heading}</h3>")
+        try:
+            max_count = max(int(it.get("count") or 0) for it in items) or 1
+        except (TypeError, ValueError):
+            max_count = 1
+        head = f'<table><thead><tr><th>{col_label}</th><th class="num" style="width:200px;">Count</th></tr></thead><tbody>'
+        rows = []
+        for it in items:
+            try:
+                cnt = int(it.get("count") or 0)
+                ratio = cnt / max_count
+            except (TypeError, ValueError):
+                ratio = 0
+            count_cell = f'<div class="bar-cell">{fmt_int(it.get("count"))}{bar_inline(ratio)}</div>'
+            rows.append(
+                f'<tr><td><code>{esc(it.get(item_key))}</code></td><td class="num">{count_cell}</td></tr>'
             )
         parts.append(head + "".join(rows) + "</tbody></table>")
 

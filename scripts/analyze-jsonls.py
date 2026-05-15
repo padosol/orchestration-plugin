@@ -18,6 +18,12 @@ report.sh 의 토큰·도구 분석 섹션 대체. jq -s 가 한 invalid 줄 만
         total_in_eq  : N
     - 도구 호출 top-10 (이름별):
         <count> <tool>
+    - 스킬 호출 top-10 (skill 이름별):
+        <count> <skill>
+    - Slash 명령 호출 top-10:
+        <count> <command-name>
+    - Subagent 호출 top-10:
+        <count> <subagent_type>
     - 큰 tool_result top-5 (응답 크기 byte):
         <size> <tool_use_id>
     - 세션 시간 범위:
@@ -28,10 +34,13 @@ invalid jsonl 줄은 조용히 skip (warning 만 stderr).
 """
 import json
 import os
+import re
 import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+
+CMD_TAG_RE = re.compile(r"<command-name>([^<]+)</command-name>")
 
 
 def parse_iso(s):
@@ -73,6 +82,9 @@ def aggregate(jsonl_paths, since=None, until=None):
         "cache_write": 0,
     }
     tool_counts = Counter()
+    skill_counts = Counter()       # Skill.input.skill → 호출 횟수 (스킬 이름별)
+    subagent_counts = Counter()    # Agent.input.subagent_type → 호출 횟수
+    command_counts = Counter()     # user msg <command-name>X</command-name> → 호출 횟수
     tool_results = []  # (size, tool_use_id, name) — 매칭 후 채움
     tool_size_by_name = Counter()  # 도구별 누적 tool_result byte
     file_read_count = Counter()    # Read input.file_path → 호출 횟수
@@ -127,7 +139,18 @@ def aggregate(jsonl_paths, since=None, until=None):
                                     tool_counts[name] += 1
                                     tu_id = block.get("id")
                                     inp = block.get("input") or {}
-                                    fp = inp.get("file_path") if isinstance(inp, dict) else None
+                                    if isinstance(inp, dict):
+                                        fp = inp.get("file_path")
+                                        if name == "Skill":
+                                            sk = inp.get("skill")
+                                            if sk:
+                                                skill_counts[sk] += 1
+                                        elif name == "Agent":
+                                            st = inp.get("subagent_type")
+                                            if st:
+                                                subagent_counts[st] += 1
+                                    else:
+                                        fp = None
                                     if tu_id:
                                         tool_use_meta[tu_id] = {"name": name, "file_path": fp}
 
@@ -136,11 +159,21 @@ def aggregate(jsonl_paths, since=None, until=None):
                         content = msg.get("content")
                         if isinstance(content, list):
                             for block in content:
-                                if isinstance(block, dict) and block.get("type") == "tool_result":
+                                if not isinstance(block, dict):
+                                    continue
+                                btype = block.get("type")
+                                if btype == "tool_result":
                                     payload = block.get("content")
                                     size = len(json.dumps(payload, ensure_ascii=False))
                                     tu_id = block.get("tool_use_id") or "(no-id)"
                                     pending_results.append((size, tu_id))
+                                elif btype == "text":
+                                    text = block.get("text") or ""
+                                    for m in CMD_TAG_RE.finditer(text):
+                                        command_counts[m.group(1).strip()] += 1
+                        elif isinstance(content, str):
+                            for m in CMD_TAG_RE.finditer(content):
+                                command_counts[m.group(1).strip()] += 1
         except (OSError, IOError) as e:
             print(f"warn: 읽기 실패 {path}: {e}", file=sys.stderr)
             continue
@@ -162,6 +195,9 @@ def aggregate(jsonl_paths, since=None, until=None):
     return {
         "totals": totals,
         "tool_counts": tool_counts,
+        "skill_counts": skill_counts,
+        "subagent_counts": subagent_counts,
+        "command_counts": command_counts,
         "tool_results": tool_results,
         "tool_size_by_name": tool_size_by_name,
         "file_read_count": file_read_count,
@@ -229,6 +265,30 @@ def render(jsonl_paths, agg, dir_path):
         for name, count in tool_counts.most_common(10):
             print(f"    {count:<6} {name}")
 
+    skill_counts = agg["skill_counts"]
+    print("- 스킬 호출 top-10 (skill 이름별):")
+    if not skill_counts:
+        print("    _(Skill 호출 없음)_")
+    else:
+        for name, count in skill_counts.most_common(10):
+            print(f"    {count:<6} {name}")
+
+    command_counts = agg["command_counts"]
+    print("- Slash 명령 호출 top-10 (command-name 별):")
+    if not command_counts:
+        print("    _(slash 명령 호출 없음)_")
+    else:
+        for name, count in command_counts.most_common(10):
+            print(f"    {count:<6} {name}")
+
+    subagent_counts = agg["subagent_counts"]
+    print("- Subagent 호출 top-10 (subagent_type 별):")
+    if not subagent_counts:
+        print("    _(Agent 호출 없음)_")
+    else:
+        for name, count in subagent_counts.most_common(10):
+            print(f"    {count:<6} {name}")
+
     print("- 도구별 tool_result 누적 byte top-10 (input 컨텍스트 비중):")
     total_sz = sum(tool_size_by_name.values())
     if not tool_size_by_name:
@@ -288,6 +348,9 @@ def render_json(jsonl_paths, agg, dir_path):
         "dir_path": dir_path,
         "totals": totals,
         "tool_counts": dict(tool_counts.most_common()),
+        "skill_counts": dict(agg["skill_counts"].most_common()),
+        "subagent_counts": dict(agg["subagent_counts"].most_common()),
+        "command_counts": dict(agg["command_counts"].most_common()),
         "tool_size_by_name": [
             {"name": k, "bytes": v, "share": (v / total_sz) if total_sz else 0}
             for k, v in tool_size_by_name.most_common()
