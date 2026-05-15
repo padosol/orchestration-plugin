@@ -104,9 +104,6 @@ fi
 
 orch_worker_register "$mp_id" "leader" "$leader_window" "$leader_pane" "$scope_dir"
 
-tmux send-keys -t "$leader_pane" "export ORCH_WORKER_ID=$mp_id ORCH_BIN_DIR=$LIB_DIR && claude" Enter
-sleep 4
-
 projects_blob="$(orch_settings_projects | tr '\n' ' ')"
 # 표시·트래커 호출용 키:
 #   issue_display = 사용자 입력 그대로 (sanitize 만 통과 — 예: MP-13, 142, my-issue#42)
@@ -147,8 +144,11 @@ first_msg="너는 ${mp_id} 팀리더(leader)다. 사용자가 위임한 ${issue_
 - 위 1) Skill 도구 invoke (orch-leader) → 2) orch-protocols.md Read → SKILL 본문의 절차대로 셋업·타입 판별·phase plan 작성 → 사용자에게 직접 phase plan 컨펌.
 - \`[plan-confirm] GO\` 받기 전 워커 spawn 금지."
 
-orch_send_keys_line "$leader_pane" "$first_msg" \
-    || echo "WARN: leader first_msg 송신 실패 (pane=$leader_pane)" >&2
+# spawn-context 를 leader inbox 에 파일로 적재 (포인터 모델). first_msg 직접 push 폐기 —
+# SessionStart hook 이 claude 기동 시 orch-leader-start skill 을 invoke → 그 skill 이 inbox 드레인.
+orch_append_message "orch" "$mp_id" "$first_msg" >/dev/null \
+    || echo "WARN: leader spawn-context inbox 적재 실패 (mp_id=$mp_id)" >&2
+tmux send-keys -t "$leader_pane" "export ORCH_WORKER_ID=$mp_id ORCH_BIN_DIR=$LIB_DIR && claude" Enter
 
 echo "OK leader=$mp_id pane=$leader_pane window=$leader_window"
 echo "  scope_dir: $scope_dir"

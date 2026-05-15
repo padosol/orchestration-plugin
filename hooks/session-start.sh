@@ -35,16 +35,19 @@ HAS_PENDING=0
 INBOX_PATH="$(orch_inbox_path "$wid" 2>/dev/null || true)"
 [ -n "$INBOX_PATH" ] && [ -s "$INBOX_PATH" ] && HAS_PENDING=1
 
+START_SKILL=""
 case "$kind" in
     orch)
         ROLE_DESC="orchestrator (PM). 사용자와 직접 대화, leader에게 위임. 직접 워커 송신은 차단됨 — leader 통해서만. 결정이 옵션 2-4개로 깔끔하면 AskUserQuestion TUI 사용 (ToolSearch 로 스키마 먼저 로드)."
         CMDS="/orch:setup, /orch:up, /orch:issue-up, /orch:issue-down, /orch:send, /orch:check-inbox, /orch:poll-inbox, /orch:status, /orch:prioritize, /orch:report, /orch:usage-stats"
         ;;
     leader)
+        START_SKILL="orch-leader-start"
         ROLE_DESC="${wid} 팀리더. 자기 MP 안에서 워커 spawn(/orch:leader-spawn) + 라우팅 + shutdown(/orch:issue-down) 책임. orch 보고 / 사용자 결정 받기. 산하 워커 간 통신은 leader 경유."
         CMDS="/orch:leader-spawn, /orch:send, /orch:check-inbox, /orch:poll-inbox, /orch:issue-down"
         ;;
     worker)
+        START_SKILL="orch-worker-start"
         scope="${wid%%/*}"
         proj="${wid##*/}"
         ROLE_DESC="${scope} 산하 ${proj} 워커. 모든 외부 통신은 leader(${scope}) 경유. 코드 작업은 worktree 안에서, 커밋은 safe-commit."
@@ -64,6 +67,12 @@ escape_json() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
-MSG="orch v2 worker_id=${wid}${session_suffix}. ${ROLE_DESC}${ADDITIONAL} 슬래시: ${CMDS}."
+if [ -n "$START_SKILL" ]; then
+    # spawn 된 leader/worker: first_msg push 폐기. 지금 즉시 start skill 을 invoke 하면
+    # 그 skill 이 persona 로딩 + orch-protocols Read + inbox 의 spawn-context/지시 드레인을 수행.
+    MSG="orch v2 worker_id=${wid}${session_suffix}. 지금 즉시 Skill 도구로 \`${START_SKILL}\` 를 invoke 하라 — 페르소나 로딩 + inbox 의 spawn-context(작업 지시) 수령을 그 skill 이 수행한다. (${ROLE_DESC})${ADDITIONAL} 슬래시: ${CMDS}."
+else
+    MSG="orch v2 worker_id=${wid}${session_suffix}. ${ROLE_DESC}${ADDITIONAL} 슬래시: ${CMDS}."
+fi
 
 printf '{"systemMessage":"%s"}\n' "$(escape_json "$MSG")"

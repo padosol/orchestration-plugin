@@ -71,9 +71,6 @@ fi
 
 orch_worker_register "$worker_id" "worker" "$mp_window" "$reviewer_pane" "$project_path" "$project"
 
-tmux send-keys -t "$reviewer_pane" "export ORCH_WORKER_ID=${worker_id} ORCH_BIN_DIR=${LIB_DIR} && claude" Enter
-sleep 4
-
 desc="$(orch_settings_project_field "$project" description)"
 stack="$(orch_settings_project_field "$project" tech_stack)"
 # 표시·트래커 호출용 키 (issue-up.sh 와 동일 규칙):
@@ -144,8 +141,11 @@ ${pr_host_block_review}
 [진입 액션]
 - 위 1) Skill 도구 invoke (orch-reviewer) → 2) orch-protocols.md Read → 3) coding-guidelines.md Read → PR #${pr} 검토 → 두 채널 답신 → \`worker-shutdown.sh\`."
 
-orch_send_keys_line "$reviewer_pane" "$first_msg" \
-    || echo "WARN: reviewer first_msg 송신 실패 (pane=$reviewer_pane)" >&2
+# spawn-context 를 reviewer inbox 에 파일로 적재 (포인터 모델). first_msg 직접 push 폐기 —
+# SessionStart hook 이 claude 기동 시 orch-worker-start skill 을 invoke → 그 skill 이 inbox 드레인.
+orch_append_message "$mp_id" "$worker_id" "$first_msg" >/dev/null \
+    || echo "WARN: reviewer spawn-context inbox 적재 실패 (worker=$worker_id)" >&2
+tmux send-keys -t "$reviewer_pane" "export ORCH_WORKER_ID=${worker_id} ORCH_BIN_DIR=${LIB_DIR} && claude" Enter
 
 echo "OK reviewer=$worker_id pane=$reviewer_pane window=$mp_window"
 echo "  PR: #$pr"

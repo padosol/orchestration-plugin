@@ -158,9 +158,6 @@ fi
 
 orch_worker_register "$worker_id" "worker" "$mp_window" "$worker_pane" "$worktree_path" "$project"
 
-tmux send-keys -t "$worker_pane" "export ORCH_WORKER_ID=${worker_id} ORCH_BIN_DIR=${LIB_DIR} && claude" Enter
-sleep 4
-
 desc="$(orch_settings_project_field "$project" description)"
 stack="$(orch_settings_project_field "$project" tech_stack)"
 plugin_root_ls="$(dirname "$LIB_DIR")"
@@ -230,8 +227,11 @@ ${pr_host_block}
 - 위 1) Skill 도구 invoke (orch-developer-worker) → 2) orch-protocols.md Read → 3) coding-guidelines.md Read → \`/orch:poll-inbox\` 로 leader 의 첫 지시를 파일 inbox 에서 기다려라."
 fi
 
-orch_send_keys_line "$worker_pane" "$first_msg" \
-    || echo "WARN: worker first_msg 송신 실패 (pane=$worker_pane)" >&2
+# spawn-context 를 worker inbox 에 파일로 적재 (포인터 모델). first_msg 직접 push 폐기 —
+# SessionStart hook 이 claude 기동 시 orch-worker-start skill 을 invoke → 그 skill 이 inbox 드레인.
+orch_append_message "$mp_id" "$worker_id" "$first_msg" >/dev/null \
+    || echo "WARN: worker spawn-context inbox 적재 실패 (worker=$worker_id)" >&2
+tmux send-keys -t "$worker_pane" "export ORCH_WORKER_ID=${worker_id} ORCH_BIN_DIR=${LIB_DIR} && claude" Enter
 
 echo "OK worker=$worker_id role=$role pane=$worker_pane window=$mp_window"
 echo "  worktree: $worktree_path"
