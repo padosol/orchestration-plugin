@@ -23,4 +23,4 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/inspect/peek.sh:*)
 **해석 가이드**:
 - `last_used` 가 5분 넘게 갱신 안 됐는데 화면이 도구 응답 대기 중이면 → 정말 멈춤. 사용자 결정 받아 kill 후 재spawn.
 - `last_used` 최근인데 inbox 가 비어 있으면 → 작업 중. 그냥 기다리기.
-- `inbox` 가 누적되어 있는데 오래 비반응이면 → 수신자가 `/orch:poll-inbox` / `/orch:check-inbox` 를 돌고 있지 않은 상태일 수 있음. first_msg 가 멈췄는지 확인하고 필요하면 재spawn.
+- `inbox` 가 누적되어 있는데 오래 비반응이면 → 수신자가 `/orch:poll-inbox` / `/orch:check-inbox` 를 돌고 있지 않은 상태일 수 있음. spawn-context 부트스트랩(start skill)이 멈췄는지 확인하고 필요하면 재spawn.

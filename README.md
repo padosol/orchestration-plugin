@@ -186,13 +186,13 @@ MP-13/repo-a          ← MP-13 산하 repo-a 워커
 3. 결정 직후 `.orch/runs/<id>/type` 에 한 줄 기록.
 4. 해당 가이드의 'Phase 템플릿' 을 phase plan 골격으로 사용.
 
-reviewer 도 같은 가이드 따름 — `review-spawn` 이 `.orch/runs/<id>/type` 을 읽어 reviewer first_msg 에 가이드 경로 주입.
+reviewer 도 같은 가이드 따름 — `review-spawn` 이 `.orch/runs/<id>/type` 을 읽어 reviewer spawn-context 에 가이드 경로 주입.
 
 ---
 
 ## 워커 페르소나 — Skill 기반
 
-leader / developer worker / PM / reviewer 의 페르소나·절차는 `skills/orch-<role>/SKILL.md` 단일 source 로 분리돼 있다. spawn 스크립트의 `first_msg` 는 동적 컨텍스트 변수 (worker_id / project / branch / stack 등) + Skill 도구 트리거 + hard guard (GO 전 spawn 금지 / leader 직접 사용자 확인 / PM direction-check / reviewer read-only / shutdown 의무) 만 담는다. 본문 절차는 SKILL 로딩으로 가져온다.
+leader / developer worker / PM / reviewer 의 페르소나·절차는 `skills/orch-<role>/SKILL.md` 단일 source 로 분리돼 있다. spawn 스크립트는 동적 컨텍스트 변수 (worker_id / project / branch / stack 등) + Skill 도구 트리거 + hard guard (GO 전 spawn 금지 / leader 직접 사용자 확인 / PM direction-check / reviewer read-only / shutdown 의무) 를 담은 **spawn-context 메시지를 워커 inbox 에 적재** (tmux push 폐기). claude 기동 시 SessionStart hook 이 `orch-leader-start`/`orch-worker-start` 진입 skill 을 invoke → 그 skill 이 inbox 를 드레인해 spawn-context 를 수령하고 본문 절차는 SKILL 로딩으로 가져온다.
 
 - `skills/orch-leader/SKILL.md` — leader 셋업 / 타입 판별 / Phase Plan / 라우팅 / cascade shutdown
 - `skills/orch-developer-worker/SKILL.md` — developer HOLD 체크포인트 / 차단 질문 / PR 4단계 / worker-shutdown
@@ -342,7 +342,7 @@ orch 가 사용자에게 보여주고 등록 여부 검토. 결정된 항목만 
 
 - 이슈 fix PR → 머지 → `plugin.json` + `marketplace.json` version bump
 - 클라이언트: `/plugin marketplace update padosol` + `/plugin update orch@padosol`
-- 다음 issue-up 부터 워커 first_msg / reviewer 가이드 / 정리 로직 갱신 반영
+- 다음 issue-up 부터 워커 spawn-context / reviewer 가이드 / 정리 로직 갱신 반영
 
 ---
 
@@ -394,14 +394,14 @@ orch 가 사용자에게 보여주고 등록 여부 검토. 결정된 항목만 
 ```
 .orch/
 ├── settings.json                  # 프로젝트 메타데이터
-├── inbox/<id>.md                  # orch / leader 인박스
+├── inbox/<id>/                    # orch / leader 인박스 (포인터 <ts>-<id>.json + payloads/<id>.md)
 ├── archive/<id>-YYYY-MM-DD.md     # 처리 완료 메시지
 ├── archive/<scope>-YYYY-MM-DD/    # issue-down 시 scope dir 통째 archive
 ├── workers/<id>.json              # orch / leader registry
 ├── errors.jsonl                   # top-level 에러 로그
 └── runs/<scope>/                  # 진행 중 이슈들 (wrapper)
     └── MP-13/
-        ├── inbox/<role>.md
+        ├── inbox/<role>/               # 포인터 <ts>-<id>.json + payloads/<id>.md
         ├── archive/<role>-YYYY-MM-DD.md
         ├── workers/<role>.json         # 살아있는 워커
         ├── workers-archive/<role>.json # 종료된 워커 (sidecar 분석 보존)

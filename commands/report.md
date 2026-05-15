@@ -113,8 +113,8 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
    1. **scope errors.jsonl 스캔** — raw 데이터의 "에러 로그 (이 MP scope)" 섹션 entry 모두. 비어 있으면 narrative "이번 사이클 에러 0건 — 개선할 패턴 없음" 으로 마무리하고 후보 송신 SKIP.
    2. **패턴 식별** — `(script, exit_code, stderr 첫 줄)` 로 그룹화. 다음 중 하나라도 해당하면 후보:
       - 같은 그룹 2회 이상 (반복 마찰)
-      - 단발이라도 root cause 가 스크립트 / 슬래시 / first_msg / 라우팅 가이드 결함으로 추정 가능 (예: 워커가 `/orch:send` 를 특수문자 그대로 호출해 깨진 케이스 → first_msg 의 heredoc 안내 누락)
-   3. **개선 액션 도출** — 각 후보 패턴마다 한 줄 fix 제안 (어디를 어떻게 — 스크립트 함수명 / first_msg 절 / 슬래시 옵션 등 구체적으로).
+      - 단발이라도 root cause 가 스크립트 / 슬래시 / spawn-context / 라우팅 가이드 결함으로 추정 가능 (예: 워커가 `/orch:send` 를 특수문자 그대로 호출해 깨진 케이스 → spawn-context 의 heredoc 안내 누락)
+   3. **개선 액션 도출** — 각 후보 패턴마다 한 줄 fix 제안 (어디를 어떻게 — 스크립트 함수명 / spawn-context 절 / 슬래시 옵션 등 구체적으로).
    4. **JSON 의 `errors_check` 필드에 결과 기록** (자동 트래커 등록 안 함):
       - `narrative`: "이번 사이클 에러 N건 / 반복 패턴 K개 / 등록 후보 K개 — orch 검토 대기" 또는 "에러 0건 — 개선할 패턴 없음"
       - `patterns`: `[{script, exit_code, count, first_line, suggested_fix}]`
@@ -123,7 +123,7 @@ raw 데이터 (위 report.sh 출력) 에 이미 변경 파일 경로 / commits /
       ```
       bash -c "$ORCH_BIN_DIR/messages/send.sh orch <<'ORCH_MSG'
       [follow-up-candidates <issue_id>] errors_check
-      - send.sh / rc=2 / 3회 / 'ERROR: ...' → first_msg 의 heredoc 절 보강
+      - send.sh / rc=2 / 3회 / 'ERROR: ...' → spawn-context 의 heredoc 절 보강
       - notify-slack.sh / rc=1 / 1회 / 'curl: …' → 토큰 검증 옵션 추가
       (등록 여부는 사용자 검토 — orch 가 후보 보여주고 결정)
       ORCH_MSG"
