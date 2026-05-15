@@ -80,14 +80,23 @@ jq -r '.projects // {} | to_entries[] | select((.value.default_base_branch // ""
    - `header`: alias 이름 (≤ 12자, 길면 잘라서)
    - `question`: "프로젝트 `<alias>` 의 default base branch?"
    - `options` (3-4개):
-     - `main (Recommended)` — 흔한 GitHub 기본
+     - `main` — 흔한 GitHub 기본
      - `develop` — gitflow 워크플로
      - `Git 관리 안함` — 해당 프로젝트가 git 저장소가 아님. PR/MR/worktree 자동화 미적용.
-     - (Recommended 는 alias 의 path 디렉토리에서 `git -C <path> symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` 로 감지된 값을 첫 옵션으로 두면 정확도 ↑. 감지 실패 + `.git` 디렉토리도 없으면 `Git 관리 안함` 을 Recommended. 감지 실패지만 `.git` 은 있으면 `main` 을 Recommended.)
    - free-form "Other" 은 AskUserQuestion 이 자동 제공.
+
+   **Recommended 결정** (alias 의 path 디렉토리 상태로 분기 — 표 그대로 적용):
+
+   | 상태 | Recommended | 비고 |
+   |---|---|---|
+   | `git -C <path> symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` 가 값을 반환 | 그 값 (예: `develop` / `main`) | 가장 정확. 옵션 라벨 끝에 `(Recommended)` 표시. |
+   | 감지 실패 + `<path>/.git` 디렉토리 존재 | `main` | 로컬 git 저장소지만 origin/HEAD 미설정 케이스. |
+   | 감지 실패 + `<path>/.git` 디렉토리 부재 | `Git 관리 안함` | 아예 git 미관리. |
 3. **Edit 으로 settings.json 갱신** — 각 응답에 대해:
    - 일반 브랜치 선택 (main/develop/Other 수동 입력): `Edit` 도구로 `.orch/settings.json` 의 해당 alias 객체 안에 `"default_base_branch": "<값>"` 필드 추가 (path/kind 다음 위치 권장).
-   - **`Git 관리 안함` 선택**: `default_base_branch` 는 쓰지 말고 대신 `"git": false` 필드를 alias 객체에 추가. 이 마커가 있으면 다음 `--update` 시 재질문이 차단되고, leader/worker 로직이 git 의존 단계 (worktree/PR/머지) 를 건너뛰는 근거가 된다.
+   - **`Git 관리 안함` 선택**: `default_base_branch` 는 쓰지 말고 대신 `"git": false` 필드를 alias 객체에 추가. 이 마커는 다음 `--update` 시 재질문을 차단하고, **추후** leader/worker 가 git 의존 단계 (worktree/PR/머지) 를 건너뛰는 근거로 쓰일 예정이다.
+
+     ⚠ **현 시점 caveat — false sense of safety 주의**: leader/worker 로직은 **아직 `"git": false` 마커를 읽지 않는다**. 마커는 현재로서는 보강 단계 재질문 방지 목적만 안전하게 보장한다. git 미관리 프로젝트에 `/orch:issue-up` 위임이 들어가면 worktree/PR 단계에서 cascade fail 한다 — git 미관리 프로젝트 위임 지원은 별도 작업으로 추가 필요.
 4. **확인 보고** — "default_base_branch 보강 완료: alias-A=main, alias-B=develop, alias-C=git 미관리, ..." 한 줄로 사용자에게 알림.
 
 이 절차를 건너뛰고 다음 단계 (validate-settings / validate-plugin / 사용자 작업) 로 가지 말 것 — 설정이 미완 상태로 진행되면 issue-up 시점에서 cascade fail.
