@@ -86,12 +86,11 @@ fi
 
 msg_id="$(orch_append_message "$from" "$target" "$body")"
 
-# leader ↔ worker 통신은 파일 inbox 를 canonical delivery 로 사용한다.
-# tmux send-keys 알림은 입력 버퍼를 깨뜨리거나 추적을 어렵게 만들 수 있어 orch 경유
-# 운영 메시지에만 기본 유지한다. 필요 시 ORCH_TMUX_NOTIFY=1 로 강제 알림 가능.
-from_kind="$(orch_wid_kind "$from")"
-target_kind="$(orch_wid_kind "$target")"
-if [ "${ORCH_TMUX_NOTIFY:-0}" = "1" ] || [ "$from_kind" = "orch" ] || [ "$target_kind" = "orch" ]; then
+# 모든 worker (orch 포함) 는 파일 inbox 를 canonical delivery 로 사용한다 — 폴링 일원화.
+# tmux send-keys 활성화는 spawn 시점에만 (leader-spawn/review-spawn 직접 호출) 일어나며,
+# 그 이후 모든 메시지는 inbox append + 수신자가 자체 poll-inbox/check-inbox 로 수령.
+# 디버깅 용 escape hatch: ORCH_TMUX_NOTIFY=1 일 때만 강제 send-keys push.
+if [ "${ORCH_TMUX_NOTIFY:-0}" = "1" ]; then
     orch_notify "$target" "$msg_id"
 else
     echo "INFO: file-queued delivery only — ${target} should poll inbox (msg_id=${msg_id})" >&2

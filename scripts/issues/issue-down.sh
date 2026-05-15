@@ -178,9 +178,9 @@ if [ "$do_cleanup" -eq 1 ]; then
     cleanup_summary=" cleanup: cleaned=${ORCH_CLEANUP_SUMMARY_CLEANED:-0} kept=${ORCH_CLEANUP_SUMMARY_KEPT:-0} partial=${ORCH_CLEANUP_SUMMARY_PARTIAL:-0} skipped=${ORCH_CLEANUP_SUMMARY_SKIPPED:-0}."
 fi
 
-# orch에 종료 보고 (leader pane 이 곧 죽으므로 stdout 은 남지 않음 — 보고는 inbox 통해 전달)
+# orch에 종료 보고 (leader pane 이 곧 죽으므로 stdout 은 남지 않음 — 보고는 inbox 통해 전달).
+# orch 도 polling 으로 받으므로 tmux push 는 안 함. Slack 알림 (아래) 으로 신호.
 orch_append_message "$mp_id" "orch" "[issue-down] $mp_id cascade shutdown 완료. archive: $archive_dir.${cleanup_summary} 머지 worktree 자동 정리(+pull), 미머지는 보존.$report_hint" >/dev/null
-orch_notify "orch" || true
 
 # Slack 알림 — MP 완료. archive 경로 + REPORT 작성 안내.
 "${LIB_DIR}/notify/notify-slack.sh" mp_done "$mp_id" "cascade shutdown 완료. /orch:report 로 REPORT.html 작성 권유" "$archive_dir" || true

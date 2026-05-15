@@ -19,26 +19,23 @@ fi
 
 mkdir -p "$ORCH_INBOX" "$ORCH_ARCHIVE" "$ORCH_WORKERS"
 
-# 이미 orch 등록 상태 처리
+# Identity 는 경로 (.orch/settings.json 의 위치) — 현재 이 경로에서 띄워진 claude 가 곧 orch.
+# orch.json 은 informational 레지스트리일 뿐 (delivery 가 polling 으로 일원화돼서 pane_id
+# 가 메시지 라우팅 책무를 잃었음). 따라서 /orch:up 은 멱등 overwrite — 기존 등록이 있어도
+# 새 pane 정보로 덮어쓴다. 충돌 검사 없음.
+prior_pane=""
 if orch_worker_exists "orch"; then
-    existing_pane="$(orch_worker_field orch pane_id 2>/dev/null || true)"
-    if [ "$existing_pane" = "$TMUX_PANE" ]; then
-        echo "OK orch 이미 이 pane에 등록됨"
-        exit 0
-    fi
-    if [ -n "$existing_pane" ] && orch_pane_alive "$existing_pane"; then
-        echo "ERROR: 다른 pane이 이미 orch로 등록됨 (pane_id=$existing_pane)" >&2
-        echo "  덮어쓰려면 그 pane에서 작업 마무리 후 .orch/workers/orch.json 직접 삭제, 다시 /orch:up" >&2
-        exit 2
-    fi
-    # stale entry 정리
-    orch_worker_unregister "orch"
+    prior_pane="$(orch_worker_field orch pane_id 2>/dev/null || true)"
 fi
 
 window_id="$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}')"
 cwd="${PWD:-$(pwd)}"
 
 orch_worker_register "orch" "orch" "$window_id" "$TMUX_PANE" "$cwd"
+
+if [ -n "$prior_pane" ] && [ "$prior_pane" != "$TMUX_PANE" ]; then
+    echo "INFO: 기존 orch 등록 갱신 (pane $prior_pane → $TMUX_PANE)"
+fi
 
 cat <<EOF
 OK orch pane 등록 완료

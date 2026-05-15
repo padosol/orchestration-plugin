@@ -16,9 +16,9 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/session/up.sh:*)
 - tmux 세션 안에서 실행되어야 함 (`TMUX_PANE` 환경변수 필수)
 - `.orch/settings.json`이 없으면 안내문에서 `/orch:setup` 권유
 
-**충돌 처리**:
-- 이미 다른 살아있는 pane이 orch로 등록된 경우 에러 — 그쪽 정리 후 재시도
-- 같은 pane이 이미 등록돼 있으면 idempotent (그대로 OK)
-- stale 등록(pane 죽음)은 자동 정리 후 재등록
+**등록 모델**:
+- Identity 는 *경로* (`.orch/settings.json` 의 위치) — 이 경로에서 띄워진 claude 가 곧 orch
+- `orch.json` 은 informational 레지스트리. 메시지 전달은 모두 파일 inbox + polling 으로 일원화돼서 pane_id 는 라우팅 책무가 없음 → `/orch:up` 은 **멱등 overwrite** (충돌 검사 없음)
+- 기존 등록이 다른 pane 이면 silent 갱신 (INFO 한 줄). tmux 가 죽었다 살아도, pane 이 재발급돼도 그냥 덮어씀
 
 출력 후 다음 단계 안내(`/orch:setup` 또는 `/orch:issue-up`)를 그대로 사용자에게 전달.
