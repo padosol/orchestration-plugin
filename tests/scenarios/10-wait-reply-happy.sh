@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
-# wait-reply.sh — inbox 에 이미 [reply:Q1] 메시지 있을 때 즉시 exit 0 + 본문 출력.
+# wait-reply.sh — inbox 에 이미 [reply:Q1] 메시지 있을 때 즉시 exit 0 + 본문 출력. (포인터 모델)
 
 set -euo pipefail
 
 ws="$SANDBOX/wait-reply-happy"
-mkdir -p "$ws/.orch/runs/mp-99/inbox"
-cat > "$ws/.orch/runs/mp-99/inbox/test.md" <<'EOF'
+ib="$ws/.orch/runs/mp-99/inbox/test"
+mkdir -p "$ib/payloads"
 
----
-from: mp-99
-to: mp-99/test
-ts: 2026-05-11T12:00:00Z
-id: msg-001
----
-[reply:Q1]
-GO. 진행하세요.
-EOF
+# 포인터 모델 메시지 수동 생성 (orch_append_message 산출 레이아웃 모사):
+#   <ib>/<sortable>-<id>.json  +  <ib>/payloads/<id>.md
+mkmsg() { # $1=seq $2=id $3=body
+    printf '%s' "$3" > "$ib/payloads/$2.md"
+    jq -nc --arg from mp-99 --arg to mp-99/test --arg ts 2026-05-11T12:00:00Z \
+        --arg id "$2" --arg payload "$ib/payloads/$2.md" \
+        '{from:$from,to:$to,ts:$ts,id:$id,payload:$payload}' \
+        > "$ib/$(printf '%020d' "$1")-$2.json"
+}
+
+mkmsg 1 msg-001 '[reply:Q1]
+GO. 진행하세요.'
 
 out="$(
     ORCH_ROOT="$ws/.orch" \

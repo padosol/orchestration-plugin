@@ -61,10 +61,13 @@ out="$(
 # INFO 메시지에 정규화 흔적
 grep -qF "target case 정규화 'mp-75' → 'MP-75'" <<<"$out" \
     || { echo "FAIL: send.sh 가 case 정규화 INFO 출력 안 함"; printf '%s\n' "$out" >&2; exit 1; }
-# inbox 파일이 'MP-75.md' 로 생성됐는지
-[ -f "$ws/.orch/inbox/MP-75.md" ] \
-    || { echo "FAIL: inbox/MP-75.md 미생성 (case 정규화 실패)"; ls "$ws/.orch/inbox/" >&2; exit 1; }
-[ -f "$ws/.orch/inbox/mp-75.md" ] \
-    && { echo "FAIL: inbox/mp-75.md 가 생성됨 (소문자 inbox 가 남으면 정규화 실패)"; exit 1; }
+# 포인터 모델: inbox 가 'MP-75' 디렉터리로 (소문자 'mp-75' 아님) 생성됐는지
+[ -d "$ws/.orch/inbox/MP-75" ] \
+    || { echo "FAIL: inbox/MP-75/ 미생성 (case 정규화 실패)"; ls "$ws/.orch/inbox/" >&2; exit 1; }
+[ -d "$ws/.orch/inbox/mp-75" ] \
+    && { echo "FAIL: inbox/mp-75/ 가 생성됨 (소문자 inbox 가 남으면 정규화 실패)"; exit 1; }
+ptr="$(find "$ws/.orch/inbox/MP-75" -maxdepth 1 -name '*.json' -type f | head -1)"
+[ -n "$ptr" ] && [ "$(jq -r '.to' "$ptr")" = "MP-75" ] \
+    || { echo "FAIL: MP-75 inbox 에 to=MP-75 pointer 없음"; exit 1; }
 
 echo "OK case-insensitive-target-lookup"

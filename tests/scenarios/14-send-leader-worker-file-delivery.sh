@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# send.sh — leader ↔ worker 메시지는 tmux 알림 없이 파일 inbox 에만 queue.
+# send.sh — leader ↔ worker 메시지는 tmux 알림 없이 파일 inbox 에만 queue. (포인터 모델)
 
 set -euo pipefail
 
@@ -21,8 +21,18 @@ if grep -qi 'tmux' <<<"$out"; then
     exit 1
 fi
 
-inbox="$ws/.orch/runs/mp-99/inbox/api.md"
-[ -f "$inbox" ] || { echo "FAIL: worker inbox 파일 미생성: $inbox"; exit 1; }
-grep -qF "작업 시작하세요" "$inbox" || { echo "FAIL: inbox 본문 누락"; exit 1; }
+# 포인터 모델: 레거시 단일 .md 파일이 아니라 디렉터리 + pointer + payload.
+ib="$ws/.orch/runs/mp-99/inbox/api"
+[ ! -f "$ws/.orch/runs/mp-99/inbox/api.md" ] || { echo "FAIL: 레거시 api.md 가 생성됨"; exit 1; }
+[ -d "$ib" ] || { echo "FAIL: worker inbox 디렉터리 미생성: $ib"; exit 1; }
+
+ptr="$(find "$ib" -maxdepth 1 -name '*.json' -type f | head -1)"
+[ -n "$ptr" ] || { echo "FAIL: pointer JSON 미생성"; exit 1; }
+[ "$(jq -r '.from' "$ptr")" = "mp-99" ] || { echo "FAIL: pointer.from != mp-99"; exit 1; }
+[ "$(jq -r '.to' "$ptr")" = "mp-99/api" ] || { echo "FAIL: pointer.to != mp-99/api"; exit 1; }
+
+payload="$(jq -r '.payload' "$ptr")"
+[ -f "$payload" ] || { echo "FAIL: payload 파일 미생성: $payload"; exit 1; }
+grep -qF "작업 시작하세요" "$payload" || { echo "FAIL: payload 본문 누락"; exit 1; }
 
 echo "OK send-leader-worker-file-delivery"

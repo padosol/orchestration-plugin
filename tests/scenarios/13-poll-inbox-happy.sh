@@ -1,28 +1,22 @@
 #!/usr/bin/env bash
-# poll-inbox.sh — inbox 에 이미 메시지가 있으면 가장 오래된 msg_id 본문을 즉시 출력 (FIFO).
+# poll-inbox.sh — inbox 에 이미 메시지가 있으면 가장 오래된 msg_id 본문을 즉시 출력 (FIFO). (포인터 모델)
 
 set -euo pipefail
 
 ws="$SANDBOX/poll-inbox-happy"
-mkdir -p "$ws/.orch/runs/mp-99/inbox"
-cat > "$ws/.orch/runs/mp-99/inbox/test.md" <<'EOF'
+ib="$ws/.orch/runs/mp-99/inbox/test"
+mkdir -p "$ib/payloads"
 
----
-from: mp-99
-to: mp-99/test
-ts: 2026-05-11T12:00:00Z
-id: msg-001
----
-첫 번째 작업 지시.
+mkmsg() { # $1=seq $2=id $3=body
+    printf '%s' "$3" > "$ib/payloads/$2.md"
+    jq -nc --arg from mp-99 --arg to mp-99/test --arg ts 2026-05-11T12:00:00Z \
+        --arg id "$2" --arg payload "$ib/payloads/$2.md" \
+        '{from:$from,to:$to,ts:$ts,id:$id,payload:$payload}' \
+        > "$ib/$(printf '%020d' "$1")-$2.json"
+}
 
----
-from: mp-99
-to: mp-99/test
-ts: 2026-05-11T12:00:01Z
-id: msg-002
----
-두 번째 메시지.
-EOF
+mkmsg 1 msg-001 '첫 번째 작업 지시.'
+mkmsg 2 msg-002 '두 번째 메시지.'
 
 out="$(
     ORCH_ROOT="$ws/.orch" \
