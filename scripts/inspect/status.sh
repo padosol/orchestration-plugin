@@ -14,10 +14,10 @@ orch_install_error_trap "$0"
 # 인박스 파일에 [direction-check] 라벨이 미처리로 남아있으면 0(true).
 # /orch:check-inbox 가 메시지를 archive 로 옮기므로 inbox 잔존 == 미처리 의미.
 orch_inbox_has_direction_check() {
-    local wid="$1" path
-    path="$(orch_inbox_path "$wid" 2>/dev/null)" || return 1
-    [ -s "$path" ] || return 1
-    grep -qF '[direction-check]' "$path" 2>/dev/null
+    local wid="$1" dir
+    dir="$(orch_inbox_dir "$wid" 2>/dev/null)" || return 1
+    [ -d "$dir/payloads" ] || return 1
+    grep -rqF '[direction-check]' "$dir/payloads" 2>/dev/null
 }
 
 if tmux has-session -t "$ORCH_TMUX_SESSION" 2>/dev/null; then

@@ -51,7 +51,7 @@ pane_id="$(orch_worker_field "$target" pane_id 2>/dev/null || true)"
 window_id="$(orch_worker_field "$target" window_id 2>/dev/null || true)"
 started_at="$(orch_worker_field "$target" started_at 2>/dev/null || true)"
 inbox_n="$(orch_inbox_count "$target" 2>/dev/null || echo 0)"
-inbox_path="$(orch_inbox_path "$target" 2>/dev/null || true)"
+inbox_path="$(orch_inbox_dir "$target" 2>/dev/null || true)"
 
 if ! orch_pane_alive "$pane_id"; then
     cat <<EOF

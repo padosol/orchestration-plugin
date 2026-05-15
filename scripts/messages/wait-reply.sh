@@ -74,10 +74,11 @@ if [ -z "$self" ]; then
     exit 2
 fi
 
-inbox="$(orch_inbox_path "$self")" || {
+inbox="$(orch_inbox_dir "$self")" || {
     echo "ERROR: inbox 경로 결정 실패 (worker_id=$self)" >&2
     exit 2
 }
+mkdir -p "$inbox/payloads"
 
 interval="${ORCH_WAIT_REPLY_INTERVAL:-30}"
 marker="[reply:${qid}]"
@@ -87,22 +88,7 @@ echo "[wait-reply] qid=${qid} 폴링 시작 (간격 ${interval}s, timeout ${time
 
 start_ts="$(date +%s)"
 while :; do
-    match_id=""
-    if [ -s "$inbox" ]; then
-        match_id="$(
-            MARKER="$marker" INBOX="$inbox" PARSE="$parse" python3 <<'PY' 2>/dev/null || true
-import os, runpy
-mod = runpy.run_path(os.environ["PARSE"])
-with open(os.environ["INBOX"], "r", encoding="utf-8", errors="replace") as f:
-    msgs, _ = mod["parse"](f.read())
-marker = os.environ["MARKER"]
-for m in msgs:
-    if marker in m["body"]:
-        print(m["id"])
-        break
-PY
-        )"
-    fi
+    match_id="$(python3 "$parse" find-marker "$inbox" "$marker" 2>/dev/null || true)"
 
     if [ -n "$match_id" ]; then
         echo "[wait-reply] qid=${qid} 답 도착 (msg_id=${match_id})" >&2

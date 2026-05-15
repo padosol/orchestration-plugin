@@ -226,15 +226,15 @@ orch_resolve_worker_id_case() {
 
 # ─── 경로 헬퍼 (scope-aware) ──────────────────────────────────────────
 
-orch_inbox_path() {
+orch_inbox_dir() {
     local w="$1" kind scope
     kind="$(orch_wid_kind "$w" 2>/dev/null || true)"
     case "$kind" in
         orch|leader)
-            printf '%s/%s.md' "$ORCH_INBOX" "$w" ;;
+            printf '%s/%s' "$ORCH_INBOX" "$w" ;;
         worker)
             scope="$(orch_scope_dir "${w%%/*}")" || return 1
-            printf '%s/inbox/%s.md' "$scope" "${w##*/}" ;;
+            printf '%s/inbox/%s' "$scope" "${w##*/}" ;;
         *) return 1 ;;
     esac
 }
@@ -303,12 +303,12 @@ orch_scope_worktrees_dir() {
 # orch_worker_unregister 직후 호출하면 라우팅이 차단된 후라 race 없음.
 orch_inbox_cleanup() {
     local wid="$1"
-    local path
-    path="$(orch_inbox_path "$wid" 2>/dev/null || true)"
-    [ -n "$path" ] || return 0
+    local dir
+    dir="$(orch_inbox_dir "$wid" 2>/dev/null || true)"
+    [ -n "$dir" ] || return 0
     # 워커 inbox 는 scope_dir 안이라 issue-down 의 scope archive 가 이미 처리. 손대지 않음.
-    case "$path" in
-        "${ORCH_INBOX}/"*) rm -f "$path" "${path}.lock" ;;
+    case "$dir" in
+        "${ORCH_INBOX}/"*) rm -rf "$dir" "${dir}.lock" ;;
     esac
 }
 
@@ -781,16 +781,19 @@ orch_gen_msg_id() {
 # inbox에 메시지 append (flock 보호). 출력: msg_id
 orch_append_message() {
     local from="$1" to="$2" body="$3"
-    local id ts target
+    local id ts dir nano payload pointer
     id="$(orch_gen_msg_id)"
     ts="$(date -Iseconds)"
-    target="$(orch_inbox_path "$to")" || return 1
-    mkdir -p "$(dirname "$target")"
-    {
-        flock -x 9
-        printf '\n---\nfrom: %s\nto: %s\nts: %s\nid: %s\n---\n%s\n' \
-            "$from" "$to" "$ts" "$id" "$body" >>"$target"
-    } 9>"${target}.lock"
+    dir="$(orch_inbox_dir "$to")" || return 1
+    mkdir -p "$dir/payloads"
+    nano="$(date +%s%N)"
+    payload="$dir/payloads/${id}.md"
+    pointer="$dir/${nano}-${id}.json"
+    printf '%s' "$body" >"${payload}.tmp"
+    mv -f "${payload}.tmp" "$payload"
+    jq -nc --arg from "$from" --arg to "$to" --arg ts "$ts" --arg id "$id" --arg payload "$payload" \
+        '{from:$from,to:$to,ts:$ts,id:$id,payload:$payload}' >"${pointer}.tmp"
+    mv -f "${pointer}.tmp" "$pointer"
     printf '%s' "$id"
 }
 
@@ -909,18 +912,20 @@ orch_send_keys_line() {
 # ─── inbox 통계 ───────────────────────────────────────────────────────
 
 orch_inbox_count() {
-    local path n
-    path="$(orch_inbox_path "$1" 2>/dev/null)" || { printf '0'; return; }
-    if [ ! -s "$path" ]; then printf '0'; return; fi
-    n="$(grep -c '^---$' "$path" 2>/dev/null || true)"
-    printf '%d' "$(( n / 2 ))"
+    local dir n
+    dir="$(orch_inbox_dir "$1" 2>/dev/null)" || { printf '0'; return; }
+    [ -d "$dir" ] || { printf '0'; return; }
+    n="$(find "$dir" -maxdepth 1 -name '*.json' -type f 2>/dev/null | wc -l)"
+    printf '%d' "$n"
 }
 
 orch_inbox_mtime() {
-    local path
-    path="$(orch_inbox_path "$1" 2>/dev/null)" || { printf -- '-'; return; }
-    if [ -s "$path" ]; then
-        date -r "$path" '+%Y-%m-%d %H:%M:%S'
+    local dir newest
+    dir="$(orch_inbox_dir "$1" 2>/dev/null)" || { printf -- '-'; return; }
+    [ -d "$dir" ] || { printf -- '-'; return; }
+    newest="$(find "$dir" -maxdepth 1 -name '*.json' -type f -printf '%T@\n' 2>/dev/null | sort -rn | head -1)"
+    if [ -n "$newest" ]; then
+        date -d "@${newest%.*}" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf -- '-'
     else
         printf -- '-'
     fi

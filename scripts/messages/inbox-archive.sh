@@ -20,10 +20,10 @@ if [ -z "$self" ]; then
     exit 2
 fi
 
-inbox="$(orch_inbox_path "$self")"
+inbox="$(orch_inbox_dir "$self")"
 archive="$(orch_archive_path "$self")"
 
-if [ ! -s "$inbox" ]; then
+if [ "$(orch_inbox_count "$self")" -eq 0 ]; then
     echo "INBOX_EMPTY worker_id=$self"
     exit 0
 fi
@@ -42,25 +42,19 @@ fi
 
 case "$1" in
     --all)
-        # 전체 모드 — 운영 사고 복구용 escape hatch
-        {
-            flock -x 9
-            cat "$inbox" >> "$archive"
-            : > "$inbox"
-        } 9>"${inbox}.lock"
+        # 전체 모드 — 운영 사고 복구용 escape hatch. FIFO 순으로 extract→archive→삭제.
+        while read -r aid; do
+            [ -n "$aid" ] || continue
+            python3 "${LIB_DIR}/inbox-parse.py" extract "$inbox" "$aid" >> "$archive"
+            python3 "${LIB_DIR}/inbox-parse.py" remove "$inbox" "$aid"
+        done < <(python3 "${LIB_DIR}/inbox-parse.py" ids "$inbox")
         echo "ARCHIVED worker_id=$self to=$archive (whole inbox — --all 사용)"
         ;;
     *)
-        # 단건 모드
+        # 단건 모드. extract 가 실패하면 (id 미존재) 여기서 멈춤 — set -e
         msg_id="$1"
-        {
-            flock -x 9
-            # extract 가 실패하면 (id 미존재) 여기서 멈춤 — set -e
-            block="$(python3 "${LIB_DIR}/inbox-parse.py" extract "$inbox" "$msg_id")"
-            new_inbox="$(python3 "${LIB_DIR}/inbox-parse.py" remove "$inbox" "$msg_id")"
-            printf '%s' "$block" >> "$archive"
-            printf '%s' "$new_inbox" > "$inbox"
-        } 9>"${inbox}.lock"
+        python3 "${LIB_DIR}/inbox-parse.py" extract "$inbox" "$msg_id" >> "$archive"
+        python3 "${LIB_DIR}/inbox-parse.py" remove "$inbox" "$msg_id"
         echo "ARCHIVED worker_id=$self id=$msg_id to=$archive"
         ;;
 esac

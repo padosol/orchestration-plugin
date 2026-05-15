@@ -56,35 +56,25 @@ if [ -z "$self" ]; then
     exit 2
 fi
 
-inbox="$(orch_inbox_path "$self")" || {
+inbox="$(orch_inbox_dir "$self")" || {
     echo "ERROR: inbox 경로 결정 실패 (worker_id=$self)" >&2
     exit 2
 }
-mkdir -p "$(dirname "$inbox")"
-touch "$inbox"
+mkdir -p "$inbox/payloads"
 
 parse="${LIB_DIR}/inbox-parse.py"
 echo "[poll-inbox] worker_id=${self} 폴링 시작 (간격 ${interval}s, timeout ${timeout}s, inbox=${inbox})" >&2
 
 start_ts="$(date +%s)"
 while :; do
-    first_id=""
-    if [ -s "$inbox" ]; then
-        first_id="$(
-            flock -s 9
-            python3 "$parse" summary "$inbox" 2>/dev/null | head -1 | cut -f1
-        )" 9>"${inbox}.lock"
-    fi
+    first_id="$(python3 "$parse" summary "$inbox" 2>/dev/null | head -1 | cut -f1)"
 
     if [ -n "$first_id" ]; then
         echo "[poll-inbox] 메시지 도착 (msg_id=${first_id})" >&2
-        {
-            flock -s 9
-            echo "=== INBOX worker_id=$self id=$first_id ==="
-            python3 "$parse" body "$inbox" "$first_id"
-            echo "=== END ==="
-            echo "(처리 후 단건 archive: \$ORCH_BIN_DIR/messages/inbox-archive.sh $first_id)"
-        } 9>"${inbox}.lock"
+        echo "=== INBOX worker_id=$self id=$first_id ==="
+        python3 "$parse" body "$inbox" "$first_id"
+        echo "=== END ==="
+        echo "(처리 후 단건 archive: \$ORCH_BIN_DIR/messages/inbox-archive.sh $first_id)"
         exit 0
     fi
 
