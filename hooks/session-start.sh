@@ -32,8 +32,7 @@ kind="$(orch_wid_kind "$wid")"
 [ "$kind" != "invalid" ] || exit 0
 
 HAS_PENDING=0
-INBOX_PATH="$(orch_inbox_path "$wid" 2>/dev/null || true)"
-[ -n "$INBOX_PATH" ] && [ -s "$INBOX_PATH" ] && HAS_PENDING=1
+[ "$(orch_inbox_count "$wid" 2>/dev/null || echo 0)" -gt 0 ] && HAS_PENDING=1
 
 START_SKILL=""
 case "$kind" in
@@ -75,4 +74,4 @@ else
     MSG="orch v2 worker_id=${wid}${session_suffix}. ${ROLE_DESC}${ADDITIONAL} 슬래시: ${CMDS}."
 fi
 
-printf '{"systemMessage":"%s"}\n' "$(escape_json "$MSG")"
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(escape_json "$MSG")"

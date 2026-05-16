@@ -48,4 +48,25 @@ for p in orch-pm orch-reviewer orch-developer-worker; do
 done
 grep -qF 'check-inbox' <<<"$wc" || fail "orch-worker-start 가 inbox 드레인 안 함"
 
+# 4. session-start.sh 는 Phase 1 에서 삭제된 orch_inbox_path 를 참조하면 안 됨.
+grep -qF 'orch_inbox_path' <<<"$hc" && fail "session-start.sh: 삭제된 orch_inbox_path 참조 (orch_inbox_count 사용해야 함)"
+
+# 5. hook 을 실제 실행해 출력 채널 검증 — start skill 지시는 모델 컨텍스트에 닿는
+#    hookSpecificOutput.additionalContext 로 나와야 한다. systemMessage 는 사용자 표시
+#    전용이라 모델이 안 보므로 그 채널이면 부트스트랩이 동작하지 않는다.
+ho="$SANDBOX/spawn-bootstrap-hookout.json"
+ORCH_WORKER_ID=MP-BOOT \
+    CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
+    ORCH_INBOX="$SANDBOX/spawn-bootstrap-inbox" \
+    bash "$hook" </dev/null >"$ho" 2>/dev/null || fail "session-start.sh 실행 실패"
+
+jq -e . "$ho" >/dev/null 2>&1 || fail "session-start.sh 출력이 유효 JSON 아님"
+[ "$(jq -r '.hookSpecificOutput.hookEventName // ""' "$ho")" = "SessionStart" ] \
+    || fail "출력에 hookSpecificOutput.hookEventName=SessionStart 없음"
+ac="$(jq -r '.hookSpecificOutput.additionalContext // ""' "$ho")"
+[ -n "$ac" ] || fail "additionalContext 비어 있음 (start skill 지시가 모델에 안 닿음)"
+grep -qF 'orch-leader-start' <<<"$ac" || fail "additionalContext 에 orch-leader-start invoke 지시 없음"
+[ "$(jq -r 'has("systemMessage")' "$ho")" = "false" ] \
+    || fail "systemMessage 채널 사용 — 모델이 못 봄 (additionalContext 로만 출력해야 함)"
+
 echo "OK spawn-polling-bootstrap"
