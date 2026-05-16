@@ -144,8 +144,8 @@ first_msg="너는 ${mp_id} 팀리더(leader)다. 사용자가 위임한 ${issue_
 - 위 1) Skill 도구 invoke (orch-leader) → 2) orch-protocols.md Read → SKILL 본문의 절차대로 셋업·타입 판별·phase plan 작성 → 사용자에게 직접 phase plan 컨펌.
 - \`[plan-confirm] GO\` 받기 전 워커 spawn 금지."
 
-# spawn-context 를 leader inbox 에 파일로 적재 (포인터 모델). first_msg 직접 push 폐기 —
-# SessionStart hook 이 claude 기동 시 orch-leader-start skill 을 invoke → 그 skill 이 inbox 드레인.
+# spawn-context 를 leader inbox 에 파일로 적재 (포인터 모델). tmux push 폐기 —
+# claude 기동 시 SessionStart hook 이 이 첫 메시지를 셸에서 드레인해 stdout 으로 주입.
 orch_append_message "orch" "$mp_id" "$first_msg" >/dev/null \
     || echo "WARN: leader spawn-context inbox 적재 실패 (mp_id=$mp_id)" >&2
 tmux send-keys -t "$leader_pane" "export ORCH_WORKER_ID=$mp_id ORCH_BIN_DIR=$LIB_DIR && claude" Enter

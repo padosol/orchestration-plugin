@@ -141,8 +141,8 @@ ${pr_host_block_review}
 [진입 액션]
 - 위 1) Skill 도구 invoke (orch-reviewer) → 2) orch-protocols.md Read → 3) coding-guidelines.md Read → PR #${pr} 검토 → 두 채널 답신 → \`worker-shutdown.sh\`."
 
-# spawn-context 를 reviewer inbox 에 파일로 적재 (포인터 모델). first_msg 직접 push 폐기 —
-# SessionStart hook 이 claude 기동 시 orch-worker-start skill 을 invoke → 그 skill 이 inbox 드레인.
+# spawn-context 를 reviewer inbox 에 파일로 적재 (포인터 모델). tmux push 폐기 —
+# claude 기동 시 SessionStart hook 이 이 첫 메시지를 셸에서 드레인해 stdout 으로 주입.
 orch_append_message "$mp_id" "$worker_id" "$first_msg" >/dev/null \
     || echo "WARN: reviewer spawn-context inbox 적재 실패 (worker=$worker_id)" >&2
 tmux send-keys -t "$reviewer_pane" "export ORCH_WORKER_ID=${worker_id} ORCH_BIN_DIR=${LIB_DIR} && claude" Enter

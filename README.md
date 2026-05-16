@@ -192,7 +192,7 @@ reviewer 도 같은 가이드 따름 — `review-spawn` 이 `.orch/runs/<id>/typ
 
 ## 워커 페르소나 — Skill 기반
 
-leader / developer worker / PM / reviewer 의 페르소나·절차는 `skills/orch-<role>/SKILL.md` 단일 source 로 분리돼 있다. spawn 스크립트는 동적 컨텍스트 변수 (worker_id / project / branch / stack 등) + Skill 도구 트리거 + hard guard (GO 전 spawn 금지 / leader 직접 사용자 확인 / PM direction-check / reviewer read-only / shutdown 의무) 를 담은 **spawn-context 메시지를 워커 inbox 에 적재** (tmux push 폐기). claude 기동 시 SessionStart hook 이 `orch-leader-start`/`orch-worker-start` 진입 skill 을 invoke → 그 skill 이 inbox 를 드레인해 spawn-context 를 수령하고 본문 절차는 SKILL 로딩으로 가져온다.
+leader / developer worker / PM / reviewer 의 페르소나·절차는 `skills/orch-<role>/SKILL.md` 단일 source 로 분리돼 있다. spawn 스크립트는 동적 컨텍스트 변수 (worker_id / project / branch / stack 등) + Skill 도구 트리거 + hard guard (GO 전 spawn 금지 / leader 직접 사용자 확인 / PM direction-check / reviewer read-only / shutdown 의무) 를 담은 **spawn-context 메시지를 워커 inbox 에 적재** (tmux push 폐기). claude 기동 시 SessionStart hook 이 inbox 의 첫 메시지(spawn-context)를 셸에서 직접 드레인해 plain stdout 으로 컨텍스트에 주입하고 단건 archive 한다 (SessionStart 는 stdout 을 자동으로 모델 컨텍스트에 추가). 페르소나 본문은 spawn-context 가 지시하는 `skills/orch-<role>/SKILL.md` 를 모델이 Read 해 가져온다.
 
 - `skills/orch-leader/SKILL.md` — leader 셋업 / 타입 판별 / Phase Plan / 라우팅 / cascade shutdown
 - `skills/orch-developer-worker/SKILL.md` — developer HOLD 체크포인트 / 차단 질문 / PR 4단계 / worker-shutdown

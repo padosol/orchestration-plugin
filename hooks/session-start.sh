@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# SessionStart hook for orch v2.
-# ORCH_WORKER_ID(또는 후방호환 LOL_WORKER_ID) 환경변수가 설정된 워커 세션에서 동작.
-# orch 도 /orch:up 후엔 등록되지만 환경변수 설정 안 돼있을 수 있음 — 그땐 hook 이 그냥 종료.
+# SessionStart hook (orch v2).
+# spawn 된 leader/worker 의 부트스트랩을 inbox 의 spawn-context(첫 메시지)를
+# 셸에서 직접 드레인해 plain stdout 으로 주입한다. SessionStart 는 plain stdout 을
+# 자동으로 모델 컨텍스트에 추가하므로 JSON 래퍼도 start skill indirection 도 불필요.
+# orch(PM) 는 spawn-context 가 없으므로 역할 안내만.
 
 set -u
 
 WORKER_ID="${ORCH_WORKER_ID:-${LOL_WORKER_ID:-}}"
 [ -n "$WORKER_ID" ] || exit 0
 
-# stdin payload에서 session_id 추출 (안내문 표시용 — 라우팅엔 안 씀)
+# stdin payload 에서 session_id 추출 (표시용 — 라우팅엔 안 씀)
 session_id=""
 if [ ! -t 0 ]; then
     payload="$(cat 2>/dev/null || true)"
@@ -17,11 +19,7 @@ if [ ! -t 0 ]; then
     fi
 fi
 
-if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-    # plugin hook 으로 실행되면 CLAUDE_PLUGIN_ROOT 가 자동 export 됨.
-    # 환경변수 미설정 = 비정상 호출 (수동 실행 등) — 안내 없이 조용히 종료.
-    exit 0
-fi
+[ -n "${CLAUDE_PLUGIN_ROOT:-}" ] || exit 0
 LIB_PATH="${CLAUDE_PLUGIN_ROOT}/scripts/core/lib.sh"
 [ -f "$LIB_PATH" ] || exit 0
 # shellcheck source=/dev/null
@@ -31,47 +29,43 @@ wid="$WORKER_ID"
 kind="$(orch_wid_kind "$wid")"
 [ "$kind" != "invalid" ] || exit 0
 
-HAS_PENDING=0
-[ "$(orch_inbox_count "$wid" 2>/dev/null || echo 0)" -gt 0 ] && HAS_PENDING=1
-
-START_SKILL=""
-case "$kind" in
-    orch)
-        ROLE_DESC="orchestrator (PM). 사용자와 직접 대화, leader에게 위임. 직접 워커 송신은 차단됨 — leader 통해서만. 결정이 옵션 2-4개로 깔끔하면 AskUserQuestion TUI 사용 (ToolSearch 로 스키마 먼저 로드)."
-        CMDS="/orch:setup, /orch:up, /orch:issue-up, /orch:issue-down, /orch:send, /orch:check-inbox, /orch:poll-inbox, /orch:status, /orch:prioritize, /orch:report, /orch:usage-stats"
-        ;;
-    leader)
-        START_SKILL="orch-leader-start"
-        ROLE_DESC="${wid} 팀리더. 자기 MP 안에서 워커 spawn(/orch:leader-spawn) + 라우팅 + shutdown(/orch:issue-down) 책임. orch 보고 / 사용자 결정 받기. 산하 워커 간 통신은 leader 경유."
-        CMDS="/orch:leader-spawn, /orch:send, /orch:check-inbox, /orch:poll-inbox, /orch:issue-down"
-        ;;
-    worker)
-        START_SKILL="orch-worker-start"
-        scope="${wid%%/*}"
-        proj="${wid##*/}"
-        ROLE_DESC="${scope} 산하 ${proj} 워커. 모든 외부 통신은 leader(${scope}) 경유. 코드 작업은 worktree 안에서, 커밋은 safe-commit."
-        CMDS="/orch:send, /orch:check-inbox, /orch:poll-inbox"
-        ;;
-esac
-
-ADDITIONAL=""
-if [ "$HAS_PENDING" -eq 1 ]; then
-    ADDITIONAL=" Inbox 미처리 메시지 있음 → 먼저 /orch:check-inbox 실행할 것."
-fi
-
 session_suffix=""
 [ -n "$session_id" ] && session_suffix=" [claude_session=${session_id:0:8}]"
 
-escape_json() {
-    printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
-}
-
-if [ -n "$START_SKILL" ]; then
-    # spawn 된 leader/worker: first_msg push 폐기. 지금 즉시 start skill 을 invoke 하면
-    # 그 skill 이 persona 로딩 + orch-protocols Read + inbox 의 spawn-context/지시 드레인을 수행.
-    MSG="orch v2 worker_id=${wid}${session_suffix}. 지금 즉시 Skill 도구로 \`${START_SKILL}\` 를 invoke 하라 — 페르소나 로딩 + inbox 의 spawn-context(작업 지시) 수령을 그 skill 이 수행한다. (${ROLE_DESC})${ADDITIONAL} 슬래시: ${CMDS}."
-else
-    MSG="orch v2 worker_id=${wid}${session_suffix}. ${ROLE_DESC}${ADDITIONAL} 슬래시: ${CMDS}."
+if [ "$kind" = "orch" ]; then
+    printf 'orch v2 worker_id=%s%s. orchestrator(PM). 사용자와 직접 대화, leader 에게 위임. 직접 워커 송신 차단 — leader 경유. 결정이 옵션 2-4개로 깔끔하면 AskUserQuestion TUI (ToolSearch 로 스키마 먼저 로드). 슬래시: /orch:setup, /orch:up, /orch:issue-up, /orch:issue-down, /orch:send, /orch:check-inbox, /orch:poll-inbox, /orch:status, /orch:prioritize, /orch:report, /orch:usage-stats\n' "$wid" "$session_suffix"
+    exit 0
 fi
 
-printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(escape_json "$MSG")"
+# leader/worker — inbox 의 첫(최古) 메시지 = spawn-context (spawn 스크립트가 claude
+# 기동 전에 적재). 셸에서 드레인해 그대로 컨텍스트로 주입.
+parse="${CLAUDE_PLUGIN_ROOT}/scripts/inbox-parse.py"
+dir="$(orch_inbox_dir "$wid" 2>/dev/null || true)"
+first_id=""
+[ -n "$dir" ] && [ -d "$dir" ] && first_id="$(python3 "$parse" ids "$dir" 2>/dev/null | head -1 || true)"
+
+if [ -z "$first_id" ]; then
+    # spawn-context 미도착 또는 이미 드레인됨(세션 재개/clear/compact 재fire).
+    # 재부트스트랩 금지 — 런타임 inbox 폴링으로 진행.
+    printf 'orch v2 worker_id=%s%s. spawn-context 없음 — 런타임 inbox 폴링으로 진행 (/orch:poll-inbox 또는 /orch:check-inbox). 슬래시: /orch:send, /orch:check-inbox, /orch:poll-inbox\n' "$wid" "$session_suffix"
+    exit 0
+fi
+
+# payload 경로는 id 로 결정적: <dir>/payloads/<id>.md
+body=""
+pf="$dir/payloads/${first_id}.md"
+[ -f "$pf" ] && body="$(cat "$pf")"
+
+if [ -z "$body" ]; then
+    printf 'orch v2 worker_id=%s%s. spawn-context payload 읽기 실패(id=%s) — /orch:check-inbox 로 직접 수령하라. 슬래시: /orch:send, /orch:check-inbox, /orch:poll-inbox\n' "$wid" "$session_suffix" "$first_id"
+    exit 0
+fi
+
+printf 'orch v2 worker_id=%s%s. 아래는 너의 spawn-context (작업 지시) 다. 다른 어떤 행동보다 먼저 이 본문을 그대로 따른다:\n\n%s\n' "$wid" "$session_suffix" "$body"
+
+# 전달 완료 — 단건 archive. 런타임 inbox 폴링이 spawn-context 를 재처리하지
+# 않도록 inbox 에서 빼고 archive 에 보존. stdout 오염 방지로 출력 버린다.
+arch="${CLAUDE_PLUGIN_ROOT}/scripts/messages/inbox-archive.sh"
+[ -f "$arch" ] && bash "$arch" "$first_id" >/dev/null 2>&1 || true
+
+exit 0
